@@ -1,0 +1,33 @@
+[build-system]
+requires = ["maturin>=1.9.4,<2"]
+build-backend = "maturin"
+
+[project]
+name = "lp-ip-craft"
+version = "0.1.0"
+description = "LP and mixed-integer LP contracts in Rust with Python bindings (interface draft; dummy backend only)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "numpy>=1.24"]
+
+[project.urls]
+Repository = "https://github.com/dietmarwo/LP-IP-craft"
+
+[tool.maturin]
+manifest-path = "crates/python/Cargo.toml"
+python-source = "python"
+module-name = "lp_ip_craft._native"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
