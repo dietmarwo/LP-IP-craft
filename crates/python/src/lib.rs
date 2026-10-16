@@ -559,6 +559,25 @@ fn lp_residuals<'py>(
     Ok(out)
 }
 
+/// Independent outward-rounded dual bound. Use `lp_ip_craft.safe_dual_bound`.
+#[pyfunction]
+fn safe_dual_bound<'py>(
+    py: Python<'py>,
+    model: &Bound<'py, PyModel>,
+    row_duals: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let row_duals = floats(row_duals, "row_duals")?;
+    let inner: &Model = &model.get().inner;
+    let result = py
+        .detach(|| lp_ip_craft::safe_dual_bound(inner, &row_duals))
+        .map_err(to_py_err)?;
+    let out = PyDict::new(py);
+    out.set_item("bound", result.bound)?;
+    out.set_item("status", result.status.as_str())?;
+    out.set_item("index", result.index)?;
+    Ok(out)
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
@@ -570,5 +589,6 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(solve_native, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
     m.add_function(wrap_pyfunction!(lp_residuals, m)?)?;
+    m.add_function(wrap_pyfunction!(safe_dual_bound, m)?)?;
     Ok(())
 }

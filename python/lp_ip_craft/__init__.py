@@ -26,9 +26,10 @@ from ._native import BackendError, Cancellation, EvaluationError, Model
 from ._native import backends as _backends
 from ._native import evaluate as _evaluate
 from ._native import lp_residuals as _lp_residuals
+from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "BACKENDS",
@@ -43,10 +44,13 @@ __all__ = [
     "LpResiduals",
     "Model",
     "Options",
+    "SafeBoundStatus",
+    "SafeDualBound",
     "SolveResult",
     "Status",
     "evaluate",
     "lp_residuals",
+    "safe_dual_bound",
     "solve",
 ]
 
@@ -153,6 +157,26 @@ class LpResiduals:
     complementarity: float
     dual_sign: float
     duality_gap: float
+
+
+SafeBoundStatus = Literal[
+    "finite", "unbounded_row", "unbounded_variable",
+    "arithmetic_overflow", "unsupported_arithmetic",
+]
+
+
+@dataclass(frozen=True)
+class SafeDualBound:
+    """An independent bound for the exact binary64 model, or an explanation
+    of why this calculation could not supply one. Not a solver status."""
+
+    bound: Optional[float]
+    """Lower bound when minimizing, upper when maximizing; includes offset.
+    Present exactly for status ``finite``."""
+    status: SafeBoundStatus
+    index: Optional[int]
+    """Zero-based row/variable for ``unbounded_row``/``unbounded_variable``;
+    otherwise None. These outcomes do not prove the model unbounded."""
 
 
 @dataclass(frozen=True)
@@ -274,3 +298,24 @@ def lp_residuals(model: Model, x: Iterable[float], duals: Duals) -> LpResiduals:
     """
     raw = _lp_residuals(model, x, duals.row_duals, duals.reduced_costs)
     return LpResiduals(**raw)
+
+
+def safe_dual_bound(model: Model, row_duals: Iterable[float]) -> SafeDualBound:
+    """Bound the objective using arbitrary finite row duals in the original
+    sense, with outward-rounded residual correction over the variable box.
+
+    No primal point, reduced costs or tolerance is used. Integrality is relaxed;
+    the bound applies to every feasible LP/MIP point of the stored binary64
+    model. It may be weak or unavailable for poor duals or infinite bounds:
+    with solver duals, a column with an infinite bound usually makes it
+    ``unbounded_variable``. Duals of the LP with one-sided costs shifted by a
+    small margin avoid that (``margin_duals`` in ``examples/safe_bound.py``);
+    free columns need finite bounds.
+    Requires standard IEEE binary64 arithmetic with gradual underflow; runtime
+    probes reject flush-to-zero modes. The interpreter is released.
+
+    This does not certify a tolerance-feasible incumbent, a solver's search
+    tree, or ``solve(...).best_bound``. It makes no pruning decision and does
+    not modify solve results. Available even in dummy-only builds.
+    """
+    return SafeDualBound(**_safe_dual_bound(model, row_duals))

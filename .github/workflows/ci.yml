@@ -69,6 +69,10 @@ jobs:
       - run: python -m pytest -q
       - run: python examples/demo.py
       - run: python examples/solve_highs.py
+      - run: python examples/safe_bound.py
+      - name: Bound availability with HiGHS and margin duals (fails on an unsafe bound)
+        shell: bash
+        run: python examples/bound_availability.py --table >> "$GITHUB_STEP_SUMMARY"
 
   python-dummy-only:
     name: Python without HiGHS (dummy-only build)
@@ -86,3 +90,4 @@ jobs:
       - run: python -c "import lp_ip_craft as m; assert m.BACKENDS == ('dummy',), m.BACKENDS"
       - run: python -m pytest -q
       - run: python examples/demo.py
+      - run: python examples/safe_bound.py

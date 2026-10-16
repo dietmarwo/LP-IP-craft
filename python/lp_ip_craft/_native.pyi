@@ -92,3 +92,7 @@ def lp_residuals(
     row_duals: Iterable[float],
     reduced_costs: Iterable[float],
 ) -> dict[str, float]: ...
+def safe_dual_bound(
+    model: Model,
+    row_duals: Iterable[float],
+) -> dict[str, Any]: ...
