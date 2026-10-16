@@ -1,0 +1,13 @@
+[package]
+name = "lp-ip-craft"
+description = "Model, solver and result contracts for LP and mixed-integer LP (interface draft with a dummy backend)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Deliberately no dependencies: the core contract must stay usable without Python
+# or any third-party numerical library.
+[dependencies]
