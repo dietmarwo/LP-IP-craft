@@ -6,3 +6,7 @@ __pycache__/
 *.so
 *.pyd
 *.egg-info/
+
+/history/*.bundle
+/MANIFEST.sha256
+/SOURCE-REVISION

@@ -20,10 +20,5 @@ doctest = false
 lp-ip-craft = { path = "../core" }
 pyo3 = { version = "0.30.1", features = ["abi3-py310"] }
 
-[features]
-default = ["highs"]
-highs = ["dep:lp-ip-craft-highs"]
-
-[dependencies.lp-ip-craft-highs]
-path = "../highs"
-optional = true
+[dependencies.lp-ip-craft-native]
+path = "../native"

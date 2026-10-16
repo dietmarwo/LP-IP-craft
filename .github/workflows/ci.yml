@@ -1,93 +1,59 @@
 name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-
+on: [push, pull_request]
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   rust:
-    name: Rust (fmt, clippy, tests, examples)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      # highs-sys builds HiGHS from source (CMake, C++) and runs bindgen (libclang).
-      - run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo clippy -p lp-ip-craft-python --no-default-features --locked -- -D warnings
-      # Debug profile keeps Rust overflow checks; highs-sys always builds HiGHS in Release.
       - run: cargo test --workspace --locked
-      - run: cargo run -p lp-ip-craft --example production --locked
-      - run: cargo run -p lp-ip-craft-highs --example solve --locked
-
+      - run: cargo run -p lp-ip-craft-native --release --example benchmark --locked -- 1
+      - name: Numerical dependency audit
+        shell: bash
+        run: |
+          cargo tree -p lp-ip-craft-native --locked > dependency-tree.txt
+          if rg 'highs|bindgen|cmake|blas|lapack' dependency-tree.txt; then exit 1; fi
   msrv:
-    name: Rust 1.85 (declared rust-version)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.85
-      - run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
-      - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-targets --locked
-
   python:
-    name: Python ${{ matrix.python }} on ${{ matrix.os }} (HiGHS)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.10", "3.14"]
-    env:
-      MATURIN_PEP517_ARGS: --locked
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - uses: dtolnay/rust-toolchain@stable
-      - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
-      - uses: Swatinem/rust-cache@v2
       - run: python -m pip install ".[test]"
-      - run: python -c "import lp_ip_craft as m; assert 'highs' in m.BACKENDS, m.BACKENDS"
+      - run: python -c "import lp_ip_craft as m; assert m.BACKENDS == ('dummy', 'native')"
       - run: python -m pytest -q
-      - run: python examples/demo.py
-      - run: python examples/solve_highs.py
+      - run: python examples/solve_native.py
       - run: python examples/safe_bound.py
-      - name: Bound availability with HiGHS and margin duals (fails on an unsafe bound)
-        shell: bash
-        run: python examples/bound_availability.py --table >> "$GITHUB_STEP_SUMMARY"
 
-  python-dummy-only:
-    name: Python without HiGHS (dummy-only build)
+  oracle:
     runs-on: ubuntu-latest
-    env:
-      MATURIN_PEP517_ARGS: --locked --no-default-features
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: python -m pip install ".[test]"
-      - run: python -c "import lp_ip_craft as m; assert m.BACKENDS == ('dummy',), m.BACKENDS"
-      - run: python -m pytest -q
-      - run: python examples/demo.py
-      - run: python examples/safe_bound.py
+      - run: python -m pip install ".[test]" scipy
+      - run: python examples/validate_native.py > native-oracle.json
+      - run: python examples/validate_components.py 1 > components-serial.json
+      - run: python examples/validate_components.py 4 > components-parallel.json

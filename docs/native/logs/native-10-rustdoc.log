@@ -1,0 +1,7 @@
+    Checking lp-ip-craft v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/core)
+ Documenting lp-ip-craft v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/core)
+    Checking lp-ip-craft-native v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/native)
+ Documenting lp-ip-craft-native v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/native)
+ Documenting lp-ip-craft-python v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/python)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s
+   Generated /workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/target/doc/lp_ip_craft/index.html and 2 other files

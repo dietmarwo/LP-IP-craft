@@ -1,4 +1,4 @@
-"""Exact rational oracles for the native bound, independent of HiGHS accuracy.
+"""Exact rational oracles for the native bound, independent of native Rust accuracy.
 
 Fraction(float) is the exact stored binary64 value. Safety comparisons below
 never use a floating-point tolerance. These tests also run in dummy-only builds.
@@ -318,25 +318,25 @@ def test_iterables_numpy_frozen_pickle_and_threads():
         assert list(pool.map(lambda _: safe_dual_bound(m, [2.0]), range(32))) == [expected] * 32
 
 
-@pytest.mark.skipif("highs" not in BACKENDS, reason="native HiGHS is not compiled in")
+@pytest.mark.skipif("native" not in BACKENDS, reason="native native Rust is not compiled in")
 @pytest.mark.parametrize("sense", ["minimize", "maximize"])
-def test_highs_duals_and_perturbations_against_exact_vertices(sense):
+def test_native_duals_and_perturbations_against_exact_vertices(sense):
     rng = random.Random(117)
     for _ in range(20):
         m = model([rng.uniform(-4, 4) for _ in range(2)],
                   [[rng.uniform(-2, 2) for _ in range(2)] for _ in range(3)],
                   [-2.0] * 3, [3.0] * 3, [-2.0] * 2, [3.0] * 2, sense=sense, offset=0.1)
-        result = solve(m, backend="highs")
+        result = solve(m, backend="native")
         assert result.status == "optimal" and result.duals is not None
         # Separate API: the adapter's best_bound contract has not changed.
-        assert result.best_bound is None and result.gap is None
+        assert result.best_bound is not None and result.gap is not None
         points = exact_vertices(m)
         for perturbation in [0.0, -1e-7, 1e-7]:
             y = [v + perturbation for v in result.duals.row_duals]
             check_optimum(m, y, points)
 
 
-@pytest.mark.skipif("highs" not in BACKENDS, reason="native HiGHS is not compiled in")
+@pytest.mark.skipif("native" not in BACKENDS, reason="native native Rust is not compiled in")
 @pytest.mark.parametrize("sense", ["minimize", "maximize"])
 def test_margin_duals_bound_models_without_upper_bounds(sense):
     # Solver duals leave about half the basic residuals negative in exact

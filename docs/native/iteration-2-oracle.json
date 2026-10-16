@@ -1,0 +1,3206 @@
+{
+  "cases": 400,
+  "passed": 400,
+  "results": [
+    {
+      "integer": false,
+      "case": 0,
+      "objective": -1.637931034482742,
+      "oracle": -1.6379310344827172,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 1,
+      "objective": -10.959999999999981,
+      "oracle": -10.96,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 2,
+      "objective": -4.153846153846154,
+      "oracle": -4.153846153846154,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 3,
+      "objective": 9.769230769230761,
+      "oracle": 9.76923076923077,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 4,
+      "objective": -11.400000000000002,
+      "oracle": -11.400000000000002,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 5,
+      "objective": 13.333333333333524,
+      "oracle": 13.333333333333332,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "integer": false,
+      "case": 6,
+      "objective": 29.77956989247312,
+      "oracle": 29.779569892473106,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "integer": false,
+      "case": 7,
+      "objective": -0.6000000000000139,
+      "oracle": -0.6000000000000014,
+      "nodes": 0,
+      "pivots": 17
+    },
+    {
+      "integer": false,
+      "case": 8,
+      "objective": -37.55,
+      "oracle": -37.550000000000004,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 9,
+      "objective": -13.500000000000002,
+      "oracle": -13.5,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 10,
+      "objective": -5.735632183908054,
+      "oracle": -5.735632183908037,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 11,
+      "objective": 22.151515151515152,
+      "oracle": 22.151515151515152,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 12,
+      "objective": -7.36363636363635,
+      "oracle": -7.363636363636335,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 13,
+      "objective": -25.000000000000014,
+      "oracle": -25.0,
+      "nodes": 0,
+      "pivots": 15
+    },
+    {
+      "integer": false,
+      "case": 14,
+      "objective": -2.993975903614471,
+      "oracle": -2.9939759036144498,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 15,
+      "objective": 13.050951847704368,
+      "oracle": 13.050951847704368,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "integer": false,
+      "case": 16,
+      "objective": -17.955223880597014,
+      "oracle": -17.955223880597018,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 17,
+      "objective": -17.125786163522022,
+      "oracle": -17.12578616352201,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 18,
+      "objective": -40.19047619047619,
+      "oracle": -40.19047619047619,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 19,
+      "objective": -34.261111111111134,
+      "oracle": -34.261111111111106,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 20,
+      "objective": 0.21624713958810027,
+      "oracle": 0.21624713958810227,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 21,
+      "objective": -34.185185185185205,
+      "oracle": -34.18518518518518,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 22,
+      "objective": -19.353591160221004,
+      "oracle": -19.353591160220994,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 23,
+      "objective": -35.2,
+      "oracle": -35.2,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 24,
+      "objective": -11.687499999999995,
+      "oracle": -11.6875,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 25,
+      "objective": -4.333333333333333,
+      "oracle": -4.333333333333334,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 26,
+      "objective": -6.909090909090933,
+      "oracle": -6.90909090909091,
+      "nodes": 0,
+      "pivots": 15
+    },
+    {
+      "integer": false,
+      "case": 27,
+      "objective": 7.875000000000023,
+      "oracle": 7.874999999999993,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 28,
+      "objective": -33.03289473684211,
+      "oracle": -33.03289473684211,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 29,
+      "objective": -4.979797979797976,
+      "oracle": -4.979797979797978,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "integer": false,
+      "case": 30,
+      "objective": 10.168269230769221,
+      "oracle": 10.16826923076923,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 31,
+      "objective": -20.390728476821195,
+      "oracle": -20.39072847682119,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 32,
+      "objective": -9.153846153846139,
+      "oracle": -9.15384615384615,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 33,
+      "objective": -19.000000000000014,
+      "oracle": -19.0,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 34,
+      "objective": 22.4931906614786,
+      "oracle": 22.4931906614786,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 35,
+      "objective": -13.641975308641968,
+      "oracle": -13.64197530864198,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 36,
+      "objective": -8.730769230769228,
+      "oracle": -8.73076923076923,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 37,
+      "objective": -15.590909090909083,
+      "oracle": -15.590909090909093,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 38,
+      "objective": -37.05555555555557,
+      "oracle": -37.05555555555556,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 39,
+      "objective": -27.924479166666668,
+      "oracle": -27.924479166666668,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 40,
+      "objective": 7.749999999999971,
+      "oracle": 7.75,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 41,
+      "objective": 25.300898203592816,
+      "oracle": 25.30089820359281,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 42,
+      "objective": -22.740740740740726,
+      "oracle": -22.74074074074074,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 43,
+      "objective": -26.47904191616766,
+      "oracle": -26.479041916167667,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 44,
+      "objective": -26.999999999999993,
+      "oracle": -26.999999999999996,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 45,
+      "objective": -5.393258426966294,
+      "oracle": -5.393258426966293,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 46,
+      "objective": -11.311475409836069,
+      "oracle": -11.311475409836069,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 47,
+      "objective": -39.39999999999999,
+      "oracle": -39.400000000000006,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 48,
+      "objective": 42.1666666666667,
+      "oracle": 42.16666666666667,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 49,
+      "objective": -14.25000000000001,
+      "oracle": -14.250000000000014,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 50,
+      "objective": -8.086956521739129,
+      "oracle": -8.086956521739129,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 51,
+      "objective": -5.428571428571407,
+      "oracle": -5.428571428571431,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 52,
+      "objective": 12.746666666666666,
+      "oracle": 12.746666666666666,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 53,
+      "objective": -8.85836909871244,
+      "oracle": -8.858369098712451,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 54,
+      "objective": -32.82051282051284,
+      "oracle": -32.82051282051282,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 55,
+      "objective": 14.99967969250481,
+      "oracle": 14.999679692504804,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 56,
+      "objective": 5.113636363636349,
+      "oracle": 5.113636363636367,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 57,
+      "objective": -1.2058823529411784,
+      "oracle": -1.2058823529411775,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 58,
+      "objective": 4.321428571428571,
+      "oracle": 4.321428571428569,
+      "nodes": 0,
+      "pivots": 14
+    },
+    {
+      "integer": false,
+      "case": 59,
+      "objective": -12.65174129353234,
+      "oracle": -12.651741293532337,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 60,
+      "objective": -33.74999999999997,
+      "oracle": -33.75000000000001,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 61,
+      "objective": -10.458333333333332,
+      "oracle": -10.458333333333332,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "integer": false,
+      "case": 62,
+      "objective": -2.6818181818181825,
+      "oracle": -2.681818181818182,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 63,
+      "objective": 3.2005842259006894,
+      "oracle": 3.200584225900687,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 64,
+      "objective": -13.251461988304087,
+      "oracle": -13.251461988304094,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 65,
+      "objective": -15.651465798045614,
+      "oracle": -15.651465798045603,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "integer": false,
+      "case": 66,
+      "objective": -8.684426229508208,
+      "oracle": -8.684426229508201,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 67,
+      "objective": -11.137704918032792,
+      "oracle": -11.137704918032789,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 68,
+      "objective": -0.23684210526315796,
+      "oracle": -0.23684210526316107,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 69,
+      "objective": 4.269230769230763,
+      "oracle": 4.269230769230766,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 70,
+      "objective": 28.518518518518512,
+      "oracle": 28.51851851851852,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 71,
+      "objective": -70.33333333333339,
+      "oracle": -70.33333333333334,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 72,
+      "objective": -6.72619047619048,
+      "oracle": -6.726190476190478,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "integer": false,
+      "case": 73,
+      "objective": -19.499999999999986,
+      "oracle": -19.5,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 74,
+      "objective": -1.0645161290322536,
+      "oracle": -1.064516129032258,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 75,
+      "objective": -14.615384615384617,
+      "oracle": -14.615384615384617,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 76,
+      "objective": 3.2542372881355988,
+      "oracle": 3.2542372881355908,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 77,
+      "objective": 21.235294117647058,
+      "oracle": 21.235294117647058,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 78,
+      "objective": -8.999999999999996,
+      "oracle": -9.0,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 79,
+      "objective": -37.55555555555556,
+      "oracle": -37.55555555555556,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 80,
+      "objective": 24.11930926216641,
+      "oracle": 24.119309262166407,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 81,
+      "objective": -6.983583154889381,
+      "oracle": -6.98358315488937,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 82,
+      "objective": -16.211658570437205,
+      "oracle": -16.211658570437198,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 83,
+      "objective": 0.6411042944785397,
+      "oracle": 0.6411042944785308,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 84,
+      "objective": -26.575757575757567,
+      "oracle": -26.57575757575758,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 85,
+      "objective": -38.31249999999999,
+      "oracle": -38.3125,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 86,
+      "objective": -60.000000000000014,
+      "oracle": -60.0,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 87,
+      "objective": -30.879629629629655,
+      "oracle": -30.87962962962963,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 88,
+      "objective": -13.666666666666671,
+      "oracle": -13.666666666666657,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "integer": false,
+      "case": 89,
+      "objective": -30.57142857142858,
+      "oracle": -30.57142857142857,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 90,
+      "objective": 19.895140664961634,
+      "oracle": 19.895140664961634,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 91,
+      "objective": 8.5,
+      "oracle": 8.5,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "integer": false,
+      "case": 92,
+      "objective": -30.85365853658537,
+      "oracle": -30.853658536585364,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 93,
+      "objective": 7.925000000000001,
+      "oracle": 7.925000000000001,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 94,
+      "objective": -0.8431372549019596,
+      "oracle": -0.8431372549019613,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 95,
+      "objective": 18.51162790697675,
+      "oracle": 18.51162790697675,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 96,
+      "objective": -28.142857142857146,
+      "oracle": -28.14285714285714,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 97,
+      "objective": -20.87575392038601,
+      "oracle": -20.875753920386003,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 98,
+      "objective": -47.07894736842106,
+      "oracle": -47.078947368421055,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 99,
+      "objective": -13.053097345132741,
+      "oracle": -13.05309734513274,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 100,
+      "objective": 6.30645161290321,
+      "oracle": 6.306451612903224,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "integer": false,
+      "case": 101,
+      "objective": -10.666666666666664,
+      "oracle": -10.666666666666666,
+      "nodes": 0,
+      "pivots": 15
+    },
+    {
+      "integer": false,
+      "case": 102,
+      "objective": -14.849192100538598,
+      "oracle": -14.8491921005386,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 103,
+      "objective": 26.111111111111114,
+      "oracle": 26.111111111111114,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 104,
+      "objective": 3.4444444444444366,
+      "oracle": 3.4444444444444464,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 105,
+      "objective": -0.7659574468085033,
+      "oracle": -0.7659574468085113,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 106,
+      "objective": -18.284263959390866,
+      "oracle": -18.284263959390863,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 107,
+      "objective": -8.674174174174189,
+      "oracle": -8.674174174174173,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 108,
+      "objective": -5.902116402116402,
+      "oracle": -5.902116402116404,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 109,
+      "objective": -23.095391211146826,
+      "oracle": -23.095391211146833,
+      "nodes": 0,
+      "pivots": 14
+    },
+    {
+      "integer": false,
+      "case": 110,
+      "objective": -32.738461538461614,
+      "oracle": -32.73846153846152,
+      "nodes": 0,
+      "pivots": 18
+    },
+    {
+      "integer": false,
+      "case": 111,
+      "objective": -21.186900958466452,
+      "oracle": -21.186900958466463,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 112,
+      "objective": 5.000000000000014,
+      "oracle": 5.0,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 113,
+      "objective": -21.35602094240836,
+      "oracle": -21.356020942408378,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 114,
+      "objective": -1.3642857142857099,
+      "oracle": -1.3642857142857174,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 115,
+      "objective": -31.451612903225815,
+      "oracle": -31.451612903225808,
+      "nodes": 0,
+      "pivots": 16
+    },
+    {
+      "integer": false,
+      "case": 116,
+      "objective": 67.19999999999999,
+      "oracle": 67.2,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 117,
+      "objective": 30.691428571428567,
+      "oracle": 30.69142857142858,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "integer": false,
+      "case": 118,
+      "objective": -13.220149253731343,
+      "oracle": -13.220149253731345,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 119,
+      "objective": -45.71980676328503,
+      "oracle": -45.71980676328502,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 120,
+      "objective": -27.000000000000007,
+      "oracle": -27.0,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 121,
+      "objective": 8.659999999999995,
+      "oracle": 8.659999999999998,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 122,
+      "objective": -22.295454545454547,
+      "oracle": -22.295454545454547,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 123,
+      "objective": -85.83180428134557,
+      "oracle": -85.83180428134557,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "integer": false,
+      "case": 124,
+      "objective": -20.064102564102534,
+      "oracle": -20.064102564102562,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 125,
+      "objective": -24.88700564971752,
+      "oracle": -24.887005649717516,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 126,
+      "objective": 3.3539967373572743,
+      "oracle": 3.353996737357253,
+      "nodes": 0,
+      "pivots": 16
+    },
+    {
+      "integer": false,
+      "case": 127,
+      "objective": 14.522167487684717,
+      "oracle": 14.522167487684726,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 128,
+      "objective": 16.631578947368425,
+      "oracle": 16.63157894736842,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 129,
+      "objective": 15.45205479452056,
+      "oracle": 15.452054794520546,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 130,
+      "objective": -24.401459854014597,
+      "oracle": -24.401459854014597,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 131,
+      "objective": -0.9999999999999991,
+      "oracle": -1.0,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 132,
+      "objective": 12.851724137931036,
+      "oracle": 12.851724137931033,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 133,
+      "objective": -33.250000000000014,
+      "oracle": -33.25,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 134,
+      "objective": -25.99999999999999,
+      "oracle": -26.0,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 135,
+      "objective": 4.625,
+      "oracle": 4.625,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 136,
+      "objective": -15.820512820512834,
+      "oracle": -15.820512820512823,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 137,
+      "objective": -17.561904761904763,
+      "oracle": -17.561904761904767,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "integer": false,
+      "case": 138,
+      "objective": 6.3965517241379315,
+      "oracle": 6.396551724137922,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 139,
+      "objective": -12.46666666666665,
+      "oracle": -12.466666666666667,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 140,
+      "objective": 5.961538461538464,
+      "oracle": 5.96153846153846,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 141,
+      "objective": 4.7540983606557425,
+      "oracle": 4.754098360655746,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 142,
+      "objective": -8.879310344827584,
+      "oracle": -8.879310344827587,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 143,
+      "objective": 14.999999999999995,
+      "oracle": 15.0,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 144,
+      "objective": 13.500000000000007,
+      "oracle": 13.500000000000002,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 145,
+      "objective": -15.523809523809533,
+      "oracle": -15.523809523809524,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 146,
+      "objective": -5.33333333333333,
+      "oracle": -5.333333333333334,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 147,
+      "objective": -4.02325581395349,
+      "oracle": -4.02325581395349,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 148,
+      "objective": 15.080503144654088,
+      "oracle": 15.080503144654088,
+      "nodes": 0,
+      "pivots": 17
+    },
+    {
+      "integer": false,
+      "case": 149,
+      "objective": 30.15384615384616,
+      "oracle": 30.15384615384615,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 150,
+      "objective": 8.999999999999991,
+      "oracle": 9.0,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 151,
+      "objective": -17.90243902439023,
+      "oracle": -17.902439024390244,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 152,
+      "objective": -32.56666666666666,
+      "oracle": -32.56666666666666,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 153,
+      "objective": -19.169611307420503,
+      "oracle": -19.169611307420492,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 154,
+      "objective": -2.386363636363641,
+      "oracle": -2.3863636363636367,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "integer": false,
+      "case": 155,
+      "objective": 26.39824797843666,
+      "oracle": 26.398247978436657,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 156,
+      "objective": -14.833333333333323,
+      "oracle": -14.833333333333334,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 157,
+      "objective": 9.425658876180998,
+      "oracle": 9.425658876181004,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 158,
+      "objective": -51.90769230769227,
+      "oracle": -51.90769230769231,
+      "nodes": 0,
+      "pivots": 14
+    },
+    {
+      "integer": false,
+      "case": 159,
+      "objective": -0.9999999999999947,
+      "oracle": -1.0,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 160,
+      "objective": -13.203844208396564,
+      "oracle": -13.20384420839656,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 161,
+      "objective": 12.511764705882353,
+      "oracle": 12.511764705882353,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 162,
+      "objective": -8.296747967479673,
+      "oracle": -8.296747967479675,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 163,
+      "objective": -38.0,
+      "oracle": -38.0,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "integer": false,
+      "case": 164,
+      "objective": 3.99999999999999,
+      "oracle": 4.0,
+      "nodes": 0,
+      "pivots": 14
+    },
+    {
+      "integer": false,
+      "case": 165,
+      "objective": -16.530864197530853,
+      "oracle": -16.530864197530867,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 166,
+      "objective": -2.690476190476172,
+      "oracle": -2.69047619047619,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 167,
+      "objective": -21.05479452054794,
+      "oracle": -21.054794520547944,
+      "nodes": 0,
+      "pivots": 14
+    },
+    {
+      "integer": false,
+      "case": 168,
+      "objective": -16.22346368715084,
+      "oracle": -16.22346368715084,
+      "nodes": 0,
+      "pivots": 15
+    },
+    {
+      "integer": false,
+      "case": 169,
+      "objective": 23.794117647058833,
+      "oracle": 23.794117647058822,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 170,
+      "objective": -53.565217391304344,
+      "oracle": -53.565217391304344,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 171,
+      "objective": -60.68292682926829,
+      "oracle": -60.6829268292683,
+      "nodes": 0,
+      "pivots": 14
+    },
+    {
+      "integer": false,
+      "case": 172,
+      "objective": -15.074074074074073,
+      "oracle": -15.074074074074076,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 173,
+      "objective": 4.4999999999999885,
+      "oracle": 4.5,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 174,
+      "objective": 8.571428571428582,
+      "oracle": 8.571428571428577,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 175,
+      "objective": -23.999999999999993,
+      "oracle": -24.0,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 176,
+      "objective": -27.23076923076923,
+      "oracle": -27.230769230769234,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 177,
+      "objective": 24.991627906976746,
+      "oracle": 24.991627906976746,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 178,
+      "objective": 18.61337608795236,
+      "oracle": 18.61337608795236,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 179,
+      "objective": -25.736842105263143,
+      "oracle": -25.73684210526316,
+      "nodes": 0,
+      "pivots": 19
+    },
+    {
+      "integer": false,
+      "case": 180,
+      "objective": 4.351620947630931,
+      "oracle": 4.3516209476309236,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 181,
+      "objective": -22.877120822622118,
+      "oracle": -22.877120822622068,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 182,
+      "objective": -51.00000000000003,
+      "oracle": -51.0,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 183,
+      "objective": -18.384615384615408,
+      "oracle": -18.384615384615383,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 184,
+      "objective": -22.801941747572823,
+      "oracle": -22.801941747572812,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 185,
+      "objective": -23.12182741116751,
+      "oracle": -23.121827411167512,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 186,
+      "objective": 3.999999999999991,
+      "oracle": 4.0,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 187,
+      "objective": -25.533864541832635,
+      "oracle": -25.53386454183267,
+      "nodes": 0,
+      "pivots": 17
+    },
+    {
+      "integer": false,
+      "case": 188,
+      "objective": -46.7969798657718,
+      "oracle": -46.79697986577182,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 189,
+      "objective": -5.6056338028169,
+      "oracle": -5.605633802816901,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 190,
+      "objective": -14.132142857142856,
+      "oracle": -14.132142857142856,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 191,
+      "objective": -20.401129943502834,
+      "oracle": -20.401129943502823,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "integer": false,
+      "case": 192,
+      "objective": -21.464705882352966,
+      "oracle": -21.464705882352938,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "integer": false,
+      "case": 193,
+      "objective": 1.7057195571955681,
+      "oracle": 1.7057195571955681,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "integer": false,
+      "case": 194,
+      "objective": 16.25,
+      "oracle": 16.25,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "integer": false,
+      "case": 195,
+      "objective": 8.210526315789473,
+      "oracle": 8.210526315789473,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 196,
+      "objective": 10.751492537313434,
+      "oracle": 10.751492537313432,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "integer": false,
+      "case": 197,
+      "objective": -16.206896551724153,
+      "oracle": -16.206896551724135,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 198,
+      "objective": -37.68181818181817,
+      "oracle": -37.68181818181819,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "integer": false,
+      "case": 199,
+      "objective": 17.1716621253406,
+      "oracle": 17.1716621253406,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "integer": true,
+      "case": 0,
+      "objective": 24.0,
+      "oracle": 24.0,
+      "nodes": 11,
+      "pivots": 72
+    },
+    {
+      "integer": true,
+      "case": 1,
+      "objective": -17.0,
+      "oracle": -17.0,
+      "nodes": 11,
+      "pivots": 93
+    },
+    {
+      "integer": true,
+      "case": 2,
+      "objective": -42.0,
+      "oracle": -42.0,
+      "nodes": 3,
+      "pivots": 22
+    },
+    {
+      "integer": true,
+      "case": 3,
+      "objective": 26.0,
+      "oracle": 26.0,
+      "nodes": 21,
+      "pivots": 145
+    },
+    {
+      "integer": true,
+      "case": 4,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 5,
+      "pivots": 33
+    },
+    {
+      "integer": true,
+      "case": 5,
+      "objective": 4.0,
+      "oracle": 3.999999999999999,
+      "nodes": 11,
+      "pivots": 85
+    },
+    {
+      "integer": true,
+      "case": 6,
+      "objective": 20.0,
+      "oracle": 20.0,
+      "nodes": 9,
+      "pivots": 31
+    },
+    {
+      "integer": true,
+      "case": 7,
+      "objective": 23.0,
+      "oracle": 23.0,
+      "nodes": 13,
+      "pivots": 85
+    },
+    {
+      "integer": true,
+      "case": 8,
+      "objective": -11.0,
+      "oracle": -11.0,
+      "nodes": 5,
+      "pivots": 41
+    },
+    {
+      "integer": true,
+      "case": 9,
+      "objective": -11.0,
+      "oracle": -11.0,
+      "nodes": 3,
+      "pivots": 29
+    },
+    {
+      "integer": true,
+      "case": 10,
+      "objective": 26.0,
+      "oracle": 26.0,
+      "nodes": 17,
+      "pivots": 101
+    },
+    {
+      "integer": true,
+      "case": 11,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 21,
+      "pivots": 160
+    },
+    {
+      "integer": true,
+      "case": 12,
+      "objective": 7.0,
+      "oracle": 7.0,
+      "nodes": 23,
+      "pivots": 135
+    },
+    {
+      "integer": true,
+      "case": 13,
+      "objective": -32.0,
+      "oracle": -32.0,
+      "nodes": 11,
+      "pivots": 102
+    },
+    {
+      "integer": true,
+      "case": 14,
+      "objective": -24.0,
+      "oracle": -24.0,
+      "nodes": 11,
+      "pivots": 85
+    },
+    {
+      "integer": true,
+      "case": 15,
+      "objective": -12.0,
+      "oracle": -12.0,
+      "nodes": 3,
+      "pivots": 32
+    },
+    {
+      "integer": true,
+      "case": 16,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 15,
+      "pivots": 92
+    },
+    {
+      "integer": true,
+      "case": 17,
+      "objective": 63.0,
+      "oracle": 63.0,
+      "nodes": 11,
+      "pivots": 62
+    },
+    {
+      "integer": true,
+      "case": 18,
+      "objective": -20.0,
+      "oracle": -20.0,
+      "nodes": 5,
+      "pivots": 39
+    },
+    {
+      "integer": true,
+      "case": 19,
+      "objective": 8.0,
+      "oracle": 8.0,
+      "nodes": 19,
+      "pivots": 108
+    },
+    {
+      "integer": true,
+      "case": 20,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 5,
+      "pivots": 34
+    },
+    {
+      "integer": true,
+      "case": 21,
+      "objective": 26.0,
+      "oracle": 26.0,
+      "nodes": 7,
+      "pivots": 45
+    },
+    {
+      "integer": true,
+      "case": 22,
+      "objective": -51.0,
+      "oracle": -51.0,
+      "nodes": 15,
+      "pivots": 102
+    },
+    {
+      "integer": true,
+      "case": 23,
+      "objective": 27.0,
+      "oracle": 27.0,
+      "nodes": 9,
+      "pivots": 46
+    },
+    {
+      "integer": true,
+      "case": 24,
+      "objective": -9.0,
+      "oracle": -9.0,
+      "nodes": 7,
+      "pivots": 58
+    },
+    {
+      "integer": true,
+      "case": 25,
+      "objective": 11.0,
+      "oracle": 11.0,
+      "nodes": 27,
+      "pivots": 115
+    },
+    {
+      "integer": true,
+      "case": 26,
+      "objective": -53.0,
+      "oracle": -53.0,
+      "nodes": 1,
+      "pivots": 9
+    },
+    {
+      "integer": true,
+      "case": 27,
+      "objective": 22.0,
+      "oracle": 22.0,
+      "nodes": 19,
+      "pivots": 121
+    },
+    {
+      "integer": true,
+      "case": 28,
+      "objective": -12.0,
+      "oracle": -12.0,
+      "nodes": 23,
+      "pivots": 219
+    },
+    {
+      "integer": true,
+      "case": 29,
+      "objective": -26.0,
+      "oracle": -26.0,
+      "nodes": 5,
+      "pivots": 43
+    },
+    {
+      "integer": true,
+      "case": 30,
+      "objective": -2.0,
+      "oracle": -2.0,
+      "nodes": 5,
+      "pivots": 48
+    },
+    {
+      "integer": true,
+      "case": 31,
+      "objective": -18.0,
+      "oracle": -18.0,
+      "nodes": 9,
+      "pivots": 64
+    },
+    {
+      "integer": true,
+      "case": 32,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 7,
+      "pivots": 38
+    },
+    {
+      "integer": true,
+      "case": 33,
+      "objective": -4.0,
+      "oracle": -4.0,
+      "nodes": 9,
+      "pivots": 54
+    },
+    {
+      "integer": true,
+      "case": 34,
+      "objective": 16.0,
+      "oracle": 16.0,
+      "nodes": 11,
+      "pivots": 37
+    },
+    {
+      "integer": true,
+      "case": 35,
+      "objective": 7.0,
+      "oracle": 7.0,
+      "nodes": 7,
+      "pivots": 42
+    },
+    {
+      "integer": true,
+      "case": 36,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 17,
+      "pivots": 97
+    },
+    {
+      "integer": true,
+      "case": 37,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 5,
+      "pivots": 36
+    },
+    {
+      "integer": true,
+      "case": 38,
+      "objective": -33.0,
+      "oracle": -33.0,
+      "nodes": 3,
+      "pivots": 20
+    },
+    {
+      "integer": true,
+      "case": 39,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 13,
+      "pivots": 90
+    },
+    {
+      "integer": true,
+      "case": 40,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 7,
+      "pivots": 47
+    },
+    {
+      "integer": true,
+      "case": 41,
+      "objective": -44.0,
+      "oracle": -44.0,
+      "nodes": 5,
+      "pivots": 38
+    },
+    {
+      "integer": true,
+      "case": 42,
+      "objective": 3.0,
+      "oracle": 3.0,
+      "nodes": 5,
+      "pivots": 38
+    },
+    {
+      "integer": true,
+      "case": 43,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 5,
+      "pivots": 40
+    },
+    {
+      "integer": true,
+      "case": 44,
+      "objective": -9.0,
+      "oracle": -9.0,
+      "nodes": 3,
+      "pivots": 29
+    },
+    {
+      "integer": true,
+      "case": 45,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 11,
+      "pivots": 74
+    },
+    {
+      "integer": true,
+      "case": 46,
+      "objective": 23.0,
+      "oracle": 23.0,
+      "nodes": 13,
+      "pivots": 100
+    },
+    {
+      "integer": true,
+      "case": 47,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 9,
+      "pivots": 77
+    },
+    {
+      "integer": true,
+      "case": 48,
+      "objective": -35.0,
+      "oracle": -35.0,
+      "nodes": 23,
+      "pivots": 144
+    },
+    {
+      "integer": true,
+      "case": 49,
+      "objective": 45.0,
+      "oracle": 45.0,
+      "nodes": 23,
+      "pivots": 120
+    },
+    {
+      "integer": true,
+      "case": 50,
+      "objective": -17.0,
+      "oracle": -17.0,
+      "nodes": 7,
+      "pivots": 57
+    },
+    {
+      "integer": true,
+      "case": 51,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 13,
+      "pivots": 103
+    },
+    {
+      "integer": true,
+      "case": 52,
+      "objective": 12.0,
+      "oracle": 12.0,
+      "nodes": 3,
+      "pivots": 20
+    },
+    {
+      "integer": true,
+      "case": 53,
+      "objective": -41.0,
+      "oracle": -41.0,
+      "nodes": 7,
+      "pivots": 68
+    },
+    {
+      "integer": true,
+      "case": 54,
+      "objective": 20.0,
+      "oracle": 20.0,
+      "nodes": 5,
+      "pivots": 37
+    },
+    {
+      "integer": true,
+      "case": 55,
+      "objective": 10.0,
+      "oracle": 10.0,
+      "nodes": 7,
+      "pivots": 25
+    },
+    {
+      "integer": true,
+      "case": 56,
+      "objective": -12.0,
+      "oracle": -12.0,
+      "nodes": 7,
+      "pivots": 39
+    },
+    {
+      "integer": true,
+      "case": 57,
+      "objective": -43.0,
+      "oracle": -43.0,
+      "nodes": 5,
+      "pivots": 35
+    },
+    {
+      "integer": true,
+      "case": 58,
+      "objective": -2.0,
+      "oracle": -2.0,
+      "nodes": 9,
+      "pivots": 72
+    },
+    {
+      "integer": true,
+      "case": 59,
+      "objective": -9.0,
+      "oracle": -9.0,
+      "nodes": 5,
+      "pivots": 60
+    },
+    {
+      "integer": true,
+      "case": 60,
+      "objective": 7.0,
+      "oracle": 7.0,
+      "nodes": 27,
+      "pivots": 135
+    },
+    {
+      "integer": true,
+      "case": 61,
+      "objective": 7.0,
+      "oracle": 7.0,
+      "nodes": 11,
+      "pivots": 58
+    },
+    {
+      "integer": true,
+      "case": 62,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 9,
+      "pivots": 80
+    },
+    {
+      "integer": true,
+      "case": 63,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 9,
+      "pivots": 35
+    },
+    {
+      "integer": true,
+      "case": 64,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 11,
+      "pivots": 114
+    },
+    {
+      "integer": true,
+      "case": 65,
+      "objective": 17.0,
+      "oracle": 17.0,
+      "nodes": 17,
+      "pivots": 114
+    },
+    {
+      "integer": true,
+      "case": 66,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 25,
+      "pivots": 154
+    },
+    {
+      "integer": true,
+      "case": 67,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 15,
+      "pivots": 127
+    },
+    {
+      "integer": true,
+      "case": 68,
+      "objective": -10.0,
+      "oracle": -10.0,
+      "nodes": 11,
+      "pivots": 117
+    },
+    {
+      "integer": true,
+      "case": 69,
+      "objective": -9.0,
+      "oracle": -9.0,
+      "nodes": 15,
+      "pivots": 104
+    },
+    {
+      "integer": true,
+      "case": 70,
+      "objective": 24.0,
+      "oracle": 23.999999999999993,
+      "nodes": 5,
+      "pivots": 43
+    },
+    {
+      "integer": true,
+      "case": 71,
+      "objective": -39.0,
+      "oracle": -39.0,
+      "nodes": 11,
+      "pivots": 83
+    },
+    {
+      "integer": true,
+      "case": 72,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 17,
+      "pivots": 134
+    },
+    {
+      "integer": true,
+      "case": 73,
+      "objective": -37.0,
+      "oracle": -37.0,
+      "nodes": 7,
+      "pivots": 59
+    },
+    {
+      "integer": true,
+      "case": 74,
+      "objective": 11.0,
+      "oracle": 11.0,
+      "nodes": 9,
+      "pivots": 58
+    },
+    {
+      "integer": true,
+      "case": 75,
+      "objective": 9.0,
+      "oracle": 9.0,
+      "nodes": 15,
+      "pivots": 93
+    },
+    {
+      "integer": true,
+      "case": 76,
+      "objective": 11.0,
+      "oracle": 11.0,
+      "nodes": 1,
+      "pivots": 7
+    },
+    {
+      "integer": true,
+      "case": 77,
+      "objective": 5.0,
+      "oracle": 5.0,
+      "nodes": 15,
+      "pivots": 106
+    },
+    {
+      "integer": true,
+      "case": 78,
+      "objective": 5.0,
+      "oracle": 5.0,
+      "nodes": 5,
+      "pivots": 23
+    },
+    {
+      "integer": true,
+      "case": 79,
+      "objective": 14.0,
+      "oracle": 14.0,
+      "nodes": 13,
+      "pivots": 57
+    },
+    {
+      "integer": true,
+      "case": 80,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 21,
+      "pivots": 143
+    },
+    {
+      "integer": true,
+      "case": 81,
+      "objective": -26.0,
+      "oracle": -26.0,
+      "nodes": 11,
+      "pivots": 83
+    },
+    {
+      "integer": true,
+      "case": 82,
+      "objective": -6.0,
+      "oracle": -6.0,
+      "nodes": 37,
+      "pivots": 226
+    },
+    {
+      "integer": true,
+      "case": 83,
+      "objective": -6.0,
+      "oracle": -6.0,
+      "nodes": 27,
+      "pivots": 173
+    },
+    {
+      "integer": true,
+      "case": 84,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 11,
+      "pivots": 59
+    },
+    {
+      "integer": true,
+      "case": 85,
+      "objective": -4.0,
+      "oracle": -4.0,
+      "nodes": 11,
+      "pivots": 95
+    },
+    {
+      "integer": true,
+      "case": 86,
+      "objective": 12.0,
+      "oracle": 12.0,
+      "nodes": 9,
+      "pivots": 61
+    },
+    {
+      "integer": true,
+      "case": 87,
+      "objective": 12.0,
+      "oracle": 12.0,
+      "nodes": 19,
+      "pivots": 97
+    },
+    {
+      "integer": true,
+      "case": 88,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 9,
+      "pivots": 64
+    },
+    {
+      "integer": true,
+      "case": 89,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 15,
+      "pivots": 104
+    },
+    {
+      "integer": true,
+      "case": 90,
+      "objective": -6.0,
+      "oracle": -6.0,
+      "nodes": 33,
+      "pivots": 193
+    },
+    {
+      "integer": true,
+      "case": 91,
+      "objective": -2.0,
+      "oracle": -2.0,
+      "nodes": 15,
+      "pivots": 94
+    },
+    {
+      "integer": true,
+      "case": 92,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 21,
+      "pivots": 139
+    },
+    {
+      "integer": true,
+      "case": 93,
+      "objective": 14.0,
+      "oracle": 14.0,
+      "nodes": 11,
+      "pivots": 82
+    },
+    {
+      "integer": true,
+      "case": 94,
+      "objective": -32.0,
+      "oracle": -32.0,
+      "nodes": 17,
+      "pivots": 106
+    },
+    {
+      "integer": true,
+      "case": 95,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 3,
+      "pivots": 18
+    },
+    {
+      "integer": true,
+      "case": 96,
+      "objective": -18.0,
+      "oracle": -18.0,
+      "nodes": 9,
+      "pivots": 51
+    },
+    {
+      "integer": true,
+      "case": 97,
+      "objective": 23.0,
+      "oracle": 23.0,
+      "nodes": 5,
+      "pivots": 27
+    },
+    {
+      "integer": true,
+      "case": 98,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 7,
+      "pivots": 43
+    },
+    {
+      "integer": true,
+      "case": 99,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 7,
+      "pivots": 47
+    },
+    {
+      "integer": true,
+      "case": 100,
+      "objective": 23.0,
+      "oracle": 23.0,
+      "nodes": 11,
+      "pivots": 69
+    },
+    {
+      "integer": true,
+      "case": 101,
+      "objective": -34.0,
+      "oracle": -34.0,
+      "nodes": 17,
+      "pivots": 116
+    },
+    {
+      "integer": true,
+      "case": 102,
+      "objective": -19.0,
+      "oracle": -19.0,
+      "nodes": 15,
+      "pivots": 124
+    },
+    {
+      "integer": true,
+      "case": 103,
+      "objective": -22.0,
+      "oracle": -22.0,
+      "nodes": 31,
+      "pivots": 228
+    },
+    {
+      "integer": true,
+      "case": 104,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 13,
+      "pivots": 78
+    },
+    {
+      "integer": true,
+      "case": 105,
+      "objective": 14.0,
+      "oracle": 14.0,
+      "nodes": 5,
+      "pivots": 31
+    },
+    {
+      "integer": true,
+      "case": 106,
+      "objective": -32.0,
+      "oracle": -32.0,
+      "nodes": 11,
+      "pivots": 93
+    },
+    {
+      "integer": true,
+      "case": 107,
+      "objective": -17.0,
+      "oracle": -17.0,
+      "nodes": 3,
+      "pivots": 25
+    },
+    {
+      "integer": true,
+      "case": 108,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 7,
+      "pivots": 54
+    },
+    {
+      "integer": true,
+      "case": 109,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 13,
+      "pivots": 108
+    },
+    {
+      "integer": true,
+      "case": 110,
+      "objective": 18.0,
+      "oracle": 18.0,
+      "nodes": 11,
+      "pivots": 62
+    },
+    {
+      "integer": true,
+      "case": 111,
+      "objective": 18.0,
+      "oracle": 18.0,
+      "nodes": 43,
+      "pivots": 179
+    },
+    {
+      "integer": true,
+      "case": 112,
+      "objective": -63.0,
+      "oracle": -63.0,
+      "nodes": 7,
+      "pivots": 54
+    },
+    {
+      "integer": true,
+      "case": 113,
+      "objective": -18.0,
+      "oracle": -18.0,
+      "nodes": 11,
+      "pivots": 74
+    },
+    {
+      "integer": true,
+      "case": 114,
+      "objective": 20.0,
+      "oracle": 20.0,
+      "nodes": 17,
+      "pivots": 117
+    },
+    {
+      "integer": true,
+      "case": 115,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 7,
+      "pivots": 59
+    },
+    {
+      "integer": true,
+      "case": 116,
+      "objective": -28.0,
+      "oracle": -28.0,
+      "nodes": 5,
+      "pivots": 38
+    },
+    {
+      "integer": true,
+      "case": 117,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 9,
+      "pivots": 76
+    },
+    {
+      "integer": true,
+      "case": 118,
+      "objective": 3.0,
+      "oracle": 3.0,
+      "nodes": 7,
+      "pivots": 61
+    },
+    {
+      "integer": true,
+      "case": 119,
+      "objective": -16.0,
+      "oracle": -16.0,
+      "nodes": 3,
+      "pivots": 24
+    },
+    {
+      "integer": true,
+      "case": 120,
+      "objective": 7.0,
+      "oracle": 7.0,
+      "nodes": 19,
+      "pivots": 148
+    },
+    {
+      "integer": true,
+      "case": 121,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 3,
+      "pivots": 32
+    },
+    {
+      "integer": true,
+      "case": 122,
+      "objective": 28.0,
+      "oracle": 28.0,
+      "nodes": 7,
+      "pivots": 35
+    },
+    {
+      "integer": true,
+      "case": 123,
+      "objective": -26.0,
+      "oracle": -26.0,
+      "nodes": 5,
+      "pivots": 34
+    },
+    {
+      "integer": true,
+      "case": 124,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 21,
+      "pivots": 142
+    },
+    {
+      "integer": true,
+      "case": 125,
+      "objective": 13.0,
+      "oracle": 13.0,
+      "nodes": 7,
+      "pivots": 36
+    },
+    {
+      "integer": true,
+      "case": 126,
+      "objective": -35.0,
+      "oracle": -35.0,
+      "nodes": 15,
+      "pivots": 106
+    },
+    {
+      "integer": true,
+      "case": 127,
+      "objective": 14.0,
+      "oracle": 14.0,
+      "nodes": 15,
+      "pivots": 117
+    },
+    {
+      "integer": true,
+      "case": 128,
+      "objective": -16.0,
+      "oracle": -16.0,
+      "nodes": 13,
+      "pivots": 102
+    },
+    {
+      "integer": true,
+      "case": 129,
+      "objective": 29.0,
+      "oracle": 29.0,
+      "nodes": 11,
+      "pivots": 71
+    },
+    {
+      "integer": true,
+      "case": 130,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 5,
+      "pivots": 40
+    },
+    {
+      "integer": true,
+      "case": 131,
+      "objective": 4.0,
+      "oracle": 4.0,
+      "nodes": 7,
+      "pivots": 52
+    },
+    {
+      "integer": true,
+      "case": 132,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 5,
+      "pivots": 30
+    },
+    {
+      "integer": true,
+      "case": 133,
+      "objective": 6.0,
+      "oracle": 6.0,
+      "nodes": 15,
+      "pivots": 116
+    },
+    {
+      "integer": true,
+      "case": 134,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 7,
+      "pivots": 53
+    },
+    {
+      "integer": true,
+      "case": 135,
+      "objective": -16.0,
+      "oracle": -15.99999999999999,
+      "nodes": 1,
+      "pivots": 12
+    },
+    {
+      "integer": true,
+      "case": 136,
+      "objective": 3.0,
+      "oracle": 3.0,
+      "nodes": 9,
+      "pivots": 93
+    },
+    {
+      "integer": true,
+      "case": 137,
+      "objective": 3.0,
+      "oracle": 3.0,
+      "nodes": 11,
+      "pivots": 42
+    },
+    {
+      "integer": true,
+      "case": 138,
+      "objective": -54.0,
+      "oracle": -54.0,
+      "nodes": 5,
+      "pivots": 44
+    },
+    {
+      "integer": true,
+      "case": 139,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 19,
+      "pivots": 155
+    },
+    {
+      "integer": true,
+      "case": 140,
+      "objective": 20.0,
+      "oracle": 20.0,
+      "nodes": 15,
+      "pivots": 85
+    },
+    {
+      "integer": true,
+      "case": 141,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 17,
+      "pivots": 137
+    },
+    {
+      "integer": true,
+      "case": 142,
+      "objective": -31.0,
+      "oracle": -31.0,
+      "nodes": 9,
+      "pivots": 55
+    },
+    {
+      "integer": true,
+      "case": 143,
+      "objective": 41.0,
+      "oracle": 41.0,
+      "nodes": 11,
+      "pivots": 91
+    },
+    {
+      "integer": true,
+      "case": 144,
+      "objective": 17.0,
+      "oracle": 17.0,
+      "nodes": 21,
+      "pivots": 164
+    },
+    {
+      "integer": true,
+      "case": 145,
+      "objective": -13.0,
+      "oracle": -12.999999999999998,
+      "nodes": 33,
+      "pivots": 222
+    },
+    {
+      "integer": true,
+      "case": 146,
+      "objective": 24.0,
+      "oracle": 24.0,
+      "nodes": 3,
+      "pivots": 20
+    },
+    {
+      "integer": true,
+      "case": 147,
+      "objective": 30.0,
+      "oracle": 30.0,
+      "nodes": 7,
+      "pivots": 54
+    },
+    {
+      "integer": true,
+      "case": 148,
+      "objective": -40.0,
+      "oracle": -40.0,
+      "nodes": 25,
+      "pivots": 188
+    },
+    {
+      "integer": true,
+      "case": 149,
+      "objective": 21.0,
+      "oracle": 21.0,
+      "nodes": 5,
+      "pivots": 44
+    },
+    {
+      "integer": true,
+      "case": 150,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 23,
+      "pivots": 142
+    },
+    {
+      "integer": true,
+      "case": 151,
+      "objective": 29.0,
+      "oracle": 29.0,
+      "nodes": 13,
+      "pivots": 90
+    },
+    {
+      "integer": true,
+      "case": 152,
+      "objective": -43.0,
+      "oracle": -43.0,
+      "nodes": 1,
+      "pivots": 6
+    },
+    {
+      "integer": true,
+      "case": 153,
+      "objective": -25.0,
+      "oracle": -25.0,
+      "nodes": 13,
+      "pivots": 96
+    },
+    {
+      "integer": true,
+      "case": 154,
+      "objective": -27.0,
+      "oracle": -27.0,
+      "nodes": 13,
+      "pivots": 108
+    },
+    {
+      "integer": true,
+      "case": 155,
+      "objective": -72.0,
+      "oracle": -72.0,
+      "nodes": 7,
+      "pivots": 60
+    },
+    {
+      "integer": true,
+      "case": 156,
+      "objective": -27.0,
+      "oracle": -27.0,
+      "nodes": 3,
+      "pivots": 27
+    },
+    {
+      "integer": true,
+      "case": 157,
+      "objective": 0.0,
+      "oracle": -2.6645352591003757e-15,
+      "nodes": 1,
+      "pivots": 8
+    },
+    {
+      "integer": true,
+      "case": 158,
+      "objective": -9.0,
+      "oracle": -9.0,
+      "nodes": 5,
+      "pivots": 30
+    },
+    {
+      "integer": true,
+      "case": 159,
+      "objective": -30.0,
+      "oracle": -30.0,
+      "nodes": 15,
+      "pivots": 120
+    },
+    {
+      "integer": true,
+      "case": 160,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 3,
+      "pivots": 18
+    },
+    {
+      "integer": true,
+      "case": 161,
+      "objective": -23.0,
+      "oracle": -23.0,
+      "nodes": 9,
+      "pivots": 66
+    },
+    {
+      "integer": true,
+      "case": 162,
+      "objective": 25.0,
+      "oracle": 25.0,
+      "nodes": 13,
+      "pivots": 113
+    },
+    {
+      "integer": true,
+      "case": 163,
+      "objective": -29.0,
+      "oracle": -29.0,
+      "nodes": 5,
+      "pivots": 41
+    },
+    {
+      "integer": true,
+      "case": 164,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 13,
+      "pivots": 85
+    },
+    {
+      "integer": true,
+      "case": 165,
+      "objective": 8.0,
+      "oracle": 8.0,
+      "nodes": 19,
+      "pivots": 110
+    },
+    {
+      "integer": true,
+      "case": 166,
+      "objective": -49.0,
+      "oracle": -49.0,
+      "nodes": 9,
+      "pivots": 71
+    },
+    {
+      "integer": true,
+      "case": 167,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 3,
+      "pivots": 24
+    },
+    {
+      "integer": true,
+      "case": 168,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 7,
+      "pivots": 76
+    },
+    {
+      "integer": true,
+      "case": 169,
+      "objective": -18.0,
+      "oracle": -18.0,
+      "nodes": 11,
+      "pivots": 67
+    },
+    {
+      "integer": true,
+      "case": 170,
+      "objective": 10.0,
+      "oracle": 10.0,
+      "nodes": 15,
+      "pivots": 103
+    },
+    {
+      "integer": true,
+      "case": 171,
+      "objective": 33.0,
+      "oracle": 33.0,
+      "nodes": 15,
+      "pivots": 87
+    },
+    {
+      "integer": true,
+      "case": 172,
+      "objective": -34.0,
+      "oracle": -34.0,
+      "nodes": 3,
+      "pivots": 34
+    },
+    {
+      "integer": true,
+      "case": 173,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 3,
+      "pivots": 30
+    },
+    {
+      "integer": true,
+      "case": 174,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 3,
+      "pivots": 18
+    },
+    {
+      "integer": true,
+      "case": 175,
+      "objective": 2.0,
+      "oracle": 1.9999999999999996,
+      "nodes": 17,
+      "pivots": 160
+    },
+    {
+      "integer": true,
+      "case": 176,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 13,
+      "pivots": 96
+    },
+    {
+      "integer": true,
+      "case": 177,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 7,
+      "pivots": 39
+    },
+    {
+      "integer": true,
+      "case": 178,
+      "objective": -22.0,
+      "oracle": -22.0,
+      "nodes": 3,
+      "pivots": 20
+    },
+    {
+      "integer": true,
+      "case": 179,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 17,
+      "pivots": 78
+    },
+    {
+      "integer": true,
+      "case": 180,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 7,
+      "pivots": 49
+    },
+    {
+      "integer": true,
+      "case": 181,
+      "objective": -38.0,
+      "oracle": -38.0,
+      "nodes": 5,
+      "pivots": 53
+    },
+    {
+      "integer": true,
+      "case": 182,
+      "objective": 6.0,
+      "oracle": 6.0,
+      "nodes": 7,
+      "pivots": 74
+    },
+    {
+      "integer": true,
+      "case": 183,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 21,
+      "pivots": 141
+    },
+    {
+      "integer": true,
+      "case": 184,
+      "objective": 25.0,
+      "oracle": 25.0,
+      "nodes": 17,
+      "pivots": 110
+    },
+    {
+      "integer": true,
+      "case": 185,
+      "objective": 4.0,
+      "oracle": 4.0,
+      "nodes": 1,
+      "pivots": 13
+    },
+    {
+      "integer": true,
+      "case": 186,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 5,
+      "pivots": 29
+    },
+    {
+      "integer": true,
+      "case": 187,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 1,
+      "pivots": 6
+    },
+    {
+      "integer": true,
+      "case": 188,
+      "objective": -17.0,
+      "oracle": -17.0,
+      "nodes": 5,
+      "pivots": 59
+    },
+    {
+      "integer": true,
+      "case": 189,
+      "objective": -18.0,
+      "oracle": -18.0,
+      "nodes": 7,
+      "pivots": 55
+    },
+    {
+      "integer": true,
+      "case": 190,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 21,
+      "pivots": 187
+    },
+    {
+      "integer": true,
+      "case": 191,
+      "objective": -9.0,
+      "oracle": -9.0,
+      "nodes": 7,
+      "pivots": 67
+    },
+    {
+      "integer": true,
+      "case": 192,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 15,
+      "pivots": 139
+    },
+    {
+      "integer": true,
+      "case": 193,
+      "objective": -17.0,
+      "oracle": -17.0,
+      "nodes": 9,
+      "pivots": 73
+    },
+    {
+      "integer": true,
+      "case": 194,
+      "objective": -10.0,
+      "oracle": -10.0,
+      "nodes": 9,
+      "pivots": 41
+    },
+    {
+      "integer": true,
+      "case": 195,
+      "objective": 39.0,
+      "oracle": 39.0,
+      "nodes": 13,
+      "pivots": 37
+    },
+    {
+      "integer": true,
+      "case": 196,
+      "objective": -12.0,
+      "oracle": -12.0,
+      "nodes": 5,
+      "pivots": 44
+    },
+    {
+      "integer": true,
+      "case": 197,
+      "objective": 9.0,
+      "oracle": 9.0,
+      "nodes": 11,
+      "pivots": 60
+    },
+    {
+      "integer": true,
+      "case": 198,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 5,
+      "pivots": 33
+    },
+    {
+      "integer": true,
+      "case": 199,
+      "objective": 8.0,
+      "oracle": 7.999999999999982,
+      "nodes": 31,
+      "pivots": 136
+    }
+  ]
+}

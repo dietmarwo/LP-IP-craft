@@ -1,14 +1,14 @@
-"""How often safe_dual_bound is finite with HiGHS duals, and how tight it is.
+"""How often safe_dual_bound is finite with native Rust duals, and how tight it is.
 
     python examples/bound_availability.py [--count N] [--seed S] [--table]
 
 Random feasible, bounded LPs (n = 3..24) in four families of variable boxes,
 plus MIPs bounded through their LP relaxation. Each model is bounded twice:
-with the row duals HiGHS returns, and with ``margin_duals`` from
+with the row duals native Rust returns, and with ``margin_duals`` from
 safe_bound.py (costs of one-sided columns shifted by 1e-6 before solving).
-Looseness is ``(optimum - bound) / max(1, |optimum|)`` against the HiGHS
+Looseness is ``(optimum - bound) / max(1, |optimum|)`` against the native Rust
 objective (for MIPs, its MIP objective), oriented so a valid bound gives a
-nonnegative value. Requires the HiGHS backend.
+nonnegative value. Requires the native Rust backend.
 
 Every finite bound is also checked, without tolerance, against the exact
 Lagrangian bound of its multipliers computed in rational arithmetic; the
@@ -35,7 +35,7 @@ from lp_ip_craft import BACKENDS, Model, safe_dual_bound, solve  # noqa: E402
 
 INF = math.inf
 FAMILIES = ["box [0, 3]", "x >= 0, no upper bound", "half the columns free",
-            "MIP: integers in [0, 4], continuous x >= 0"]
+            "MIP: all variables in [0, 4]"]
 
 
 def csr(a):
@@ -72,6 +72,8 @@ def problem(family: str, rng) -> Model:
         integer = rng.random(n) < 0.5
         upper = [4.0 if i else INF for i in integer]
         kinds = ["integer" if i else "continuous" for i in integer]
+    if any(k == "integer" for k in (kinds or [])):
+        upper = [4.0] * n
     indptr, indices, values = csr(a)
     return Model(objective=[float(v) for v in rng.normal(size=n)],
                  sense="minimize" if rng.random() < 0.5 else "maximize",
@@ -113,16 +115,16 @@ def run(count: int, seed: int):
     rng = np.random.default_rng(seed)
     rows, unsafe = [], []
     for family in FAMILIES:
-        tally = {"HiGHS duals": collections.Counter(), "margin duals": collections.Counter()}
+        tally = {"native Rust duals": collections.Counter(), "margin duals": collections.Counter()}
         loose = {key: [] for key in tally}
         inherent = collections.Counter()
         for _ in range(count):
             model = problem(family, rng)
-            reference = solve(model, backend="highs")
-            lp = solve(relaxation(model), backend="highs") if model.kinds.count("integer") else reference
+            reference = solve(model, backend="native")
+            lp = solve(relaxation(model), backend="native") if model.kinds.count("integer") else reference
             if reference.status != "optimal" or lp.status != "optimal":
                 continue
-            sources = {"HiGHS duals": lp.duals.row_duals, "margin duals": margin_duals(model)}
+            sources = {"native Rust duals": lp.duals.row_duals, "margin duals": margin_duals(model)}
             for key, y in sources.items():
                 if y is None:
                     tally[key]["no duals"] += 1
@@ -156,8 +158,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--table", action="store_true", help="print a Markdown table")
     args = parser.parse_args()
-    if "highs" not in BACKENDS:
-        sys.exit("this measurement needs the HiGHS backend")
+    if "native" not in BACKENDS:
+        sys.exit("this measurement needs the native Rust backend")
     rows, unsafe = run(args.count, args.seed)
     if args.table:
         print(f"Seed {args.seed}, {args.count} models per family.\n")

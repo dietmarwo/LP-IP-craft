@@ -3,8 +3,9 @@
 //! solver-independent checks.
 //!
 //! This crate has no dependencies. Real optimization is in the sibling crate
-//! `lp-ip-craft-highs`, an adapter to the open HiGHS solver that implements
-//! [`LpIpSolver`]. [`DummySolver`] stays as a contract fixture: it evaluates
+//! `lp-ip-craft-native`, our dependency-free Rust simplex/branch-and-bound
+//! implementation of [`LpIpSolver`]. [`DummySolver`] remains a contract fixture:
+//! it evaluates
 //! one candidate and returns it with [`Status::Stub`].
 //!
 //! ```
@@ -45,7 +46,7 @@ mod model;
 mod solver;
 mod sparse;
 
-pub use bound::{SafeBoundStatus, SafeDualBound, safe_dual_bound};
+pub use bound::{SafeBoundStatus, SafeDualBound, safe_dual_bound, safe_dual_bound_with_bounds};
 pub use check::evaluate;
 pub use dummy::DummySolver;
 pub use error::{Error, Result};

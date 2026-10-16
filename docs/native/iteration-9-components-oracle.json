@@ -1,0 +1,1266 @@
+{
+  "cases": 180,
+  "passed": 180,
+  "records": [
+    {
+      "domain": "lp",
+      "case": 0,
+      "objective": 29.658539173245053,
+      "reference": 29.65853917324506,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 1,
+      "objective": -33.43292682926829,
+      "reference": -33.43292682926829,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 2,
+      "objective": -49.10077744755997,
+      "reference": -49.100777447559985,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 3,
+      "objective": 24.26276991809385,
+      "reference": 24.26276991809383,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 4,
+      "objective": 0.07889590854391759,
+      "reference": 0.0788959085439167,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 5,
+      "objective": 15.839213766403311,
+      "reference": 15.839213766403313,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 6,
+      "objective": -73.4642857142857,
+      "reference": -73.46428571428572,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 7,
+      "objective": 27.71725585805228,
+      "reference": 27.717255858052276,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 8,
+      "objective": 18.85654906731549,
+      "reference": 18.85654906731549,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 9,
+      "objective": -55.46904761904763,
+      "reference": -55.469047619047615,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 10,
+      "objective": -11.71560846560848,
+      "reference": -11.715608465608465,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 11,
+      "objective": -8.859090909090916,
+      "reference": -8.859090909090913,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 12,
+      "objective": 0.3360595343353885,
+      "reference": 0.3360595343353969,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 13,
+      "objective": -26.972378735191842,
+      "reference": -26.97237873519184,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 14,
+      "objective": -18.8169696969697,
+      "reference": -18.8169696969697,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 15,
+      "objective": -33.87745660856714,
+      "reference": -33.877456608567144,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 16,
+      "objective": -8.266146688560472,
+      "reference": -8.266146688560479,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 17,
+      "objective": 24.375448028673844,
+      "reference": 24.375448028673837,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 18,
+      "objective": -10.500778816199398,
+      "reference": -10.500778816199379,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 19,
+      "objective": 42.129629629629626,
+      "reference": 42.129629629629626,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 20,
+      "objective": -29.696280991735527,
+      "reference": -29.696280991735534,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 21,
+      "objective": -11.293333333333344,
+      "reference": -11.293333333333328,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 22,
+      "objective": 16.990565246561566,
+      "reference": 16.990565246561555,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 23,
+      "objective": -83.42008547008545,
+      "reference": -83.42008547008547,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 24,
+      "objective": 22.990418894830693,
+      "reference": 22.990418894830647,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 25,
+      "objective": -3.911290322580639,
+      "reference": -3.911290322580646,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 26,
+      "objective": 10.498484848484846,
+      "reference": 10.498484848484848,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 27,
+      "objective": -83.7439393939394,
+      "reference": -83.7439393939394,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 28,
+      "objective": -61.19367816091953,
+      "reference": -61.19367816091954,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 29,
+      "objective": 0.6454105263158163,
+      "reference": 0.6454105263157821,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 30,
+      "objective": -46.73504983388704,
+      "reference": -46.73504983388705,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 31,
+      "objective": -37.02891922319167,
+      "reference": -37.02891922319167,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 32,
+      "objective": -3.533333333333335,
+      "reference": -3.5333333333333314,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 33,
+      "objective": -46.73717948717946,
+      "reference": -46.73717948717949,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 34,
+      "objective": -1.7677777777777823,
+      "reference": -1.7677777777777806,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 35,
+      "objective": 58.07376237623764,
+      "reference": 58.073762376237624,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 36,
+      "objective": -5.612314156431807,
+      "reference": -5.612314156431798,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 37,
+      "objective": -17.102415026833626,
+      "reference": -17.102415026833633,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 38,
+      "objective": -25.944909090909068,
+      "reference": -25.944909090909093,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 39,
+      "objective": 5.786363636363637,
+      "reference": 5.786363636363637,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 40,
+      "objective": -9.30000000000001,
+      "reference": -9.300000000000004,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 41,
+      "objective": -55.98597025016901,
+      "reference": -55.985970250169046,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 42,
+      "objective": -72.24118387909319,
+      "reference": -72.24118387909321,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 43,
+      "objective": -8.406818181818174,
+      "reference": -8.406818181818188,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 44,
+      "objective": -59.31283068783068,
+      "reference": -59.3128306878307,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 45,
+      "objective": 25.016957787481775,
+      "reference": 25.0169577874818,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 46,
+      "objective": 0.23968105065666556,
+      "reference": 0.23968105065665846,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 47,
+      "objective": -37.31043956043955,
+      "reference": -37.31043956043956,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 48,
+      "objective": 2.316666666666668,
+      "reference": 2.3166666666666678,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 49,
+      "objective": -6.479323308270672,
+      "reference": -6.479323308270679,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 50,
+      "objective": -68.56486975871546,
+      "reference": -68.56486975871546,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 51,
+      "objective": -22.53125,
+      "reference": -22.53125,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 52,
+      "objective": -20.949999999999978,
+      "reference": -20.950000000000003,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 53,
+      "objective": -2.4424364123159297,
+      "reference": -2.4424364123159252,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 54,
+      "objective": -37.30555555555558,
+      "reference": -37.30555555555556,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 55,
+      "objective": -7.251176470588225,
+      "reference": -7.251176470588237,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 56,
+      "objective": -41.11080804636891,
+      "reference": -41.110808046368916,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 57,
+      "objective": 9.407702825888771,
+      "reference": 9.40770282588879,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 58,
+      "objective": 22.651803948264128,
+      "reference": 22.651803948264124,
+      "components": 2
+    },
+    {
+      "domain": "lp",
+      "case": 59,
+      "objective": -44.64624183006538,
+      "reference": -44.64624183006536,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 0,
+      "objective": 62.25,
+      "reference": 62.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 1,
+      "objective": -10.75,
+      "reference": -10.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 2,
+      "objective": 5.25,
+      "reference": 5.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 3,
+      "objective": -3.75,
+      "reference": -3.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 4,
+      "objective": -36.75,
+      "reference": -36.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 5,
+      "objective": 9.25,
+      "reference": 9.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 6,
+      "objective": -35.75,
+      "reference": -35.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 7,
+      "objective": -2.75,
+      "reference": -2.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 8,
+      "objective": 13.25,
+      "reference": 13.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 9,
+      "objective": -21.75,
+      "reference": -21.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 10,
+      "objective": -30.75,
+      "reference": -30.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 11,
+      "objective": -8.75,
+      "reference": -8.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 12,
+      "objective": 22.25,
+      "reference": 22.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 13,
+      "objective": -24.75,
+      "reference": -24.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 14,
+      "objective": 12.25,
+      "reference": 12.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 15,
+      "objective": -43.75,
+      "reference": -43.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 16,
+      "objective": -34.75,
+      "reference": -34.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 17,
+      "objective": -12.75,
+      "reference": -12.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 18,
+      "objective": 2.25,
+      "reference": 2.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 19,
+      "objective": -6.75,
+      "reference": -6.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 20,
+      "objective": -32.75,
+      "reference": -32.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 21,
+      "objective": -3.75,
+      "reference": -3.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 22,
+      "objective": -28.75,
+      "reference": -28.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 23,
+      "objective": 13.25,
+      "reference": 13.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 24,
+      "objective": -0.75,
+      "reference": -0.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 25,
+      "objective": -5.75,
+      "reference": -5.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 26,
+      "objective": 19.25,
+      "reference": 19.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 27,
+      "objective": 10.25,
+      "reference": 10.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 28,
+      "objective": -32.75,
+      "reference": -32.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 29,
+      "objective": -34.75,
+      "reference": -34.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 30,
+      "objective": 1.25,
+      "reference": 1.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 31,
+      "objective": 22.25,
+      "reference": 22.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 32,
+      "objective": -10.75,
+      "reference": -10.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 33,
+      "objective": -27.75,
+      "reference": -27.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 34,
+      "objective": 21.25,
+      "reference": 21.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 35,
+      "objective": 43.25,
+      "reference": 43.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 36,
+      "objective": 23.25,
+      "reference": 23.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 37,
+      "objective": -11.75,
+      "reference": -11.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 38,
+      "objective": 1.25,
+      "reference": 1.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 39,
+      "objective": 45.25,
+      "reference": 45.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 40,
+      "objective": 39.25,
+      "reference": 39.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 41,
+      "objective": -7.75,
+      "reference": -7.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 42,
+      "objective": -11.75,
+      "reference": -11.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 43,
+      "objective": -12.75,
+      "reference": -12.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 44,
+      "objective": 40.25,
+      "reference": 40.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 45,
+      "objective": 5.25,
+      "reference": 5.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 46,
+      "objective": -42.75,
+      "reference": -42.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 47,
+      "objective": 3.25,
+      "reference": 3.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 48,
+      "objective": 16.25,
+      "reference": 16.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 49,
+      "objective": 3.25,
+      "reference": 3.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 50,
+      "objective": 13.25,
+      "reference": 13.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 51,
+      "objective": -14.75,
+      "reference": -14.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 52,
+      "objective": -19.75,
+      "reference": -19.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 53,
+      "objective": 13.25,
+      "reference": 13.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 54,
+      "objective": -18.75,
+      "reference": -18.75,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 55,
+      "objective": 1.25,
+      "reference": 1.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 56,
+      "objective": 0.25,
+      "reference": 0.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 57,
+      "objective": 10.25,
+      "reference": 10.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 58,
+      "objective": 25.25,
+      "reference": 25.25,
+      "components": 2
+    },
+    {
+      "domain": "ip",
+      "case": 59,
+      "objective": -5.75,
+      "reference": -5.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 0,
+      "objective": -20.64473684210526,
+      "reference": -20.644736842105264,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 1,
+      "objective": -6.836956521739108,
+      "reference": -6.836956521739129,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 2,
+      "objective": 7.2499999999999964,
+      "reference": 7.25,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 3,
+      "objective": -5.477272727272734,
+      "reference": -5.477272727272727,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 4,
+      "objective": 13.250000000000021,
+      "reference": 13.25,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 5,
+      "objective": 15.77380952380952,
+      "reference": 15.773809523809524,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 6,
+      "objective": -52.13888888888889,
+      "reference": -52.138888888888886,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 7,
+      "objective": -18.750000000000007,
+      "reference": -18.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 8,
+      "objective": -51.75,
+      "reference": -51.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 9,
+      "objective": 8.845238095238095,
+      "reference": 8.845238095238095,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 10,
+      "objective": -1.8333333333333326,
+      "reference": -1.8333333333333333,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 11,
+      "objective": 7.749999999999993,
+      "reference": 7.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 12,
+      "objective": 34.45,
+      "reference": 34.45,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 13,
+      "objective": 25.45,
+      "reference": 25.45,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 14,
+      "objective": -28.264705882352942,
+      "reference": -28.264705882352942,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 15,
+      "objective": -36.41666666666665,
+      "reference": -36.416666666666664,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 16,
+      "objective": -9.41666666666667,
+      "reference": -9.416666666666666,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 17,
+      "objective": -13.079835082458766,
+      "reference": -13.079835082458771,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 18,
+      "objective": -40.74999999999999,
+      "reference": -40.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 19,
+      "objective": 38.61538461538463,
+      "reference": 38.61538461538461,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 20,
+      "objective": 11.535714285714285,
+      "reference": 11.535714285714285,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 21,
+      "objective": 15.150000000000002,
+      "reference": 15.15,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 22,
+      "objective": 12.249999999999986,
+      "reference": 12.25,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 23,
+      "objective": -24.949999999999996,
+      "reference": -24.95,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 24,
+      "objective": 4.1309523809523725,
+      "reference": 4.130952380952381,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 25,
+      "objective": 9.499999999999998,
+      "reference": 9.5,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 26,
+      "objective": 5.603333333333335,
+      "reference": 5.6033333333333335,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 27,
+      "objective": -23.416666666666657,
+      "reference": -23.416666666666668,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 28,
+      "objective": -62.41666666666667,
+      "reference": -62.41666666666667,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 29,
+      "objective": -32.74999999999999,
+      "reference": -32.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 30,
+      "objective": 15.583333333333336,
+      "reference": 15.583333333333334,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 31,
+      "objective": 33.8706896551724,
+      "reference": 33.87068965517241,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 32,
+      "objective": 4.749999999999995,
+      "reference": 4.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 33,
+      "objective": -26.749999999999986,
+      "reference": -26.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 34,
+      "objective": -5.949999999999997,
+      "reference": -5.95,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 35,
+      "objective": 18.593434343434335,
+      "reference": 18.593434343434346,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 36,
+      "objective": 11.249999999999986,
+      "reference": 11.25,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 37,
+      "objective": -5.916666666666671,
+      "reference": -5.916666666666666,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 38,
+      "objective": -24.211538461538467,
+      "reference": -24.21153846153846,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 39,
+      "objective": -16.499999999999996,
+      "reference": -16.5,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 40,
+      "objective": -2.3846153846153904,
+      "reference": -2.3846153846153832,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 41,
+      "objective": -56.30555555555555,
+      "reference": -56.30555555555556,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 42,
+      "objective": 17.249999999999993,
+      "reference": 17.25,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 43,
+      "objective": -50.74999999999999,
+      "reference": -50.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 44,
+      "objective": 13.51666666666667,
+      "reference": 13.51666666666667,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 45,
+      "objective": 4.75,
+      "reference": 4.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 46,
+      "objective": 29.04999999999999,
+      "reference": 29.05,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 47,
+      "objective": -39.916666666666686,
+      "reference": -39.916666666666664,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 48,
+      "objective": -45.84090909090909,
+      "reference": -45.84090909090909,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 49,
+      "objective": 19.70098039215686,
+      "reference": 19.70098039215686,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 50,
+      "objective": -24.612068965517253,
+      "reference": -24.612068965517242,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 51,
+      "objective": -22.568181818181813,
+      "reference": -22.56818181818182,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 52,
+      "objective": -5.295454545454554,
+      "reference": -5.295454545454546,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 53,
+      "objective": -31.249999999999986,
+      "reference": -31.25,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 54,
+      "objective": -22.749999999999996,
+      "reference": -22.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 55,
+      "objective": 8.75,
+      "reference": 8.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 56,
+      "objective": -19.75,
+      "reference": -19.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 57,
+      "objective": 37.75,
+      "reference": 37.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 58,
+      "objective": -46.74999999999996,
+      "reference": -46.75,
+      "components": 2
+    },
+    {
+      "domain": "mip",
+      "case": 59,
+      "objective": 3.0833333333333335,
+      "reference": 3.0833333333333335,
+      "components": 2
+    }
+  ]
+}

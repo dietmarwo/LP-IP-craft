@@ -3,8 +3,7 @@
 //!
 //! There are no Python callbacks: model data is copied into Rust once, when a
 //! `Model` is constructed, and every solve or evaluation runs with the
-//! interpreter detached. The HiGHS backend is the default cargo feature
-//! `highs`; without it, `backend="highs"` raises `NotImplementedError`.
+//! interpreter detached. The numerical engine is implemented in native Rust.
 
 use lp_ip_craft::{
     BackendReport, Bounds, CancellationToken, CsrMatrix, Duals, DummySolver, Error, Evaluation,
@@ -354,10 +353,9 @@ fn evaluation_dict<'py>(py: Python<'py>, e: Evaluation) -> PyResult<Bound<'py, P
     Ok(d)
 }
 
-#[cfg(feature = "highs")]
-fn highs_settings(
+fn native_settings(
     options: Option<&Bound<'_, PyDict>>,
-) -> PyResult<lp_ip_craft_highs::HighsOptions> {
+) -> PyResult<lp_ip_craft_native::NativeOptions> {
     fn field<'py, T: for<'a> FromPyObject<'a, 'py>>(
         value: &Bound<'py, PyAny>,
         key: &str,
@@ -371,7 +369,7 @@ fn highs_settings(
             )
         })
     }
-    let mut settings = lp_ip_craft_highs::HighsOptions::default();
+    let mut settings = lp_ip_craft_native::NativeOptions::default();
     let Some(options) = options else {
         return Ok(settings);
     };
@@ -381,13 +379,31 @@ fn highs_settings(
             "time_limit_seconds" => settings.time_limit_seconds = field(&value, &key)?,
             "node_limit" => settings.node_limit = field(&value, &key)?,
             "iteration_limit" => settings.iteration_limit = field(&value, &key)?,
-            "seed" => settings.seed = field(&value, &key)?,
-            "mip_relative_gap" => settings.mip_relative_gap = field(&value, &key)?,
-            "mip_absolute_gap" => settings.mip_absolute_gap = field(&value, &key)?,
             "dual_tolerance" => settings.dual_tolerance = field(&value, &key)?,
+            "pivot_tolerance" => settings.pivot_tolerance = field(&value, &key)?,
+            "incumbent_heuristic" => settings.incumbent_heuristic = field(&value, &key)?,
+            "objective_lattice" => settings.objective_lattice = field(&value, &key)?,
+            "node_reoptimization" => settings.node_reoptimization = field(&value, &key)?,
+            "fast_pivots" => settings.fast_pivots = field(&value, &key)?,
+            "dantzig_pricing" => settings.dantzig_pricing = field(&value, &key)?,
+            "redundant_row_min_ratio" => settings.redundant_row_min_ratio = field(&value, &key)?,
+            "redundant_rows" => settings.redundant_rows = field(&value, &key)?,
+            "component_threads" => settings.component_threads = field(&value, &key)?,
+            "component_parallel_min_entries" => {
+                settings.component_parallel_min_entries = field(&value, &key)?
+            }
+            "decompose" => settings.decompose = field(&value, &key)?,
+            "decomposition_min_variables" => {
+                settings.decomposition_min_variables = field(&value, &key)?
+            }
+            "presolve" => settings.presolve = field(&value, &key)?,
+            "sparse" => settings.sparse = field(&value, &key)?,
+            "max_sparse_entries" => settings.max_sparse_entries = field(&value, &key)?,
+            "sparse_refactor_interval" => settings.sparse_refactor_interval = field(&value, &key)?,
+            "max_tableau_entries" => settings.max_tableau_entries = field(&value, &key)?,
             _ => {
                 return Err(PyValueError::new_err(format!(
-                    "backend_options: unknown HiGHS option {key:?}"
+                    "backend_options: unknown native option {key:?}"
                 )));
             }
         }
@@ -398,11 +414,7 @@ fn highs_settings(
 /// Backends compiled into this extension.
 #[pyfunction]
 fn backends() -> Vec<&'static str> {
-    let mut names = vec!["dummy"];
-    if cfg!(feature = "highs") {
-        names.push("highs");
-    }
-    names
+    vec!["dummy", "native"]
 }
 
 fn report_dict<'py>(py: Python<'py>, r: &BackendReport) -> PyResult<Bound<'py, PyDict>> {
@@ -458,21 +470,15 @@ fn solve_native<'py>(
             py.detach(|| DummySolver.solve(inner, &options, start.as_ref(), &token))
                 .map_err(to_py_err)?
         }
-        #[cfg(feature = "highs")]
-        "highs" => {
-            let mut solver = lp_ip_craft_highs::HighsSolver::new(highs_settings(backend_options)?);
+        "native" => {
+            let mut solver =
+                lp_ip_craft_native::NativeSolver::new(native_settings(backend_options)?);
             py.detach(|| solver.solve(inner, &options, start.as_ref(), &token))
                 .map_err(to_py_err)?
         }
-        #[cfg(not(feature = "highs"))]
-        "highs" => {
-            return Err(PyNotImplementedError::new_err(
-                "this build of lp_ip_craft has no HiGHS backend; rebuild with the default features",
-            ));
-        }
         _ => {
             return Err(PyValueError::new_err(format!(
-                "unknown backend {backend:?}; expected \"dummy\" or \"highs\""
+                "unknown backend {backend:?}; expected \"dummy\" or \"native\""
             )));
         }
     };

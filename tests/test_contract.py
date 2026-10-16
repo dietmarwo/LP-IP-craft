@@ -133,7 +133,7 @@ def test_unknown_or_missing_backend_is_explicit(model):
     with pytest.raises(ValueError, match="unknown backend"):
         solve(model, backend="cplex")
     if "highs" not in BACKENDS:
-        with pytest.raises(NotImplementedError, match="HiGHS"):
+        with pytest.raises(ValueError, match="unknown backend"):
             solve(model, backend="highs")
 
 

@@ -1,120 +1,136 @@
-# LP-IP-craft
+# LP-IP-craft — native Rust LP/MIP pilot
 
-Linear and mixed-integer linear programming (LP / MIP) in Rust, with Python
-bindings.
+Version **0.15.0** replaces the HiGHS adapter with an optimization engine owned
+by this project. Both numerical crates have **no third-party dependencies**.
+The optional Python extension uses PyO3. No HiGHS, C/C++ solver, CMake,
+libclang, BLAS or external numerical library is built or linked by the solver.
 
-> **Status: iteration 2 (v0.3.0).** Real LP/MIP solves go through an adapter
-> to the open-source [HiGHS](https://highs.dev/) solver. This is a validated
-> Rust interface to an existing engine, not yet a native Rust simplex or
-> branch-and-bound. The dependency-free core contracts and the original dummy
-> backend remain.
+Ten implemented native iterations are documented in [docs/native](docs/native):
 
-Iteration 2 adds a native Rust `safe_dual_bound` calculation with outward
-rounding and a matching Python API. It converts approximate row multipliers
-into a conservative objective bound for the stored binary64 model, or explains
-why no finite bound could be computed. It works without HiGHS and also bounds
-the continuous relaxation of a MIP. See the [plan](docs/iteration-2-plan.md),
-[results](docs/iteration-2-results.md) and [validity argument](docs/safe-dual-bounds.md).
+1. Two-phase primal simplex, dual postsolve and finite-box branch-and-bound.
+2. Fixed-column/empty-row presolve and dense allocation preflight.
+3. In-place pivots and most-negative pricing with Bland anti-stall fallback.
+4. Shared parent dictionaries and dual-simplex child reoptimization, with a
+   bounded cold fallback and independent original-unit acceptance checks.
+5. Checked rounding/unit-move incumbents, conservative pruning and conditional
+   integer-objective lattice bounds.
+6. Borrowed node bounds without copying the original sparse model.
+7. Sparse-row streaming into one dictionary allocation and inline substitutions.
+8. Conservative redundant-row presolve with a configurable scan threshold.
+9. Independent component solves with checked primal/dual reconstruction.
+10. Scoped parallel component solves with up to 16 workers and bounded quotas.
 
-## What is here
+Version 0.15 adds an **opt-in sparse revised-simplex pilot** with sparse
+row-pivoted LU, sparse product-form updates, periodic refactorization and
+bordered-row/dual-simplex reuse for MIP children. Select
+`NativeOptions(sparse=True)` in Python or `NativeOptions { sparse: true,
+..Default::default() }` in Rust. The sparse path never allocates a dense
+tableau or basis inverse, and never silently falls back to the dense kernel.
+The previous dense kernel remains the default and a comparison reference.
 
-| Component | Purpose |
-| --- | --- |
-| `crates/core` (`lp-ip-craft`) | Dependency-free contracts: validated `Model`, `LpIpSolver`, statuses/results, `evaluate`, `lp_residuals`, `safe_dual_bound` and `DummySolver` |
-| `crates/highs` (`lp-ip-craft-highs`) | `HighsSolver`: HiGHS 1.15.0 through the `highs` 2.4.0 bindings, with typed settings, explicit status mapping and independent acceptance checks |
-| `crates/python`, `python/lp_ip_craft` | PyO3 extension and typed Python API (`Model`, `solve`, `evaluate`, `lp_residuals`, `HighsOptions`, result dataclasses) |
-| [`docs/api.md`](docs/api.md) | The contract: data conventions, statuses, bounds and gaps, duals, HiGHS settings and limits, errors |
-| [`docs/iteration-1-results.md`](docs/iteration-1-results.md) | What iteration 1 delivered, the review record, open decisions, next steps |
-| [`docs/safe-dual-bounds.md`](docs/safe-dual-bounds.md) | Native bound calculation, proof, arithmetic assumptions, exact-oracle tests and limits |
-| [`docs/target-card.md`](docs/target-card.md) | Application inputs still to be supplied (left TBD on purpose) |
+Both paths are numerical pilots. MIPs still require finite bounds on **all**
+variables, including continuous variables, of magnitude at most 2^53-1. The
+dense cap is 8 million binary64 entries (64 MB per dictionary). Sparse states
+have a separate default cap of 2 million tracked numerical entries. This is
+not a process-memory cap: indexing, work vectors, allocation temporaries and
+pending-node snapshots need additional memory. Sparse LU fill can still grow
+quadratically on unfavorable matrices.
 
-## Python example
+Each connected solve uses one thread. Independent components can use up to
+16 workers. The new [sparse plan, results and benchmark protocol](docs/sparse/README.md)
+uses connected synthetic cases and independent known answers. No real GTOC
+formulation has been supplied; application readiness remains unverified.
+
+## Build and use
+
+Rust 1.85 or later. Plain `cargo build` builds only the two Rust numerical
+crates; Python is an optional workspace member. Rust-only checks need no
+Python installation:
+
+```sh
+cargo test -p lp-ip-craft -p lp-ip-craft-native --locked
+cargo run --release -p lp-ip-craft-native --example solve --locked
+cargo run --release -p lp-ip-craft-native --example benchmark --locked -- 7
+cargo run --release -p lp-ip-craft-native --example sparse_benchmark --locked -- packing 4096 sparse
+```
+
+Rust API:
+
+```rust,ignore
+use lp_ip_craft::{CancellationToken, LpIpSolver, Options};
+use lp_ip_craft_native::{NativeOptions, NativeSolver};
+let mut solver = NativeSolver::new(NativeOptions::default());
+let result = solver.solve(&model, &Options::default(), None,
+                          &CancellationToken::default())?;
+```
+
+Python 3.10 or later:
+
+```sh
+python -m venv .venv
+. .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install ".[test]"
+python examples/solve_native.py
+python -m pytest -q
+```
 
 ```python
-import math
-from lp_ip_craft import HighsOptions, Model, evaluate, solve
-
-# minimize 2 x + 3 y + 5  subject to  x + 2 y >= 2.5,  0 <= x <= 3,  y binary
-model = Model(
-    objective=[2.0, 3.0], objective_offset=5.0,
-    lower=[0.0, 0.0], upper=[3.0, 1.0], kinds=["continuous", "binary"],
-    indptr=[0, 2], indices=[0, 1], values=[1.0, 2.0],   # A in CSR form
-    row_lower=[2.5], row_upper=[math.inf],
-)
-result = solve(model, backend="highs",
-               backend_options=HighsOptions(time_limit_seconds=10))
-assert result.status == "optimal"
-assert abs(result.evaluation.objective - 9.0) < 1e-9   # recomputed, offset included
-print(result.candidate, result.best_bound, result.gap, result.backend.raw_status)
-
-# The independent check works on any solver's solution:
-assert evaluate(model, [0.5, 1.0]).feasible_candidate
+from lp_ip_craft import Model, NativeOptions, solve
+m = Model(objective=[3., 2.], sense="maximize",
+          lower=[0., 0.], upper=[10., 10.],
+          row_lower=[float("-inf"), float("-inf")], row_upper=[4., 5.],
+          indptr=[0, 2, 4], indices=[0, 1, 0, 1], values=[1., 1., 2., 1.])
+r = solve(m, backend="native", backend_options=NativeOptions())
+assert r.status == "optimal"
+assert abs(r.evaluation.objective - 9.) < 1e-7
 ```
 
-Always pass `backend="highs"` to optimize: the default `"dummy"` is kept for
-compatibility and only evaluates one candidate (`status == "stub"`). Sequences
-may be lists, tuples or 1-D NumPy arrays. The Rust equivalents are in
-`crates/highs/examples/solve.rs` and the crate documentation
-(`cargo doc --open -p lp-ip-craft-highs`).
+The default `backend="dummy"` remains for contract compatibility: it evaluates
+a point and reports `stub`. Select `native` to optimize. `backend="highs"`
+and `HighsOptions` have been removed. `NativeOptions` supports actual native
+controls; seed and HiGHS-specific gap options have no replacement here.
 
-Compute an independent bound for the model above using a row multiplier:
+## Numerical guarantees and limits
 
-```python
-from lp_ip_craft import safe_dual_bound
+LP `optimal` requires independent primal feasibility, stationarity, dual-sign
+and relative duality-gap checks in original units. MIP incumbents pass the
+independent primal/integrality check. All solve statuses are numerical,
+including infeasibility; this is not an exact search-tree certificate.
 
-checked = safe_dual_bound(model, [2.0])
-assert checked.bound is not None and checked.bound <= 9.0
-print(checked.bound, checked.status, checked.index)
-```
+The existing outward-rounded `safe_dual_bound` is retained. Returned bounds
+use this calculation when available; LP bounds can be absent with infinite
+variable bounds. Conservative pruning additionally requires an original-model
+incumbent whose constraint activities are enclosed inside their bounds. This
+can fail on floating-point equality rows; search then continues without that
+pruning opportunity. Integer-lattice tightening has explicit sufficient
+conditions. Neither mechanism certifies phase-I infeasibility or the whole
+branch-and-bound tree. Standard IEEE binary64 with gradual underflow is
+required; fast-math is unsupported.
 
-Run [`examples/safe_bound.py`](examples/safe_bound.py) for an example using
-HiGHS LP duals, including perturbed duals that make a naive bound invalid.
-The function uses no tolerance and makes no pruning decision. It does not
-certify an incumbent or the HiGHS search tree; `solve().best_bound` retains
-its existing meaning.
+Starts are complete primal points. For a MIP they are evaluated as incumbent
+candidates; LP starts are explicitly rejected because public basis import is not
+implemented. Internal child-node basis reuse works in both kernels. Time/cancellation limits are cooperative and retain an incumbent
+when present. Node limits count relaxations; pivot limits apply across all
+nodes, phase I, dual simplex and cold retries. Parallel components reserve
+shares of the global node/pivot limits; unused shares are not redistributed.
+Serial component execution shares the remaining budget instead. See the API
+for this deliberate limit/performance tradeoff and memory accounting.
 
-With plain solver duals, a model with columns that have an infinite bound
-(such as `x >= 0`) rarely gets a finite bound. The same example shows
-`margin_duals`, which requests duals from the LP with slightly shifted costs
-on those columns. [`examples/bound_availability.py`](examples/bound_availability.py)
-measures both on random LPs and MIPs.
+See [API](docs/api.md), [validation and results](docs/native/validation-6-10.md),
+[performance](docs/native/performance-6-10.md) and the still-incomplete
+[application target card](docs/target-card.md). Earlier adapter records are
+under [docs/history](docs/history); their timings are not native-engine claims.
 
-## Build and test
+## Layout
 
-Requirements: stable Rust (edition 2024, 1.85 or newer), CPython 3.10 or
-newer, and for the HiGHS backend a C++ compiler, CMake and libclang: `highs-sys`
-builds HiGHS from source and generates its bindings. No separately installed
-solver is needed.
+| Path | Purpose |
+|---|---|
+| `crates/core` | Immutable CSR model, contracts and independent checks |
+| `crates/native` | Sparse revised simplex/LU, dense reference, presolve, integer search |
+| `crates/python`, `python/lp_ip_craft` | Optional PyO3/Python interface |
+| `tests`, `crates/*/tests` | Contract, numeric, exact-oracle and engine tests |
+| `examples/validate_native.py` | Optional SciPy oracle; not a package dependency |
+| `docs/native` | Ten earlier plans, results and raw measurements |
+| `docs/sparse` | Sparse implementation plan, validation and raw scaling results |
 
-```bash
-sudo apt-get install build-essential cmake libclang-dev   # Debian/Ubuntu
-python3 -m venv .venv && source .venv/bin/activate
-python -m pip install 'maturin>=1.9.4,<2' pytest numpy
-bash scripts/check.sh
-```
-
-`scripts/check.sh` runs `cargo fmt --check`, Clippy with `-D warnings`, the
-Rust tests and both Rust examples, builds the extension with `maturin develop`,
-then runs `pytest` and all four Python examples. `python -m pip install .` builds
-and installs the package; `python -m maturin build --release` builds an abi3
-wheel. Without the native toolchain:
-
-```bash
-cargo test -p lp-ip-craft                                      # core contracts only
-python -m maturin develop --release --no-default-features      # dummy-only extension
-```
-
-In a dummy-only build `lp_ip_craft.BACKENDS == ("dummy",)` and
-`backend="highs"` raises `NotImplementedError`. The binding crate has no Rust
-test executable (it would need to link libpython); it is tested through pytest
-against the compiled module. CI covers Linux, macOS and Windows.
-
-## Related
-
-[SQP-craft](https://github.com/dietmarwo/SQP-craft) is the sibling repository
-for the nonlinear (SQP) track, with the same conventions.
-
-## License
-
-MIT, see [LICENSE](LICENSE). HiGHS and the `highs` bindings are MIT licensed;
-see [docs/dependencies.md](docs/dependencies.md).
+Project code is MIT. See [dependencies](docs/dependencies.md) and `Cargo.lock`.

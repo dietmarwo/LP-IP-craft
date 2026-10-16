@@ -1,0 +1,4214 @@
+{
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "rounds": 7,
+  "runs_per_fixture_and_iteration": 21,
+  "binary_sha256": [
+    "4aa4cc2006798f060f4aff6856d7957381ecea92e56a1761ec2ea84593731bb3",
+    "f577f1cbbaf4977d8e13f7cb05a853cbabf923ce8645973311e86ef7b929ae18",
+    "a7e9a04f3b9a355a6039afe25d2a1f4085014eb2c02a1139a43eacb4efe4f785",
+    "6d78ee307786577375bc974ab2d3900b2ca7ba8277057c27886d9115ecbb1433",
+    "d159c263f4e3d90a36302d0a4538b3b6aa5241e3a5a71de2a206e50b5ccd1f3e"
+  ],
+  "records": [
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.022496964,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.02398451,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.022955395,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.065572884,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.058029091,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.057257596,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000730243,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000879688,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000771715,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000466895,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000460886,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 1,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.00044391,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000354345,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000383319,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000360795,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.063374433,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.062063163,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.062695007,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000461557,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000438943,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000449599,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000269417,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000270688,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 1,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000253362,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000237218,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.00022529,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000248115,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.002394736,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001568128,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001898517,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.00024503,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000300895,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000327956,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000214574,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.00019841,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 1,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000235686,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.00021195,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000197739,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.00021152,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001421696,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001620307,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001405372,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000210898,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000194724,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000224018,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000252692,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000245681,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 1,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000226051,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000207563,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000195365,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000195005,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001366013,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001571713,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001382488,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 8.4598e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 7.7267e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 8.9365e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000327534,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000235806,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 1,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.00026458,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.020760991,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.021042287,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.020820051,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.054844112,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.056106718,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.054902039,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000717293,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000716001,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000719967,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000491693,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000447636,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 2,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000685395,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000208906,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000196267,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000196166,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001388026,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001459364,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001473845,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 8.8354e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 7.8668e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 7.8017e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000191559,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000187793,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 2,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000260293,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000251489,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000197168,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000245531,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001371371,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001433986,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001387645,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000180412,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000183417,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000210759,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000217859,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000219081,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 2,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000246873,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000235045,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000267314,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000228335,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001497721,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001492794,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001517031,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000249988,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000236617,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000228776,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000207613,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000193793,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 2,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000188185,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000398632,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000562269,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000346734,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.055516157,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.056280761,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.059925676,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000498954,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000453344,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000473215,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000268335,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000314124,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 2,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000270028,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.00024502,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000224529,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000486885,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001395417,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001504512,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.00140353,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000241975,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000252881,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000222877,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000209376,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000211759,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 3,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000191158,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000249457,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000200893,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000213933,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001426605,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001396109,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001501117,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000182356,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000220753,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000184849,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000219521,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000263047,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 3,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000220473,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000207043,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000248816,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000197669,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001363058,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001356749,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001342898,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 8.7622e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 8.0582e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 7.7837e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000205119,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000186892,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 3,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000189086,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.020736975,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.021331113,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.020974664,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.057449896,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.06176331,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.065064545,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000831786,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000792617,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000702771,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000474797,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.00046378,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 3,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000445102,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000522519,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000364891,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000445313,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.065825996,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.062309265,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.062840356,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.001084598,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000677413,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000455979,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000294665,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000273153,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 3,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.0002979,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000236397,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000298411,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000274314,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001511262,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001437791,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001562981,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000248786,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000241084,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.00023145,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000219201,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000345833,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 4,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000203818,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.0003374,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000326433,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000386383,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.057629247,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.058940067,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.058015951,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000459644,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000537071,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.00046367,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000272192,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000262046,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 4,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.00025812,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.023194967,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.022325775,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.022648862,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.057203255,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.059128121,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.060632944,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000760909,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000718375,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000692826,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000517772,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.00044359,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 4,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000457922,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000216807,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000199872,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000199331,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.00158325,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001802242,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001392603,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 8.6411e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 7.93e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 7.8558e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000192981,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000186352,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 4,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000246211,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000254695,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000196086,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000210608,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.002023195,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.00139075,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001493655,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000216907,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000189345,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.00017215,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000216878,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000224319,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 4,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000267013,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000210067,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000195806,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000207253,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001623312,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001447035,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001383489,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 8.5229e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 7.7887e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 7.6245e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000243187,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000187423,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 5,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000210367,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.023333717,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.023614712,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.021232804,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.081691535,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.065742049,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.074758955,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.00075505,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000737093,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000715691,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000487806,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000477001,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 5,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000458222,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000368506,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000330149,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000568458,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.057919526,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.063943272,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.061993778,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000470961,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000507035,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000521707,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000274113,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000262716,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 5,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000274635,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000237678,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000240583,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000279192,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001533405,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001584934,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001557803,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000283058,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000244679,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.00029782,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000217278,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000211619,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 5,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000201625,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000245611,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000197728,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000210128,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001454918,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001461236,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001339503,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000180763,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000177047,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000171008,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000233192,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000274815,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 5,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000227003,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000254054,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000200323,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000245521,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001783083,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001388727,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001466244,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 8.5319e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000140983,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000107933,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000189516,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.00018497,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 6,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000182205,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000208855,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000216557,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000200482,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001376279,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001394256,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001342657,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000180412,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000188474,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000169577,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000218861,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000211839,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 6,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000207233,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000234273,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000261505,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000226813,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001692186,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001670112,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001798436,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000247263,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000269827,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.00023163,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000210308,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000209967,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 6,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000274134,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000353825,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000326563,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000327765,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.061121441,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.063044355,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.061138858,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000474857,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000577161,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000477571,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000330439,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.00029791,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 6,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000259993,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.027100625,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.027257502,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.022463703,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.077663681,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.067995832,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.064803992,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000737474,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000716972,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000808641,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000468317,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000472934,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 6,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000460185,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000404381,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000363419,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000327625,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.065727973,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.060149753,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.058082462,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000447996,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000441156,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.00046961,
+      "nodes": 33,
+      "pivots": 574,
+      "objective": 117
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000304099,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000270819,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 2,
+      "round": 7,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.00026452,
+      "nodes": 55,
+      "pivots": 291,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000239171,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000265361,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000229887,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.002048073,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001650603,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.00154276,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000342007,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000244159,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000227053,
+      "nodes": 33,
+      "pivots": 300,
+      "objective": 117
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000208575,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000208736,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 3,
+      "round": 7,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000191099,
+      "nodes": 55,
+      "pivots": 185,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000215546,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000199611,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000215946,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.001579295,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001667478,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.001513365,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000212701,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.000190938,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000187273,
+      "nodes": 33,
+      "pivots": 110,
+      "objective": 117
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000250338,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000227874,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 4,
+      "round": 7,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000256036,
+      "nodes": 55,
+      "pivots": 103,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.000206472,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.000200402,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.000196096,
+      "nodes": 0,
+      "pivots": 40,
+      "objective": 830
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.00139101,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.001431572,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.002519234,
+      "nodes": 0,
+      "pivots": 68,
+      "objective": 1184.8582831163164
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000113842,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 7.8259e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 7.6205e-05,
+      "nodes": 15,
+      "pivots": 36,
+      "objective": 117
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000252741,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000189997,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 5,
+      "round": 7,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000387035,
+      "nodes": 47,
+      "pivots": 88,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 1,
+      "seconds": 0.023450744,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 2,
+      "seconds": 0.022024179,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "fixed",
+      "run": 3,
+      "seconds": 0.022309871,
+      "nodes": 0,
+      "pivots": 220,
+      "objective": 830
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 1,
+      "seconds": 0.069089965,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 2,
+      "seconds": 0.081916659,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "pivot",
+      "run": 3,
+      "seconds": 0.068488261,
+      "nodes": 0,
+      "pivots": 1708,
+      "objective": 1184.8582831163176
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 1,
+      "seconds": 0.000688199,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 2,
+      "seconds": 0.001016696,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "knapsack",
+      "run": 3,
+      "seconds": 0.000670883,
+      "nodes": 33,
+      "pivots": 851,
+      "objective": 117
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "partition",
+      "run": 1,
+      "seconds": 0.000464391,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "partition",
+      "run": 2,
+      "seconds": 0.000474607,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    },
+    {
+      "iteration": 1,
+      "round": 7,
+      "fixture": "partition",
+      "run": 3,
+      "seconds": 0.000453875,
+      "nodes": 55,
+      "pivots": 531,
+      "objective": 45
+    }
+  ]
+}

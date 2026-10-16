@@ -107,6 +107,18 @@ impl LpResiduals {
 /// [`Error::Evaluation`] if any intermediate value overflows, so a NaN can
 /// never vanish inside a maximum.
 pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResiduals> {
+    lp_residuals_with_bounds(model, model.variables(), x, duals)
+}
+
+/// LP residuals with replacement variable bounds, borrowing the original
+/// objective and matrix. Malformed bounds are rejected like original bounds.
+/// Useful for branch nodes without cloning an immutable sparse model.
+pub fn lp_residuals_with_bounds(
+    model: &Model,
+    bounds: &crate::Bounds,
+    x: &[f64],
+    duals: &Duals,
+) -> Result<LpResiduals> {
     check_point(model, x, "point")?;
     ensure(duals.row_duals.len() == model.m(), || {
         format!(
@@ -126,8 +138,7 @@ pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResidua
     ensure_finite(&duals.reduced_costs, "reduced costs")?;
 
     let row_activity = activity(model, x)?;
-    let primal = model
-        .variables()
+    let primal = bounds
         .checked_violation(x)?
         .max(model.rows().checked_violation(&row_activity)?);
 
@@ -160,7 +171,7 @@ pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResidua
     let mut dual_objective = 0.0_f64;
     for (what, values, bounds, duals) in [
         ("row", &row_activity[..], model.rows(), &duals.row_duals[..]),
-        ("variable", x, model.variables(), &duals.reduced_costs[..]),
+        ("variable", x, bounds, &duals.reduced_costs[..]),
     ] {
         for i in 0..values.len() {
             let (v, mu) = (values[i], duals[i]);

@@ -1,0 +1,136 @@
+   Compiling lp-ip-craft-native v0.12.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/native)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running unittests src/lib.rs (target/debug/deps/lp_ip_craft-fa5d1f3b7c8036f6)
+
+running 2 tests
+test bound::tests::exact_identities_and_rounded_underflow ... ok
+test bound::tests::neighbours_cover_zero_subnormal_and_extremes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bound_views.rs (target/debug/deps/bound_views-2c0a4f76ae8e40ea)
+
+running 1 test
+test borrowed_bounds_match_materialized_models ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/checks.rs (target/debug/deps/checks-2105ca0330f2d16a)
+
+running 12 tests
+test complementarity_detects_a_feasible_but_not_optimal_point ... ok
+test evaluate_rejects_bad_points_and_tolerances ... ok
+test gap_definition_follows_the_objective_sense ... ok
+test evaluate_reproduces_the_tutorial_optimum ... ok
+test lp_residuals_reject_malformed_duals ... ok
+test dual_sign_flags_duals_that_select_an_infinite_bound ... ok
+test evaluate_uses_tolerances_at_their_boundary ... ok
+test gap_at_zero_objective_and_for_invalid_bounds ... ok
+test duality_gap_is_scale_free_where_complementarity_is_not ... ok
+test result_gap_needs_a_bound_and_a_feasible_candidate ... ok
+test published_duals_satisfy_the_sign_convention_when_maximizing ... ok
+test minimizing_the_negated_objective_negates_the_duals ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/dummy_contract.rs (target/debug/deps/dummy_contract-14ac0235d22188b5)
+
+running 12 tests
+test feasible_optimal_start_is_still_only_a_stub ... ok
+test invalid_tolerances_rejected ... ok
+test input_errors_take_precedence_over_cancellation ... ok
+test fractional_start_is_never_rounded ... ok
+test malformed_starts_rejected ... ok
+test maximize_keeps_original_objective_sign ... ok
+test overflow_is_an_evaluation_error_not_a_candidate ... ok
+test pre_cancelled_solve_has_no_candidate ... ok
+test start_outside_bounds_is_evaluated_and_reported_not_repaired ... ok
+test threads_other_than_one_are_explicit_errors ... ok
+test without_start_zero_is_clamped_to_the_bounds ... ok
+test one_model_serves_independent_solves_on_several_threads ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/model_validation.rs (target/debug/deps/model_validation-127575535085461c)
+
+running 12 tests
+test error_display_has_category_and_message_has_not ... ok
+test from_dense_skips_zeros_and_checks_size ... ok
+test fixed_binaries_and_fractional_integer_bounds_are_accepted ... ok
+test decreasing_row_pointers_rejected ... ok
+test kinds_must_match_and_binaries_stay_in_unit_box ... ok
+test invalid_variable_bounds_rejected_with_entry ... ok
+test invalid_row_bounds_rejected ... ok
+test non_finite_objective_and_offset_rejected ... ok
+test malformed_csr_rejected ... ok
+test rowless_model_with_free_variable_is_valid ... ok
+test zero_variables_rejected ... ok
+test valid_models_expose_their_parts ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/numerical_boundaries.rs (target/debug/deps/numerical_boundaries-1940d7f9d1e777c0)
+
+running 3 tests
+test checked_gap_distinguishes_overflow_from_zero_objective_infinity ... ok
+test checked_bounds_reject_mismatch_nonfinite_and_overflow ... ok
+test overflowing_dual_product_is_an_error ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/safe_bounds.rs (target/debug/deps/safe_bounds-092e4abd64c4d79b)
+
+running 8 tests
+test box_only_and_mip_use_the_same_continuous_bound ... ok
+test corrected_bound_survives_perturbed_duals_in_both_senses ... ok
+test free_rows_zero_duals_fixed_variables_and_empty_rows ... ok
+test invalid_row_sign_reports_row_without_a_model_infeasibility_claim ... ok
+test overflow_is_unavailable_and_bad_input_is_an_error ... ok
+test free_variable_needs_an_enclosed_zero_not_a_tolerance ... ok
+test textbook_dual_of_decimal_data_has_an_unbounded_exact_lagrangian ... ok
+test tutorial_with_explicit_finite_box_has_a_useful_safe_bound ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/lp_ip_craft_native-c7944662e5c81196)
+
+running 2 tests
+test incumbent::tests::elementary_enclosures ... ok
+test presolve::tests::only_enclosed_rows_are_removed ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acceptance.rs (target/debug/deps/acceptance-ebc52e54e1cd9ca3)
+
+running 14 tests
+test analytic_lp_both_senses_and_duals ... ok
+test empty_rows_and_fixed_variables ... ok
+test dense_allocation_cap ... ok
+test infeasible_and_unbounded ... ok
+test limits_and_validation_before_cancel ... ok
+test mip_limit_retains_start ... ok
+test phase_one_lower_equal_ranged ... ok
+test kernel_and_pricing_modes_agree ... ok
+test streamed_tableau_compacts_empty_rows ... ok
+test presolve_differential_fixed_and_empty ... ok
+test upper_only_and_offset ... ok
+test warm_and_cold_integer_search_agree ... ok
+test tiny_supported_coefficient ... ok
+test binary_enumeration_oracle ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests lp_ip_craft
+
+running 1 test
+test crates/core/src/lib.rs - (line 11) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.16s; merged doctests compilation took 0.16s
+   Doc-tests lp_ip_craft_native
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

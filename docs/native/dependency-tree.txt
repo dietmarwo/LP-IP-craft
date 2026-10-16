@@ -1,0 +1,32 @@
+lp-ip-craft v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/core)
+
+lp-ip-craft-native v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/native)
+└── lp-ip-craft v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/core)
+
+lp-ip-craft-python v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/python)
+├── lp-ip-craft v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/core)
+├── lp-ip-craft-native v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/native) (*)
+└── pyo3 v0.30.1
+    ├── libc v0.2.190
+    ├── once_cell v1.21.4
+    ├── pyo3-ffi v0.30.1
+    │   └── libc v0.2.190
+    │   [build-dependencies]
+    │   └── pyo3-build-config v0.30.1
+    │       └── target-lexicon v0.13.5
+    └── pyo3-macros v0.30.1 (proc-macro)
+        ├── proc-macro2 v1.0.107
+        │   └── unicode-ident v1.0.27
+        ├── pyo3-macros-backend v0.30.1
+        │   ├── heck v0.5.0
+        │   ├── proc-macro2 v1.0.107 (*)
+        │   ├── quote v1.0.47
+        │   │   └── proc-macro2 v1.0.107 (*)
+        │   └── syn v3.0.9
+        │       ├── proc-macro2 v1.0.107 (*)
+        │       ├── quote v1.0.47 (*)
+        │       └── unicode-ident v1.0.27
+        ├── quote v1.0.47 (*)
+        └── syn v3.0.9 (*)
+    [build-dependencies]
+    └── pyo3-build-config v0.30.1 (*)

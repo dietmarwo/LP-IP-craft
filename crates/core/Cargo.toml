@@ -1,6 +1,6 @@
 [package]
 name = "lp-ip-craft"
-description = "Model, solver and result contracts for LP and mixed-integer LP (interface draft with a dummy backend)"
+description = "Validated LP/MIP models, solver contracts and independent numerical checks"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

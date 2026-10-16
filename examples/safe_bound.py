@@ -1,6 +1,6 @@
-"""Independent bounds from HiGHS LP duals, including unsafe naive dual sums.
+"""Independent bounds from native Rust LP duals, including unsafe naive dual sums.
 
-Run: python examples/safe_bound.py. This is also runnable without HiGHS, using
+Run: python examples/safe_bound.py. This is also runnable without native Rust, using
 the analytic duals of these tiny models. It makes no pruning decision.
 
 Part 1 corrects perturbed duals on a bounded box. Part 2 shows why columns
@@ -18,7 +18,7 @@ def margin_duals(model: Model, margin: float = 1e-6) -> "list[float] | None":
     A column with ``x_j >= l_j`` and no upper bound contributes a finite term
     only if its exact residual ``c_j - a_j^T y`` is nonnegative (minimizing).
     Solver duals meet that only to the dual feasibility tolerance (1e-7 in
-    HiGHS), so about half the basic columns get a negative exact residual.
+    native Rust), so about half the basic columns get a negative exact residual.
     Lowering their costs by more than that tolerance makes the residuals of
     the original costs positive, with room for rounding. Any multipliers give
     a valid bound for the original model; this only makes a finite one
@@ -40,7 +40,7 @@ def margin_duals(model: Model, margin: float = 1e-6) -> "list[float] | None":
         row_lower=model.row_lower, row_upper=model.row_upper,
         indptr=model.indptr, indices=model.indices, values=model.values,
     )
-    result = solve(relaxation, backend="highs")
+    result = solve(relaxation, backend="native")
     if result.status != "optimal" or result.duals is None:
         return None
     return result.duals.row_duals
@@ -56,15 +56,15 @@ def bounded_box() -> None:
         )
         y = [optimal_y]
         source = "analytic"
-        if "highs" in BACKENDS:
-            result = solve(model, backend="highs")
+        if "native" in BACKENDS:
+            result = solve(model, backend="native")
             assert result.status == "optimal" and result.duals is not None
             y = result.duals.row_duals
-            source = "HiGHS"
+            source = "native Rust"
         certified = safe_dual_bound(model, y)
-        # HiGHS may choose another optimal dual because bound duals also enter
+        # native Rust may choose another optimal dual because bound duals also enter
         # its certificate. Use the stated analytic dual for a reproducible
-        # near-optimum counterexample; the first bound still uses HiGHS duals.
+        # near-optimum counterexample; the first bound still uses native Rust duals.
         perturbed_y = optimal_y + (1e-7 if sense == "minimize" else -1e-7)
         corrected = safe_dual_bound(model, [perturbed_y])
         assert certified.bound is not None and corrected.bound is not None
@@ -92,13 +92,13 @@ def one_sided_box() -> None:
     )
     textbook = safe_dual_bound(model, [1.5])
     assert textbook.status == "unbounded_variable" and textbook.index == 0
-    if "highs" in BACKENDS:
-        plain = safe_dual_bound(model, solve(model, backend="highs").duals.row_duals)
+    if "native" in BACKENDS:
+        plain = safe_dual_bound(model, solve(model, backend="native").duals.row_duals)
         y = margin_duals(model)
         assert y is not None
-        source = f"HiGHS duals: {plain.status}; margin duals"
+        source = f"native Rust duals: {plain.status}; margin duals"
     else:
-        y = [1.5 * (1 - 1e-6)]  # what margin_duals returns, up to HiGHS's rounding
+        y = [1.5 * (1 - 1e-6)]  # what margin_duals returns, up to native Rust's rounding
         source = "analytic margin dual"
     with_margin = safe_dual_bound(model, y)
     assert with_margin.bound is not None and with_margin.bound <= 2.9999999999999996
