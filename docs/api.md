@@ -1,6 +1,6 @@
 # Contract: model, solve, results
 
-Version 0.2.0 (iteration 1). Interfaces are pre-release; `publish = false`
+Version 0.3.0 (iteration 2). Interfaces are pre-release; `publish = false`
 prevents accidental releases.
 
 ## The model
@@ -156,8 +156,9 @@ case is this crate's convention. `absolute` keeps its sign: a negative value
 means the bound is invalid, and it is reported, not clamped. Rust's
 `SolveResult::gap` and `Gap::try_new` return an `Evaluation` error if the
 subtraction overflows; `Gap::new` is the raw IEEE formula. A backend may only
-report a bound it has proven; an approximate LP dual value is not a bound (see
-the iteration-1 results, next steps).
+report a bound it has proven; an approximate LP dual value is not a bound.
+The separate `safe_dual_bound` API below computes a conservative bound with
+roundoff correction but does not change `best_bound` or the gap semantics.
 
 ### LP duals
 
@@ -191,6 +192,44 @@ a distance and grows with both magnitudes; `duality_gap` measures the same
 property scale-free and is what acceptance checks use. None of them bounds the
 objective error or certifies a MIP. Intermediate overflow is an `Evaluation`
 error, so a NaN cannot disappear inside a maximum.
+
+### Independent conservative dual bounds (iteration 2)
+
+Rust exports `safe_dual_bound(&Model, &[f64]) -> Result<SafeDualBound>`;
+Python exposes `safe_dual_bound(model, row_duals) -> SafeDualBound`.
+Multipliers use the same original-sense sign convention as `Duals.row_duals`.
+They need not be optimal. The checker recomputes the entire dual residual
+from the model, so no reduced costs or primal point is supplied.
+
+`SafeDualBound` contains `bound: Option<f64>` / `Optional[float]`, typed
+`status: SafeBoundStatus`, and `index: Option<usize>` / `Optional[int]`.
+
+| Rust / Python status | Bound | Index / interpretation |
+| --- | --- | --- |
+| `Finite` / `finite` | finite, original sense and offset | None; lower bound for minimization, upper for maximization |
+| `UnboundedRow` / `unbounded_row` | None | First row whose nonzero multiplier selects an infinite side |
+| `UnboundedVariable` / `unbounded_variable` | None | First variable whose residual enclosure has an adverse infinite direction |
+| `ArithmeticOverflow` / `arithmetic_overflow` | None | None; a finite intermediate enclosure could not be maintained |
+| `UnsupportedArithmetic` / `unsupported_arithmetic` | None | None; runtime gradual-underflow probes failed |
+
+An unavailable result describes the calculation, not the model: it does not
+prove infeasibility or unboundedness. Incorrect multiplier length or nonfinite
+entries raise `InvalidInput` / `ValueError` with field context. Neither inputs
+nor multipliers are repaired. Integrality is relaxed without changing the model
+or rounding its bounds. No feasibility tolerance enters this function.
+
+Validity is for the exact real model encoded by the stored binary64 inputs.
+Outward enclosures require standard binary64 operations and gradual underflow;
+do not compile with fast-math or change the arithmetic environment during the
+call. Runtime probes reject common flush-to-zero modes. Conservative interval
+width can prevent a bound on free variables even if the exact residual is zero.
+
+The function is dependency-free, uses O(nnz + n + m) time and O(n) workspace,
+runs with Python detached and is available in dummy-only wheels. It is an
+explicit independent calculation: it neither certifies HiGHS's MIP bound/tree
+nor validates a primal candidate exactly. An ordinary tolerance-feasible
+candidate and its rounded objective cannot automatically be used to make a
+rigorous pruning decision. See the [derivation and examples](safe-dual-bounds.md).
 
 ### Backend report
 

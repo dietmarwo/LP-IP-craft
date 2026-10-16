@@ -37,6 +37,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod bound;
 pub mod check;
 mod dummy;
 mod error;
@@ -44,6 +45,7 @@ mod model;
 mod solver;
 mod sparse;
 
+pub use bound::{SafeBoundStatus, SafeDualBound, safe_dual_bound};
 pub use check::evaluate;
 pub use dummy::DummySolver;
 pub use error::{Error, Result};

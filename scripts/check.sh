@@ -18,3 +18,4 @@ python -m maturin develop --release --locked
 python -m pytest -q
 python examples/demo.py
 python examples/solve_highs.py
+python examples/safe_bound.py
