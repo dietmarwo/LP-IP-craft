@@ -3,11 +3,13 @@
 Fraction(float) is the exact stored binary64 value. Safety comparisons below
 never use a floating-point tolerance. These tests also run in dummy-only builds.
 """
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError
 from fractions import Fraction as F
 from itertools import combinations, product
 import math
+from pathlib import Path
 import pickle
 import random
 import sys
@@ -15,6 +17,9 @@ import sys
 import pytest
 
 from lp_ip_craft import BACKENDS, Model, SafeDualBound, safe_dual_bound, solve
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples"))
+from safe_bound import margin_duals  # noqa: E402
 
 
 def model(c, a, lo, hi, lower, upper, *, sense="minimize", offset=0.0, kinds=None):
@@ -208,6 +213,83 @@ def test_infinite_boxes_rows_and_exact_zero(sense):
     assert safe_dual_bound(m, [s * 1.0]) == SafeDualBound(None, "unbounded_row", 0)
 
 
+def special_value(rng):
+    """Mixed magnitudes: exact identities, dyadics, subnormals, near overflow."""
+    tiny = math.ulp(0.0)
+    kind = rng.random()
+    if kind < 0.15:
+        return rng.choice([0.0, -0.0, 1.0, -1.0, 2.0, -0.5, 3.0])
+    if kind < 0.35:
+        return rng.randint(-40, 40) / rng.choice([1, 2, 3, 4, 8, 10])
+    if kind < 0.45:
+        return rng.choice([tiny, -tiny, 3 * tiny, sys.float_info.min, -sys.float_info.min / 3])
+    if kind < 0.55:
+        return rng.choice([1.0, -1.0]) * rng.choice([1e308, sys.float_info.max, 1e300, 1.3e154])
+    if kind < 0.75:
+        return rng.uniform(-5, 5)
+    return math.ldexp(rng.uniform(-1, 1), rng.randint(-1074, 1023))
+
+
+def special_interval(rng):
+    lo, hi = sorted((special_value(rng), special_value(rng)))
+    return rng.choice([(-math.inf, math.inf), (lo, math.inf), (-math.inf, hi), (lo, lo),
+                       (lo, hi), (lo, hi)])
+
+
+def unbounded_rows(m, y):
+    sign = 1 if m.sense == "minimize" else -1
+    return [i for i, v in enumerate(y)
+            if sign * v and math.isinf(m.row_lower[i] if sign * v > 0 else m.row_upper[i])]
+
+
+@pytest.mark.parametrize("sense", ["minimize", "maximize"])
+def test_random_infinite_sides_special_values_and_reported_indices(sense):
+    rng = random.Random(2610)
+    statuses = Counter()
+    for _ in range(1500):
+        n, rows = rng.randint(1, 6), rng.randint(0, 5)
+        a = [[special_value(rng) if rng.random() < 0.6 else 0.0 for _ in range(n)]
+             for _ in range(rows)]
+        row_box = [special_interval(rng) for _ in range(rows)]
+        box = [special_interval(rng) for _ in range(n)]
+        m = model([special_value(rng) for _ in range(n)], a,
+                  [b[0] for b in row_box], [b[1] for b in row_box],
+                  [b[0] for b in box], [b[1] for b in box],
+                  sense=sense, offset=special_value(rng))
+        y = [special_value(rng) for _ in range(rows)]
+        result = assert_safe(m, y, require_finite=False)
+        statuses[result.status] += 1
+        if result.status == "unbounded_row":
+            # Rows are processed first and in order: the first offending row.
+            assert unbounded_rows(m, y)[:1] == [result.index], (m, y, result)
+        elif result.status == "unbounded_variable":
+            assert not unbounded_rows(m, y), (m, y, result)
+            j = result.index
+            assert math.isinf(m.lower[j]) or math.isinf(m.upper[j]), (m, y, result)
+        else:
+            assert result.index is None
+    # Every outcome except the arithmetic-environment one is exercised.
+    assert min(statuses[s] for s in ("finite", "unbounded_row", "unbounded_variable",
+                                     "arithmetic_overflow")) >= 100, statuses
+
+
+@pytest.mark.parametrize("sense", ["minimize", "maximize"])
+def test_textbook_dual_of_decimal_data_has_an_unbounded_exact_lagrangian(sense):
+    # minimize 0.3 x0 + 0.7 x1 subject to 0.2 x0 + 0.3 x1 >= 2, x >= 0
+    # (or maximize its negation). Binary64 0.3 / 0.2 is not 1.5, so the
+    # textbook dual leaves a negative exact residual on an unbounded column.
+    s = 1 if sense == "minimize" else -1
+    m = model([s * 0.3, s * 0.7], [[0.2, 0.3]], [2.0], [math.inf],
+              [0.0, 0.0], [math.inf, math.inf], sense=sense)
+    assert F(0.3) - F(0.2) * F(1.5) < 0 and exact_bound(m, [s * 1.5]) is None
+    assert safe_dual_bound(m, [s * 1.5]) == SafeDualBound(None, "unbounded_variable", 0)
+    # A slightly smaller multiplier leaves room for rounding.
+    result = assert_safe(m, [s * 1.5 * (1 - 1e-6)])
+    optimum = s * F(2) * F(0.3) / F(0.2)  # x = (2 / 0.2, 0) in exact arithmetic
+    assert (F(result.bound) <= optimum) if s == 1 else (F(result.bound) >= optimum)
+    assert abs(result.bound - float(optimum)) < 1e-5
+
+
 def test_overflow_is_typed_and_never_a_finite_bound():
     m = model([1.0], [[2.0]], [2.0], [2.0], [0.0], [1.0])
     assert safe_dual_bound(m, [sys.float_info.max]) == SafeDualBound(None, "arithmetic_overflow", None)
@@ -252,3 +334,33 @@ def test_highs_duals_and_perturbations_against_exact_vertices(sense):
         for perturbation in [0.0, -1e-7, 1e-7]:
             y = [v + perturbation for v in result.duals.row_duals]
             check_optimum(m, y, points)
+
+
+@pytest.mark.skipif("highs" not in BACKENDS, reason="native HiGHS is not compiled in")
+@pytest.mark.parametrize("sense", ["minimize", "maximize"])
+def test_margin_duals_bound_models_without_upper_bounds(sense):
+    # Solver duals leave about half the basic residuals negative in exact
+    # arithmetic; on x >= 0 with no upper bound that makes the bound -inf.
+    # Duals of the cost-shifted LP (examples/safe_bound.py) must give a
+    # finite bound on the valid side of the exact optimum every time.
+    rng = random.Random(4417)
+    s = 1 if sense == "minimize" else -1
+    for _ in range(25):
+        hidden = [rng.uniform(0, 2) for _ in range(2)]
+        a = [[rng.uniform(-2, 2) for _ in range(2)] for _ in range(3)] + [[1.0, 1.0]]
+        activity = [row[0] * hidden[0] + row[1] * hidden[1] for row in a]
+        lo = [v - rng.uniform(0, 1) for v in activity[:3]] + [-math.inf]
+        hi = [math.inf if rng.random() < 0.5 else v + 1 for v in activity[:3]] + [6.0]
+        m = model([rng.uniform(-4, 4) for _ in range(2)], a, lo, hi,
+                  [0.0, 0.0], [math.inf, math.inf], sense=sense)
+        y = margin_duals(m)
+        assert y is not None
+        check_optimum(m, y, exact_vertices(m))
+    # The tutorial production LP (maximize, x >= 0, exact optimum 2150) gets
+    # a bound without the artificial upper bounds the Rust test needs.
+    production = model([s * -45.0, s * -80.0, s * -110.0],
+                       [[5.0, 20.0, 25.0], [10.0, 15.0, 20.0], [1.0, 3.0, 5.0]],
+                       [-math.inf] * 3, [400.0, 450.0, 60.0],
+                       [0.0] * 3, [math.inf] * 3, sense=sense)
+    bound = assert_safe(production, margin_duals(production)).bound
+    assert s * F(bound) <= -2150 and abs(s * bound + 2150) < 1e-2

@@ -221,8 +221,19 @@ or rounding its bounds. No feasibility tolerance enters this function.
 Validity is for the exact real model encoded by the stored binary64 inputs.
 Outward enclosures require standard binary64 operations and gradual underflow;
 do not compile with fast-math or change the arithmetic environment during the
-call. Runtime probes reject common flush-to-zero modes. Conservative interval
-width can prevent a bound on free variables even if the exact residual is zero.
+call. Runtime probes reject common flush-to-zero modes.
+
+Columns with an infinite bound limit availability. The exact residual
+`c_j − a_jᵀy` (oriented to minimization) must be `≥ 0` without an upper bound,
+`≤ 0` without a lower bound, and exactly `0` for a free column. LP solver
+duals meet this only to the solver's tolerance, so with HiGHS duals a model
+with such columns rarely gets a bound: 5 of 100 random `x ≥ 0` LPs did. For
+most of the others, the exact Lagrangian bound of those duals is itself
+infinite. Duals of the LP with one-sided costs shifted by `1e-6 · max(1, |c_j|)`
+in the safe direction (`margin_duals` in `examples/safe_bound.py`) gave a
+bound for all 100, about `1e-6` relative below the optimum. Free columns need
+finite bounds; interval width can also prevent a bound when the exact
+residual is zero. See [availability with solver duals](safe-dual-bounds.md#availability-with-solver-duals).
 
 The function is dependency-free, uses O(nnz + n + m) time and O(n) workspace,
 runs with Python detached and is available in dummy-only wheels. It is an

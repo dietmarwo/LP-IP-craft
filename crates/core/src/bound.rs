@@ -65,8 +65,15 @@ pub struct SafeDualBound {
 /// binary64 values. Standard IEEE binary64 arithmetic with gradual underflow
 /// is required; do not build with fast-math or change that environment during
 /// the call. Lightweight probes reject flush-to-zero/denormals-are-zero modes.
-/// Bounds may be weak or unavailable, especially with unbounded variables.
 /// This is not an exact primal certificate or a safe pruning decision.
+///
+/// Bounds may be weak or unavailable. With duals from an LP solver, a column
+/// with an infinite bound usually makes the result `UnboundedVariable`: its
+/// exact residual must have the safe sign (be exactly zero for a free column),
+/// and solver duals meet that only to the solver's tolerance, so the exact
+/// Lagrangian bound of those duals is often infinite itself. Request the duals
+/// from an LP whose one-sided costs are shifted by a small margin (see
+/// `docs/safe-dual-bounds.md`), or give free columns finite bounds.
 ///
 /// Runs in O(nnz + n + m) time and O(n) extra memory. Invalid multiplier
 /// length/nonfinite entries return [`crate::Error::InvalidInput`]. Arithmetic

@@ -71,59 +71,109 @@ The tests also check:
 The deterministic randomized families are regressions, not formal verification.
 No optimization speedup or GTOC acceptance claim follows from them.
 
+## Review of the delivered iteration
+
+The delivery built and passed its 70 Rust tests, doctest and 88 Python tests.
+The review checked validity and usefulness separately.
+
+**Validity: no defect found.** I read the derivation and the kernel line by
+line against [safe-dual-bounds.md](safe-dual-bounds.md): the neighbour
+enclosures, the exact identities, the corner minimization, the checks for
+one-sided boxes and the probes. I then ran an independent rational oracle
+on 210,000 random models in both senses. The models mix infinite, one-sided,
+fixed and free sides with exact identities, subnormals and values near
+overflow. No finite bound was on the wrong side of the exact Lagrangian. In
+90,000 of the cases I also checked the reported index. It was always the
+first row or variable that blocks a bound.
+
+I also reproduced the flush-to-zero claim with a C helper that sets the
+x86-64 MXCSR. FTZ, DAZ and both together return `unsupported_arithmetic`.
+Under round-up and round-toward-zero the bounds stay valid, because the
+argument needs only faithful rounding. The derivation now says so.
+
+**Availability: the main limitation was understated.** The docs said that
+interval width can prevent a bound on free variables. Measured with HiGHS
+duals (`examples/bound_availability.py`, 100 random LPs or MIPs per family),
+the limitation is much broader:
+
+| Variable boxes | Finite with HiGHS duals | Finite with margin duals |
+| --- | ---: | ---: |
+| all in [0, 3] | 100 | 100 |
+| `x ≥ 0`, no upper bound | 5 | **100** |
+| half the columns free | 2 | 4 |
+| MIP: integers in [0, 4], continuous `x ≥ 0` | 15 | **100** |
+
+Most of these failures are not caused by arithmetic. The exact Lagrangian
+bound of the HiGHS duals is itself infinite in 79 of 95, 98 of 98 and 73 of 85
+cases. HiGHS's duals are dual feasible only to its tolerance, so basic columns
+on `x ≥ 0` get slightly negative exact residuals. Even the textbook dual can
+fail: 0.3 / 0.2 is not 1.5 in binary64, so for
+`min 0.3x₀ + 0.7x₁, 0.2x₀ + 0.3x₁ ≥ 2, x ≥ 0` the dual 1.5 has an
+exact bound of −∞.
+
+The delivered Rust tutorial test worked around this with upper bounds derived
+by hand. The remedy is to ask the solver for duals with a margin. Re-solve the
+LP with the cost of each one-sided column shifted by `1e-6 · max(1, |c_j|)` in
+the safe direction, then bound the original model with those duals. This
+stays valid for any multipliers, gave a bound in every case above, and loosens
+it by about `1e-6` relative. It cannot help free columns, which need finite
+bounds.
+
+Changes in the review:
+
+- `margin_duals` in `examples/safe_bound.py`, plus a second part of the example
+  that shows the stored-decimal case.
+- `examples/bound_availability.py`, the measurement above. It checks every
+  finite bound against the exact Lagrangian and fails on a wrong one. CI runs
+  it in the HiGHS jobs and writes the table to the job summary.
+- New tests:
+  - 3,000 random models with infinite sides and special values, checking
+    validity, the reported index and that every status occurs;
+  - the stored-decimal example in Rust and Python;
+  - 50 HiGHS LPs with `x ≥ 0` and the tutorial LP, bounded with margin duals
+    against exact optima.
+- Docs: the availability section and the faithful-rounding assumption in the
+  derivation, the availability paragraph in `api.md`, the Rust and Python doc
+  comments, the README, and a pruning prerequisite: node LPs must supply
+  margin duals.
+
+`safe_dual_bound`, its statuses and the HiGHS adapter are unchanged.
+
 ## Validation
 
-Local Linux x86_64, Rust 1.99.1, CPython 3.12.14, PyO3 0.30.1,
-maturin 1.9.4. Native tests use an installed release wheel in a separate
-environment; imports resolve to `site-packages`, not an editable checkout.
+Review, local: Linux x86_64, Rust 1.97.0, CPython 3.13, PyO3 0.30.1,
+maturin 1.15.0, pytest 9.1.1, NumPy 2.5.4. The pull request's CI repeats the
+checks on Linux, macOS and Windows with Python 3.10 and 3.14, the dummy-only
+build and the Rust 1.85 check.
 
 | Check | Result |
 | --- | --- |
-| `cargo fmt --all --check` | Pass |
-| Workspace Clippy, all targets, warnings denied | Pass |
-| Dummy-only binding Clippy, warnings denied | Pass |
-| Debug Rust tests (overflow checks enabled) | **70 tests + 1 doctest pass** |
-| Rust 1.85 workspace/all-targets compatibility | Pass |
-| Rustdoc with warnings denied | Pass |
-| Installed native wheel Python suite | **88 pass** |
-| Dummy-only installed wheel Python suite | **67 pass, 21 native-only tests skipped** |
+| Delivered archive, `bash scripts/check.sh` | Pass: 70 Rust tests + 1 doctest, 88 Python tests |
+| Reviewed, `bash scripts/check.sh` from a clean build (fmt, both Clippy runs, debug tests, examples) | Pass: **71 Rust tests + 1 doctest, 94 Python tests** |
+| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Pass |
 | `mypy --strict python/lp_ip_craft` | Pass |
-| HiGHS and analytic modes of `examples/safe_bound.py` | Pass |
-| Linux x86_64 runtime arithmetic probe | FTZ, DAZ and combined modes each return `unsupported_arithmetic` with no bound; restored normal mode returns a finite bound |
+| Native wheel in a fresh virtual environment (imports from `site-packages`) | 94 pass; all examples run |
+| Dummy-only wheel (`--no-default-features`) in a fresh virtual environment | 71 pass, 23 HiGHS tests skipped; `safe_bound.py` runs in analytic mode |
+| Independent rational oracle, 210,000 adversarial models | No finite bound on the wrong side; 90,000 index checks consistent |
+| MXCSR probe (C helper, x86-64) | FTZ, DAZ, both: `unsupported_arithmetic`; round-up and round-toward-zero: finite and valid |
+| `examples/bound_availability.py`, seed 1 | The table in the review section; no unsafe bound |
 | `git diff --check` | Pass |
 
-The arithmetic-mode probe used a small local C shim to set/restore the thread's
-MXCSR register and call the installed Python API. That platform-specific probe
-is supplementary; it adds no C dependency to the core checker. CI runs the
-portable exact-oracle tests on the existing Linux/macOS/Windows and Python
-3.10/3.14 matrix, and the new example in both native and dummy-only jobs.
-Those remote CI jobs were not run for these local changes.
-
-Reproduction with a suitable C++/CMake/libclang toolchain and an activated
-virtual environment:
+The delivery recorded the same counts with Rust 1.99.1, CPython 3.12.14 and
+maturin 1.9.4, for which it set `PYO3_BUILD_EXTENSION_MODULE=1`. With
+current maturin, no variable is needed:
 
 ```bash
-python -m pip install 'maturin>=1.9.4,<2' pytest numpy mypy
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo clippy -p lp-ip-craft-python --no-default-features --locked -- -D warnings
-cargo test --workspace --locked
-cargo +1.85.0 check --workspace --all-targets --locked
+python -m pip install maturin pytest numpy mypy
+bash scripts/check.sh                       # in an activated virtual environment
 RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
-PYO3_BUILD_EXTENSION_MODULE=1 python -m maturin build --release --locked --out dist
-# Install the wheel into a separate virtual environment, then run from this repo:
-python -m pip install dist/*.whl pytest numpy
+python -m maturin build --release --locked --out dist
+python -m maturin build --release --locked --no-default-features --out dist-dummy
+# Install a wheel into a separate virtual environment, then from this repo:
 python -m pytest -q tests
 python examples/safe_bound.py
+python examples/bound_availability.py --table
 ```
-
-The explicit PyO3 environment variable supports the locally used older maturin;
-it emitted a legacy extension-feature warning, but the resulting wheel was
-installed and exercised. The native wheel targeted Linux `manylinux_2_38` with
-the `cp310-abi3` ABI. The source ZIP includes no platform-specific binary, build
-directory or transient validation log. For a dummy-only wheel use a separate
-output directory and add `--no-default-features` to the build command. Run the
-same test suite; native-backend cases are explicitly skipped.
 
 ## Limitations and next input
 
@@ -132,7 +182,9 @@ It requires ordinary IEEE arithmetic and gradual underflow. A runtime probe is
 not hardware verification; fast-math builds and arithmetic-environment changes
 during a call are unsupported. Large interval widths, unbounded variables or
 overflow can prevent a finite result even for a bounded feasible problem.
-Finite bounds can be weak for poor multipliers or loose variable boxes.
+With plain solver duals, columns with an infinite bound usually do, as the
+review measured. Margin duals fix this for one-sided columns, but not for free
+ones. Finite bounds can be weak for poor multipliers or loose variable boxes.
 
 The implementation does not validate primal feasibility exactly, supply a
 safe pruning API, prove infeasibility, propagate variable bounds, reconstruct

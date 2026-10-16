@@ -78,15 +78,23 @@ For one-sided boxes the dangerous directions are checked first:
 
 Otherwise the finite endpoint corners suffice. A wholly free variable is
 accepted only when the residual enclosure is exactly $[0,0]$, and contributes
-zero. No near-zero tolerance can substitute for this test. In particular,
-interval overestimation can make a bound unavailable even when the exact
-residual happens to be zero. This is a deliberate loss of strength, not validity.
+zero. No near-zero tolerance can substitute for this test. Interval
+overestimation can also make a bound unavailable when the exact residual has
+the safe sign or is zero. This is a deliberate loss of strength, not validity.
+With solver duals, however, the exact residual itself usually has the wrong
+sign somewhere; see [Availability with solver duals](#availability-with-solver-duals).
 
 ## Arithmetic kernel and assumptions
 
 For a finite rounded addition or product, the immediately preceding and
 following representable binary64 values enclose the exact result under
-ordinary IEEE arithmetic with gradual underflow. The code obtains adjacent
+ordinary IEEE arithmetic with gradual underflow. The argument needs only that
+each operation is faithful (error below one unit in the last place), which
+every IEEE rounding direction provides; a directed-rounding overflow returns
+`±MAX`, whose outer neighbour is infinite and is rejected. A local probe that
+set the x86-64 MXCSR from C confirmed valid bounds under round-up and
+round-toward-zero (Rust itself treats changing the environment as undefined
+behavior, so this is not a supported mode). The code obtains adjacent
 values through `to_bits`/`from_bits`, retaining the Rust 1.85 minimum. It does
 not change a process/thread rounding mode, call an interval library or use
 unsafe code. The default supported build uses Rust's standard floating-point
@@ -129,6 +137,56 @@ keeps the result at or above 8. `examples/safe_bound.py` obtains multipliers
 from HiGHS (or uses analytic ones in a dummy-only build), perturbs them and
 checks these inequalities without an epsilon.
 
+## Availability with solver duals
+
+A finite bound needs an exact residual of the safe sign on every column with
+an infinite side: $r_j\ge0$ when $u_j=\infty$, $r_j\le0$ when $l_j=-\infty$
+(oriented to minimization), and $r_j=0$ when the column is free. An LP
+solver's duals are dual feasible only to its tolerance (HiGHS: `1e-7`, on its
+scaled model), and its basic columns have $r_j\approx0$ of either sign. On a
+column without an upper bound, a negative exact residual makes the exact
+Lagrangian bound of those duals $-\infty$. No arithmetic can recover that.
+
+The binary64 data alone can cause this. Minimize $0.3x_0+0.7x_1$ subject to
+$0.2x_0+0.3x_1\ge2$ and $x\ge0$. The textbook dual is $1.5$, but with the
+stored values of 0.3 and 0.2 its exact residual is
+$0.3-0.2\cdot1.5=-2.8\cdot10^{-17}$. HiGHS returns $1.4999999999999998$,
+whose exact residual of $+1.7\cdot10^{-17}$ is smaller than the enclosure
+width. Neither gives a bound.
+
+`examples/bound_availability.py` measures this with HiGHS on random feasible,
+bounded LPs (n = 3–24). In the run below there are 100 models per family, with
+seed 1. Looseness is the gap to the HiGHS objective, relative to
+$\max(1,|\text{optimum}|)$.
+
+| Variable boxes | HiGHS duals: finite | of the rest, exact bound infinite | Median looseness | Margin duals: finite | Median looseness |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| all in [0, 3] | 100 | – | 2.5e-15 | 100 | 2.5e-15 |
+| x ≥ 0, no upper bound | 5 | 79 of 95 | 1.4e-16 | **100** | 1.4e-06 |
+| half the columns free | 2 | 98 of 98 | 1.5e-16 | 4 | 1.3e-06 |
+| MIP: integers in [0, 4], continuous x ≥ 0 | 15 | 73 of 85 | 7.2e-16 | **100** | 8.2e-02 |
+
+For the MIP family, the looseness is mostly the integrality gap of the LP
+relaxation. For most of the HiGHS duals that give no bound, the exact
+Lagrangian bound of those duals is itself infinite. The rest fail only because
+of the interval width.
+
+The remedy is to ask the solver for duals with some room. Solve the LP again
+with the cost of each one-sided column shifted by $\varepsilon\max(1,|c_j|)$
+in the safe direction: lower when $u_j=\infty$ and minimizing. Take
+$\varepsilon=10^{-6}$, well above the dual tolerance. The duals of the shifted
+LP satisfy the original sign conditions with a margin of about $\varepsilon$.
+Applied to the *original* model, `safe_dual_bound` is valid with these duals
+as with any others. The bound is weaker by about
+$\varepsilon\sum_j|c_jx_j|$. `margin_duals` in `examples/safe_bound.py`
+implements this, and for a MIP it solves the LP relaxation.
+
+A shift cannot give a free column an exactly zero residual. Free columns need
+finite bounds, either from the application or from bound propagation, which
+is not implemented. The delivered tutorial test in Rust adds upper bounds
+derived by hand for this reason. With margin duals, the Python test bounds the
+same LP with `x ≥ 0` as given.
+
 ## Validation strategy
 
 The Python tests use `fractions.Fraction(float)` to represent **exactly** each
@@ -142,12 +200,21 @@ safe side with no tolerance. Test families include:
 - 40 HiGHS LP solves, each checked with its original duals and two perturbations
   against the exact vertex optimum (120 bound checks);
 - explicit cancellation, signed-zero, fixed-variable, row-sign and unbounded
-  box cases; invalid multipliers and concurrency; frozen/picklable Python results.
+  box cases; invalid multipliers and concurrency; frozen/picklable Python results;
+- 3,000 models with infinite, one-sided, fixed and free variable and row
+  sides, mixing exact identities, subnormals and near-overflow values. Each
+  status must occur at least 100 times, and the reported row or variable
+  must be the first one that blocks a bound;
+- the stored-decimal example above in both senses, in Rust and Python;
+- 50 HiGHS LPs with `x ≥ 0` and no upper bounds, plus the tutorial
+  production LP, bounded with `margin_duals` against exact optima.
 
 These are deterministic regression checks, not a substitute for the validity
 argument or external review. The existing 61 Rust tests plus one doctest and
 69 Python tests are retained unchanged. Results and reproduced commands are
 recorded in [iteration-2-results.md](iteration-2-results.md).
+`examples/bound_availability.py` also checks every finite bound it computes
+against the exact Lagrangian of its multipliers.
 
 ## What must precede rigorous pruning
 
@@ -157,6 +224,11 @@ enclosed incumbent objective, with the correct comparison direction. A point
 accepted within `1e-7` can still lie outside the exact feasible set, and an
 ordinary objective dot product can round the wrong way. This iteration adds
 no pruning API and never derives a certificate from a small numerical gap.
+
+The node LPs of a pruning search must also supply usable multipliers. Columns
+with an infinite side need duals with a margin, as above, or an equivalent dual
+correction. Free columns need finite bounds. Otherwise the bound is usually
+unavailable on exactly the models where pruning would need it.
 
 Further scope would require separately reviewed safe variable propagation,
 exact primal checks, proof logging or rational reconstruction as appropriate.

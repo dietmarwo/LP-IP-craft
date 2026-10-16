@@ -73,6 +73,12 @@ The function uses no tolerance and makes no pruning decision. It does not
 certify an incumbent or the HiGHS search tree; `solve().best_bound` retains
 its existing meaning.
 
+With plain solver duals, a model with columns that have an infinite bound
+(such as `x >= 0`) rarely gets a finite bound. The same example shows
+`margin_duals`, which requests duals from the LP with slightly shifted costs
+on those columns. [`examples/bound_availability.py`](examples/bound_availability.py)
+measures both on random LPs and MIPs.
+
 ## Build and test
 
 Requirements: stable Rust (edition 2024, 1.85 or newer), CPython 3.10 or
@@ -89,7 +95,7 @@ bash scripts/check.sh
 
 `scripts/check.sh` runs `cargo fmt --check`, Clippy with `-D warnings`, the
 Rust tests and both Rust examples, builds the extension with `maturin develop`,
-then runs `pytest` and all three Python examples. `python -m pip install .` builds
+then runs `pytest` and all four Python examples. `python -m pip install .` builds
 and installs the package; `python -m maturin build --release` builds an abi3
 wheel. Without the native toolchain:
 

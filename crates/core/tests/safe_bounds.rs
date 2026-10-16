@@ -68,6 +68,33 @@ fn free_variable_needs_an_enclosed_zero_not_a_tolerance() {
     assert!(report.bound.is_none());
 }
 
+/// minimize 0.3 x0 + 0.7 x1 subject to 0.2 x0 + 0.3 x1 >= 2, x >= 0. The
+/// stored binary64 values make 0.3 - 0.2 * 1.5 = -2.8e-17, so the textbook
+/// dual 1.5 has an exact Lagrangian bound of -inf on the unbounded column.
+#[test]
+fn textbook_dual_of_decimal_data_has_an_unbounded_exact_lagrangian() {
+    let model = Model::new(lp_ip_craft::ModelData {
+        sense: Sense::Minimize,
+        objective: vec![0.3, 0.7],
+        objective_offset: 0.0,
+        variables: Bounds::non_negative(2),
+        kinds: vec![lp_ip_craft::VariableKind::Continuous; 2],
+        matrix: CsrMatrix::from_dense(1, 2, &[0.2, 0.3]).unwrap(),
+        rows: Bounds::new(vec![2.0], vec![f64::INFINITY]),
+    })
+    .unwrap();
+    let report = safe_dual_bound(&model, &[1.5]).unwrap();
+    assert_eq!(report.status, SafeBoundStatus::UnboundedVariable);
+    assert_eq!(report.index, Some(0));
+    // A multiplier 1e-6 smaller leaves room for the rounding. The exact
+    // optimum 2 * 0.3 / 0.2 of the stored data lies above 2.9999999999999996.
+    let bound = safe_dual_bound(&model, &[1.5 * (1.0 - 1e-6)])
+        .unwrap()
+        .bound
+        .unwrap();
+    assert!(bound <= 2.9999999999999996 && bound > 3.0 - 1e-5, "{bound}");
+}
+
 #[test]
 fn free_rows_zero_duals_fixed_variables_and_empty_rows() {
     let mut data = common::assignment_data();

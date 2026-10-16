@@ -306,7 +306,11 @@ def safe_dual_bound(model: Model, row_duals: Iterable[float]) -> SafeDualBound:
 
     No primal point, reduced costs or tolerance is used. Integrality is relaxed;
     the bound applies to every feasible LP/MIP point of the stored binary64
-    model. It may be weak or unavailable for poor duals or infinite bounds.
+    model. It may be weak or unavailable for poor duals or infinite bounds:
+    with solver duals, a column with an infinite bound usually makes it
+    ``unbounded_variable``. Duals of the LP with one-sided costs shifted by a
+    small margin avoid that (``margin_duals`` in ``examples/safe_bound.py``);
+    free columns need finite bounds.
     Requires standard IEEE binary64 arithmetic with gradual underflow; runtime
     probes reject flush-to-zero modes. The interpreter is released.
 

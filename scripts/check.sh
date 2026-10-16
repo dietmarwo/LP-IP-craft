@@ -19,3 +19,4 @@ python -m pytest -q
 python examples/demo.py
 python examples/solve_highs.py
 python examples/safe_bound.py
+python examples/bound_availability.py
