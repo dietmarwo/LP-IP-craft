@@ -42,8 +42,8 @@ pub fn evaluate(model: &Model, x: &[f64], tolerances: &Tolerances) -> Result<Eva
     }
     let primal_violation = model
         .variables()
-        .violation(x)
-        .max(model.rows().violation(&row_activity));
+        .checked_violation(x)?
+        .max(model.rows().checked_violation(&row_activity)?);
     let integrality_violation = model
         .kinds()
         .iter()
@@ -61,8 +61,7 @@ pub fn evaluate(model: &Model, x: &[f64], tolerances: &Tolerances) -> Result<Eva
     })
 }
 
-/// First-order residuals of an LP point with duals; all absolute, unscaled
-/// and `>= 0`.
+/// First-order residuals of an LP point with duals, unscaled and `>= 0`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LpResiduals {
     /// Largest bound violation of variables and rows.
@@ -76,15 +75,21 @@ pub struct LpResiduals {
     /// positive row dual of a minimization row without lower bound. Zero for
     /// sign-consistent duals.
     pub dual_sign: f64,
+    /// Relative primal-dual objective gap `|P - D| / (1 + |P| + |D|)` with
+    /// `P = c^T x` and `D = Σ μ · (bound selected by the sign of μ)` over all
+    /// row duals and reduced costs with a finite selected bound (the others
+    /// are counted in `dual_sign`). The objective offset cancels.
+    pub duality_gap: f64,
 }
 
 impl LpResiduals {
-    /// The largest of the four residuals.
+    /// The largest of the five residuals.
     pub fn max(&self) -> f64 {
         self.primal
             .max(self.stationarity)
             .max(self.complementarity)
             .max(self.dual_sign)
+            .max(self.duality_gap)
     }
 }
 
@@ -92,12 +97,15 @@ impl LpResiduals {
 /// solution of the LP, ignoring integrality (that is, of the LP relaxation of
 /// a MIP).
 ///
-/// All four residuals are zero exactly at an optimal LP solution with
-/// consistent duals; small values mean an approximately optimal pair. They
-/// are not a bound on the objective error and do not certify a MIP.
+/// All residuals are zero exactly at an optimal LP solution with consistent
+/// duals; small values mean an approximately optimal pair. `complementarity`
+/// is a product of a dual and a distance, so it grows with both magnitudes;
+/// `duality_gap` is the scale-free measure of the same property. None of them
+/// bounds the objective error, and they do not certify a MIP.
 ///
 /// Returns [`Error::InvalidInput`] for wrong lengths or non-finite entries and
-/// [`Error::Evaluation`] if a row activity overflows.
+/// [`Error::Evaluation`] if any intermediate value overflows, so a NaN can
+/// never vanish inside a maximum.
 pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResiduals> {
     check_point(model, x, "point")?;
     ensure(duals.row_duals.len() == model.m(), || {
@@ -120,20 +128,27 @@ pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResidua
     let row_activity = activity(model, x)?;
     let primal = model
         .variables()
-        .violation(x)
-        .max(model.rows().violation(&row_activity));
+        .checked_violation(x)?
+        .max(model.rows().checked_violation(&row_activity)?);
 
     let mut aty = vec![0.0; model.n()];
     model
         .matrix()
         .multiply_transpose(&duals.row_duals, &mut aty);
-    let stationarity = model
+    let mut stationarity = 0.0_f64;
+    let mut primal_objective = 0.0_f64;
+    for (j, ((&c, &a), &z)) in model
         .objective()
         .iter()
         .zip(&aty)
         .zip(&duals.reduced_costs)
-        .map(|((c, a), z)| (c - a - z).abs())
-        .fold(0.0_f64, f64::max);
+        .enumerate()
+    {
+        finite(a, || format!("(A^T row_duals)[{j}]"))?;
+        let residual = finite(c - a - z, || format!("stationarity of variable {j}"))?;
+        stationarity = stationarity.max(residual.abs());
+        primal_objective = finite(primal_objective + c * x[j], || "c^T x".into())?;
+    }
 
     // Minimizing, a positive dual selects the lower bound; maximizing, the upper.
     let orientation = match model.sense() {
@@ -142,9 +157,10 @@ pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResidua
     };
     let mut complementarity = 0.0_f64;
     let mut dual_sign = 0.0_f64;
-    for (values, bounds, duals) in [
-        (&row_activity[..], model.rows(), &duals.row_duals[..]),
-        (x, model.variables(), &duals.reduced_costs[..]),
+    let mut dual_objective = 0.0_f64;
+    for (what, values, bounds, duals) in [
+        ("row", &row_activity[..], model.rows(), &duals.row_duals[..]),
+        ("variable", x, model.variables(), &duals.reduced_costs[..]),
     ] {
         for i in 0..values.len() {
             let (v, mu) = (values[i], duals[i]);
@@ -154,19 +170,41 @@ pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResidua
                 _ => continue,
             };
             if selected.is_finite() {
-                complementarity = complementarity.max(mu.abs() * (v - selected).abs());
+                let term = finite(mu.abs() * (v - selected).abs(), || {
+                    format!("complementarity of {what} {i}")
+                })?;
+                complementarity = complementarity.max(term);
+                dual_objective =
+                    finite(dual_objective + mu * selected, || "dual objective".into())?;
             } else {
                 dual_sign = dual_sign.max(mu.abs());
             }
         }
     }
+    let duality_gap = finite(
+        (primal_objective - dual_objective).abs()
+            / (1.0 + primal_objective.abs() + dual_objective.abs()),
+        || "duality gap".into(),
+    )?;
 
     Ok(LpResiduals {
         primal,
         stationarity,
         complementarity,
         dual_sign,
+        duality_gap,
     })
+}
+
+fn finite(value: f64, what: impl FnOnce() -> String) -> Result<f64> {
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(Error::Evaluation(format!(
+            "{} overflowed to {value}",
+            what()
+        )))
+    }
 }
 
 pub(crate) fn check_point(model: &Model, x: &[f64], what: &str) -> Result<()> {

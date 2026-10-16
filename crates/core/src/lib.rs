@@ -2,11 +2,10 @@
 //! trait, typed results with explicit bound/gap and dual conventions, and
 //! solver-independent checks.
 //!
-//! **Interface draft. No optimizer is implemented.** The only backend,
-//! [`DummySolver`], evaluates one candidate and returns it with
-//! [`Status::Stub`]. It exists to exercise the contracts end to end,
-//! including through the Python binding, before real backends (HiGHS, SCIP,
-//! native components) are integrated.
+//! This crate has no dependencies. Real optimization is in the sibling crate
+//! `lp-ip-craft-highs`, an adapter to the open HiGHS solver that implements
+//! [`LpIpSolver`]. [`DummySolver`] stays as a contract fixture: it evaluates
+//! one candidate and returns it with [`Status::Stub`].
 //!
 //! ```
 //! use lp_ip_craft::{
@@ -32,7 +31,7 @@
 //! let evaluation = result.evaluation.as_ref().unwrap();
 //! assert_eq!(evaluation.objective, 7.0);
 //! assert!(evaluation.feasible_candidate);
-//! assert!(result.best_bound.is_none() && result.gap(model.sense()).is_none());
+//! assert!(result.best_bound.is_none() && result.gap(model.sense())?.is_none());
 //! # Ok::<(), lp_ip_craft::Error>(())
 //! ```
 #![forbid(unsafe_code)]
@@ -50,7 +49,7 @@ pub use dummy::DummySolver;
 pub use error::{Error, Result};
 pub use model::{Model, ModelData, Sense, VariableKind};
 pub use solver::{
-    CancellationToken, Duals, Evaluation, Gap, LpIpSolver, Options, SolveResult, Status,
-    Tolerances, WarmStart,
+    BackendReport, CancellationToken, Duals, Evaluation, Gap, LpIpSolver, Options, SolveResult,
+    StartStatus, Status, Tolerances, WarmStart,
 };
 pub use sparse::{Bounds, CsrMatrix, CsrPattern};

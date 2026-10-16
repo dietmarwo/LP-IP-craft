@@ -17,6 +17,8 @@ pub enum Error {
     Evaluation(String),
     /// A well-formed request that this component does not implement.
     Unsupported(String),
+    /// Native backend setup or execution failed.
+    Backend(String),
 }
 
 impl fmt::Display for Error {
@@ -25,6 +27,7 @@ impl fmt::Display for Error {
             Error::InvalidInput(m) => write!(f, "invalid input: {m}"),
             Error::Evaluation(m) => write!(f, "evaluation failed: {m}"),
             Error::Unsupported(m) => write!(f, "unsupported: {m}"),
+            Error::Backend(m) => write!(f, "backend failed: {m}"),
         }
     }
 }
@@ -35,7 +38,10 @@ impl Error {
     /// The message without the category prefix that [`Display`](fmt::Display) adds.
     pub fn message(&self) -> &str {
         match self {
-            Error::InvalidInput(m) | Error::Evaluation(m) | Error::Unsupported(m) => m,
+            Error::InvalidInput(m)
+            | Error::Evaluation(m)
+            | Error::Unsupported(m)
+            | Error::Backend(m) => m,
         }
     }
 }
@@ -66,5 +72,16 @@ pub(crate) fn ensure_finite(values: &[f64], what: &str) -> Result<()> {
     match first_non_finite(values) {
         Some((i, v)) => Err(Error::InvalidInput(format!("{what}: entry {i} is {v}"))),
         None => Ok(()),
+    }
+}
+
+/// Rejects nonfinite intermediate arithmetic before it can disappear in a maximum.
+pub(crate) fn finite(value: f64, what: &str) -> Result<f64> {
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(Error::Evaluation(format!(
+            "{what} overflowed or became nonfinite"
+        )))
     }
 }

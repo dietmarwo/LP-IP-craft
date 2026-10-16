@@ -3,6 +3,9 @@ from typing import Any, Iterable, Literal, Optional
 class EvaluationError(RuntimeError):
     """Floating-point evaluation failed, for example a row activity overflowed."""
 
+class BackendError(RuntimeError):
+    """A native backend failed to set up or run the model."""
+
 class Model:
     """A validated LP or mixed-integer LP; immutable and picklable.
 
@@ -66,13 +69,16 @@ class Cancellation:
     @property
     def cancelled(self) -> bool: ...
 
-def solve_dummy(
+def backends() -> list[str]: ...
+def solve_native(
     model: Model,
     start: Optional[Iterable[float]],
     feasibility_tolerance: float,
     integrality_tolerance: float,
     threads: int,
     cancellation: Cancellation,
+    backend: str,
+    backend_options: Optional[dict[str, Any]],
 ) -> dict[str, Any]: ...
 def evaluate(
     model: Model,
@@ -80,3 +86,9 @@ def evaluate(
     feasibility_tolerance: float,
     integrality_tolerance: float,
 ) -> dict[str, Any]: ...
+def lp_residuals(
+    model: Model,
+    x: Iterable[float],
+    row_duals: Iterable[float],
+    reduced_costs: Iterable[float],
+) -> dict[str, float]: ...

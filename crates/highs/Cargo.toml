@@ -1,0 +1,17 @@
+[package]
+name = "lp-ip-craft-highs"
+description = "HiGHS backend for the lp-ip-craft LP/MIP contracts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Exact pins: the status mapping, info keys and C API calls are checked against
+# these versions (HiGHS 1.15.0 is built from source by highs-sys, which needs
+# CMake, a C++ compiler and libclang).
+[dependencies]
+lp-ip-craft = { path = "../core" }
+highs = "=2.4.0"
+highs-sys = "=1.15.0"

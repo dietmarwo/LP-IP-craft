@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from lp_ip_craft import (
+    BACKENDS,
     Cancellation,
     EvaluationError,
     Model,
@@ -116,6 +117,24 @@ def test_parallel_solves_share_one_model(model):
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(lambda x: solve(model, start=x), starts))
     assert [r.evaluation.objective for r in results] == [7.0, 8.0, 7.5, 10.0] * 8
+
+
+def test_dummy_reports_its_backend(model):
+    r = solve(model, start=[1.0, 0.0])
+    assert r.backend.name == "dummy"
+    assert r.backend.version is None and r.backend.raw_status is None
+    assert r.backend.start_status == "evaluated"
+    assert r.backend.effective_options == {} and not r.backend.time_budget_exceeded
+    assert solve(model).backend.start_status == "not_provided"
+
+
+def test_unknown_or_missing_backend_is_explicit(model):
+    assert "dummy" in BACKENDS
+    with pytest.raises(ValueError, match="unknown backend"):
+        solve(model, backend="cplex")
+    if "highs" not in BACKENDS:
+        with pytest.raises(NotImplementedError, match="HiGHS"):
+            solve(model, backend="highs")
 
 
 # --- options and errors -------------------------------------------------------
