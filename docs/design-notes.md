@@ -1,3 +1,7 @@
+> Historical interface-draft review, retained for provenance. See
+> [iteration-1-results.md](iteration-1-results.md) for the implemented 0.2.0 decisions, tests
+> and limitations. Statements below about future integration describe v0.1.
+
 # Design notes
 
 Scope: the LP/MIP track of Planning2027 Idea 004 ("Open Rust solvers",

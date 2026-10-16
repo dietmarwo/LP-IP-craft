@@ -16,6 +16,28 @@ pub enum Status {
     Stub,
     /// Stopped by the cancellation token.
     Cancelled,
+    /// Backend outcome: optimal.
+    Optimal,
+    /// Backend outcome: infeasible.
+    Infeasible,
+    /// Backend outcome: unbounded.
+    Unbounded,
+    /// Backend outcome: infeasible_or_unbounded.
+    InfeasibleOrUnbounded,
+    /// Backend outcome: time_limit.
+    TimeLimit,
+    /// Backend outcome: node_limit.
+    NodeLimit,
+    /// Backend outcome: iteration_limit.
+    IterationLimit,
+    /// Backend outcome: solution_limit.
+    SolutionLimit,
+    /// Backend outcome: objective_limit.
+    ObjectiveLimit,
+    /// Backend outcome: numerical_failure.
+    NumericalFailure,
+    /// Backend outcome: unknown.
+    Unknown,
 }
 
 impl Status {
@@ -24,6 +46,17 @@ impl Status {
         match self {
             Status::Stub => "stub",
             Status::Cancelled => "cancelled",
+            Status::Optimal => "optimal",
+            Status::Infeasible => "infeasible",
+            Status::Unbounded => "unbounded",
+            Status::InfeasibleOrUnbounded => "infeasible_or_unbounded",
+            Status::TimeLimit => "time_limit",
+            Status::NodeLimit => "node_limit",
+            Status::IterationLimit => "iteration_limit",
+            Status::SolutionLimit => "solution_limit",
+            Status::ObjectiveLimit => "objective_limit",
+            Status::NumericalFailure => "numerical_failure",
+            Status::Unknown => "unknown",
         }
     }
 }
@@ -221,6 +254,19 @@ pub struct Gap {
 }
 
 impl Gap {
+    /// Checked arithmetic for external numerical data. Signed infinity is
+    /// intentional only when the incumbent objective is exactly zero.
+    pub fn try_new(sense: Sense, objective: f64, bound: f64) -> Result<Self> {
+        crate::error::finite(objective, "gap objective")?;
+        crate::error::finite(bound, "gap bound")?;
+        let gap = Self::new(sense, objective, bound);
+        crate::error::finite(gap.absolute, "absolute gap")?;
+        if objective != 0.0 {
+            crate::error::finite(gap.relative, "relative gap")?;
+        }
+        Ok(gap)
+    }
+
     /// The gap of a candidate with objective value `objective` against
     /// `bound` (a lower bound when minimizing, an upper bound when maximizing).
     pub fn new(sense: Sense, objective: f64, bound: f64) -> Self {
@@ -242,6 +288,8 @@ impl Gap {
 /// Outcome of a solve that was not aborted by an error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SolveResult {
+    /// Backend provenance, applied options and phase timings.
+    pub backend: BackendReport,
     /// How the solve ended.
     pub status: Status,
     /// The returned point (for a MIP: the incumbent). `None` if no complete
@@ -265,6 +313,21 @@ pub struct SolveResult {
 }
 
 impl SolveResult {
+    /// Empty result for a termination before any usable candidate exists.
+    pub fn empty(status: Status, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            candidate: None,
+            evaluation: None,
+            duals: None,
+            best_bound: None,
+            nodes: 0,
+            iterations: 0,
+            message: message.into(),
+            backend: BackendReport::default(),
+        }
+    }
+
     /// The [`Gap`] between the candidate and `best_bound`, if both exist and
     /// the candidate passed the feasibility check. `sense` is the model's.
     pub fn gap(&self, sense: Sense) -> Option<Gap> {
@@ -273,6 +336,16 @@ impl SolveResult {
         evaluation
             .feasible_candidate
             .then(|| Gap::new(sense, evaluation.objective, bound))
+    }
+
+    /// Checked counterpart of [`Self::gap`], rejecting arithmetic overflow.
+    pub fn checked_gap(&self, sense: Sense) -> Result<Option<Gap>> {
+        match (&self.evaluation, self.best_bound) {
+            (Some(e), Some(bound)) if e.feasible_candidate => {
+                Gap::try_new(sense, e.objective, bound).map(Some)
+            }
+            _ => Ok(None),
+        }
     }
 }
 
@@ -294,4 +367,42 @@ pub trait LpIpSolver {
         start: Option<&WarmStart>,
         cancel: &CancellationToken,
     ) -> Result<SolveResult>;
+}
+
+/// Provenance and timings for one backend invocation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BackendReport {
+    /// Engine name (dummy or highs).
+    pub name: String,
+    /// Native engine version.
+    pub version: Option<String>,
+    /// Unmodified engine status name.
+    pub raw_status: Option<String>,
+    /// Start handling: not_provided, submitted, or rejected. Submitted is not acceptance.
+    pub start_status: String,
+    /// Entire call after input validation, including conversion and checks.
+    pub total_seconds: f64,
+    /// Input conversion and native setup time.
+    pub conversion_seconds: f64,
+    /// Native optimization time.
+    pub solve_seconds: f64,
+    /// Independent extraction/checking time.
+    pub check_seconds: f64,
+    /// Options actually applied to the engine, represented as strings.
+    pub effective_options: Vec<(String, String)>,
+}
+impl Default for BackendReport {
+    fn default() -> Self {
+        Self {
+            name: "dummy".into(),
+            version: None,
+            raw_status: None,
+            start_status: "not_provided".into(),
+            total_seconds: 0.0,
+            conversion_seconds: 0.0,
+            solve_seconds: 0.0,
+            check_seconds: 0.0,
+            effective_options: vec![],
+        }
+    }
 }

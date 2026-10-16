@@ -42,8 +42,8 @@ pub fn evaluate(model: &Model, x: &[f64], tolerances: &Tolerances) -> Result<Eva
     }
     let primal_violation = model
         .variables()
-        .violation(x)
-        .max(model.rows().violation(&row_activity));
+        .checked_violation(x)?
+        .max(model.rows().checked_violation(&row_activity)?);
     let integrality_violation = model
         .kinds()
         .iter()
@@ -120,20 +120,22 @@ pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResidua
     let row_activity = activity(model, x)?;
     let primal = model
         .variables()
-        .violation(x)
-        .max(model.rows().violation(&row_activity));
+        .checked_violation(x)?
+        .max(model.rows().checked_violation(&row_activity)?);
 
     let mut aty = vec![0.0; model.n()];
     model
         .matrix()
         .multiply_transpose(&duals.row_duals, &mut aty);
-    let stationarity = model
-        .objective()
-        .iter()
-        .zip(&aty)
-        .zip(&duals.reduced_costs)
-        .map(|((c, a), z)| (c - a - z).abs())
-        .fold(0.0_f64, f64::max);
+    let mut stationarity = 0.0_f64;
+    for ((&c, &a), &z) in model.objective().iter().zip(&aty).zip(&duals.reduced_costs) {
+        crate::error::finite(a, "transpose product")?;
+        let residual = crate::error::finite(
+            crate::error::finite(c - a, "stationarity")? - z,
+            "stationarity",
+        )?;
+        stationarity = stationarity.max(residual.abs());
+    }
 
     // Minimizing, a positive dual selects the lower bound; maximizing, the upper.
     let orientation = match model.sense() {
@@ -154,7 +156,11 @@ pub fn lp_residuals(model: &Model, x: &[f64], duals: &Duals) -> Result<LpResidua
                 _ => continue,
             };
             if selected.is_finite() {
-                complementarity = complementarity.max(mu.abs() * (v - selected).abs());
+                complementarity = complementarity.max(crate::error::finite(
+                    mu.abs()
+                        * crate::error::finite(v - selected, "complementarity distance")?.abs(),
+                    "complementarity",
+                )?);
             } else {
                 dual_sign = dual_sign.max(mu.abs());
             }

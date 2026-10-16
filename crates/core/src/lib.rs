@@ -2,11 +2,9 @@
 //! trait, typed results with explicit bound/gap and dual conventions, and
 //! solver-independent checks.
 //!
-//! **Interface draft. No optimizer is implemented.** The only backend,
-//! [`DummySolver`], evaluates one candidate and returns it with
-//! [`Status::Stub`]. It exists to exercise the contracts end to end,
-//! including through the Python binding, before real backends (HiGHS, SCIP,
-//! native components) are integrated.
+//! **Iteration 1.** This dependency-free core retains [`DummySolver`] as a
+//! contract fixture. The sibling `lp-ip-craft-highs` crate implements real
+//! LP/MIP optimization. Select `backend="highs"` in Python.
 //!
 //! ```
 //! use lp_ip_craft::{
@@ -50,7 +48,7 @@ pub use dummy::DummySolver;
 pub use error::{Error, Result};
 pub use model::{Model, ModelData, Sense, VariableKind};
 pub use solver::{
-    CancellationToken, Duals, Evaluation, Gap, LpIpSolver, Options, SolveResult, Status,
-    Tolerances, WarmStart,
+    BackendReport, CancellationToken, Duals, Evaluation, Gap, LpIpSolver, Options, SolveResult,
+    Status, Tolerances, WarmStart,
 };
 pub use sparse::{Bounds, CsrMatrix, CsrPattern};

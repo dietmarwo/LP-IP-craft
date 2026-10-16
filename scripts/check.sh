@@ -8,9 +8,11 @@ if [ -z "${VIRTUAL_ENV:-}" ]; then
   exit 1
 fi
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-cargo run -p lp-ip-craft --example production --locked
-python -m maturin develop --release --locked
+cargo clippy --release --workspace --all-targets --locked -- -D warnings
+cargo test --release --workspace --locked
+cargo run --release -p lp-ip-craft --example production --locked
+PYO3_BUILD_EXTENSION_MODULE=1 python -m maturin develop --release --locked
 python -m pytest -q
 python examples/demo.py
+cargo run --release --locked -p lp-ip-craft-highs --example solve
+python examples/solve_highs.py

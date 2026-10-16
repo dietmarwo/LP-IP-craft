@@ -1,0 +1,10 @@
+🍹 Building a mixed python/rust project
+⚠️  Warning: You're building a library without activating pyo3's `extension-module` feature. See https://pyo3.rs/v0.30.1/building-and-distribution.html#the-extension-module-feature
+🔗 Found pyo3 bindings with abi3 support
+🐍 Not using a specific python interpreter
+   Compiling pyo3-ffi v0.30.1
+   Compiling lp-ip-craft-highs v0.2.0 (<workspace>/repos/LP-IP-craft/crates/highs)
+   Compiling pyo3 v0.30.1
+   Compiling lp-ip-craft-python v0.2.0 (<workspace>/repos/LP-IP-craft/crates/python)
+    Finished `release` profile [optimized] target(s) in 5.49s
+📦 Built wheel for abi3 Python ≥ 3.10 to validation/wheels/lp_ip_craft-0.2.0-cp310-abi3-manylinux_2_38_x86_64.whl

@@ -40,6 +40,7 @@ impl LpIpSolver for DummySolver {
         }
 
         let mut result = SolveResult {
+            backend: Default::default(),
             status: Status::Cancelled,
             candidate: None,
             evaluation: None,

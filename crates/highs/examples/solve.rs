@@ -1,0 +1,55 @@
+//! Runs the real HiGHS backend on the production-planning LP of the project's LP/IP
+//! tutorial (Example 1) and checks the solution and duals that Gurobi and
+//! HiGHS report for it: `cargo run -p lp-ip-craft-highs --example solve`.
+//!
+//! ```text
+//! maximize 45 chair + 80 table + 110 desk
+//! s.t.      5 chair + 20 table + 25 desk <= 400   (wood)
+//!          10 chair + 15 table + 20 desk <= 450   (labor)
+//!             chair +  3 table +  5 desk <=  60   (finishing)
+//!          x >= 0
+//! ```
+
+use lp_ip_craft::check::lp_residuals;
+use lp_ip_craft::{
+    Bounds, CancellationToken, CsrMatrix, Duals, LpIpSolver, Model, ModelData, Options, Result,
+    Sense, VariableKind, WarmStart,
+};
+use lp_ip_craft_highs::HighsSolver;
+
+fn main() -> Result<()> {
+    let model = Model::new(ModelData {
+        sense: Sense::Maximize,
+        objective: vec![45.0, 80.0, 110.0],
+        objective_offset: 0.0,
+        variables: Bounds::non_negative(3),
+        kinds: vec![VariableKind::Continuous; 3],
+        matrix: CsrMatrix::from_dense(3, 3, &[5.0, 20.0, 25.0, 10.0, 15.0, 20.0, 1.0, 3.0, 5.0])?,
+        rows: Bounds::new(vec![f64::NEG_INFINITY; 3], vec![400.0, 450.0, 60.0]),
+    })?;
+
+    // Optional complete start; HiGHS must still solve and certify its status.
+    let optimum = vec![30.0, 10.0, 0.0];
+    let result = HighsSolver::default().solve(
+        &model,
+        &Options::default(),
+        Some(&WarmStart::from_primal(optimum.clone())),
+        &CancellationToken::default(),
+    )?;
+    println!("status: {:?} ({})", result.status, result.message);
+    assert_eq!(result.status, lp_ip_craft::Status::Optimal);
+    let evaluation = result.evaluation.expect("the start was evaluated");
+    println!("evaluation: {evaluation:?}");
+    assert_eq!(evaluation.objective, 2150.0);
+
+    // Row duals (Gurobi Pi, HiGHS row_dual) and reduced costs (RC, col_dual) as
+    // published, in the crate's convention c = A^T y + z for the maximization.
+    let duals = Duals {
+        row_duals: vec![0.0, 11.0 / 3.0, 25.0 / 3.0],
+        reduced_costs: vec![0.0, 0.0, -5.0],
+    };
+    let residuals = lp_residuals(&model, &optimum, &duals)?;
+    println!("LP residuals with the published duals: {residuals:?}");
+    assert!(residuals.max() < 1e-12);
+    Ok(())
+}

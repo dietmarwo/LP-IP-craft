@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "lp-ip-craft"
-version = "0.1.0"
-description = "LP and mixed-integer LP contracts in Rust with Python bindings (interface draft; dummy backend only)"
+version = "0.2.0"
+description = "LP and mixed-integer LP in Rust with a HiGHS backend and Python bindings"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -19,7 +19,8 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8", "numpy>=1.24"]
+test = ["pytest>=8,<10", "numpy>=1.24"]
+bench = ["scipy>=1.15,<2"]
 
 [project.urls]
 Repository = "https://github.com/dietmarwo/LP-IP-craft"

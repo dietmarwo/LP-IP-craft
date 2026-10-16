@@ -347,8 +347,9 @@ fn evaluation_dict<'py>(py: Python<'py>, e: Evaluation) -> PyResult<Bound<'py, P
 
 /// Runs the dummy backend. Use `lp_ip_craft.solve` instead of calling this directly.
 #[pyfunction]
-#[pyo3(signature = (model, start, feasibility_tolerance, integrality_tolerance, threads, cancellation))]
-fn solve_dummy<'py>(
+#[pyo3(signature = (model, start, feasibility_tolerance, integrality_tolerance, threads, cancellation, backend="dummy", backend_options=None))]
+#[allow(clippy::too_many_arguments)]
+fn solve_native<'py>(
     py: Python<'py>,
     model: &Bound<'py, PyModel>,
     start: Option<&Bound<'py, PyAny>>,
@@ -356,6 +357,8 @@ fn solve_dummy<'py>(
     integrality_tolerance: f64,
     threads: i64,
     cancellation: &Bound<'py, Cancellation>,
+    backend: &str,
+    backend_options: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let start = match start.filter(|s| !s.is_none()) {
         Some(s) => Some(WarmStart::from_primal(floats(s, "start")?)),
@@ -365,18 +368,82 @@ fn solve_dummy<'py>(
     let token = cancellation.get().inner.clone();
     let inner: &Model = &model.get().inner;
     // Only owned or immutable Rust data crosses into the detached region.
-    let r = py
-        .detach(|| DummySolver.solve(inner, &options, start.as_ref(), &token))
-        .map_err(to_py_err)?;
+    let r = match backend {
+        "dummy" => {
+            if backend_options.is_some_and(|d| !d.is_empty()) {
+                return Err(PyNotImplementedError::new_err(
+                    "dummy does not implement backend options",
+                ));
+            }
+            py.detach(|| DummySolver.solve(inner, &options, start.as_ref(), &token))
+                .map_err(to_py_err)?
+        }
+        "highs" => {
+            #[cfg(feature = "highs")]
+            {
+                let mut settings = lp_ip_craft_highs::HighsOptions::default();
+                if let Some(d) = backend_options {
+                    for (key, value) in d.iter() {
+                        let key: String = key.extract()?;
+                        match key.as_str() {
+                            "time_limit_seconds" => {
+                                settings.time_limit_seconds = value.extract()?
+                            }
+                            "node_limit" => settings.node_limit = value.extract()?,
+                            "iteration_limit" => settings.iteration_limit = value.extract()?,
+                            "seed" => settings.seed = value.extract()?,
+                            "mip_relative_gap" => settings.mip_relative_gap = value.extract()?,
+                            "mip_absolute_gap" => settings.mip_absolute_gap = value.extract()?,
+                            "dual_tolerance" => settings.dual_tolerance = value.extract()?,
+                            _ => {
+                                return Err(PyValueError::new_err(format!(
+                                    "unknown HiGHS option: {key}"
+                                )));
+                            }
+                        }
+                    }
+                }
+                py.detach(|| {
+                    lp_ip_craft_highs::HighsSolver { settings }.solve(
+                        inner,
+                        &options,
+                        start.as_ref(),
+                        &token,
+                    )
+                })
+                .map_err(to_py_err)?
+            }
+            #[cfg(not(feature = "highs"))]
+            {
+                return Err(PyNotImplementedError::new_err(
+                    "HiGHS support was not compiled",
+                ));
+            }
+        }
+        _ => return Err(PyValueError::new_err(format!("unknown backend: {backend}"))),
+    };
 
     let out = PyDict::new(py);
+    out.set_item("backend", &r.backend.name)?;
+    out.set_item("backend_version", &r.backend.version)?;
+    out.set_item("raw_status", &r.backend.raw_status)?;
+    out.set_item("start_status", &r.backend.start_status)?;
+    out.set_item("total_seconds", r.backend.total_seconds)?;
+    out.set_item("conversion_seconds", r.backend.conversion_seconds)?;
+    out.set_item("solve_seconds", r.backend.solve_seconds)?;
+    out.set_item("check_seconds", r.backend.check_seconds)?;
+    let effective = PyDict::new(py);
+    for (k, v) in &r.backend.effective_options {
+        effective.set_item(k, v)?;
+    }
+    out.set_item("effective_options", effective)?;
     out.set_item("status", r.status.as_str())?;
     out.set_item("message", &r.message)?;
     out.set_item("candidate", &r.candidate)?;
     out.set_item("best_bound", r.best_bound)?;
     out.set_item("nodes", r.nodes)?;
     out.set_item("iterations", r.iterations)?;
-    match r.gap(inner.sense()) {
+    match r.checked_gap(inner.sense()).map_err(to_py_err)? {
         Some(gap) => {
             let d = PyDict::new(py);
             d.set_item("absolute", gap.absolute)?;
@@ -423,13 +490,40 @@ fn evaluate<'py>(
     evaluation_dict(py, e)
 }
 
+/// Independent LP residual checker, including original-sense dual signs.
+#[pyfunction]
+fn lp_residuals<'py>(
+    py: Python<'py>,
+    model: &Bound<'py, PyModel>,
+    x: &Bound<'py, PyAny>,
+    row_duals: &Bound<'py, PyAny>,
+    reduced_costs: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let x = floats(x, "x")?;
+    let duals = lp_ip_craft::Duals {
+        row_duals: floats(row_duals, "row_duals")?,
+        reduced_costs: floats(reduced_costs, "reduced_costs")?,
+    };
+    let inner = &model.get().inner;
+    let r = py
+        .detach(|| lp_ip_craft::check::lp_residuals(inner, &x, &duals))
+        .map_err(to_py_err)?;
+    let out = PyDict::new(py);
+    out.set_item("primal", r.primal)?;
+    out.set_item("stationarity", r.stationarity)?;
+    out.set_item("complementarity", r.complementarity)?;
+    out.set_item("dual_sign", r.dual_sign)?;
+    Ok(out)
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add_class::<PyModel>()?;
     m.add_class::<Cancellation>()?;
     m.add("EvaluationError", py.get_type::<EvaluationError>())?;
-    m.add_function(wrap_pyfunction!(solve_dummy, m)?)?;
+    m.add_function(wrap_pyfunction!(solve_native, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
+    m.add_function(wrap_pyfunction!(lp_residuals, m)?)?;
     Ok(())
 }

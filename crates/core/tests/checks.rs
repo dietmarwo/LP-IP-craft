@@ -184,6 +184,7 @@ fn result_gap_needs_a_bound_and_a_feasible_candidate() {
         feasible_candidate,
     };
     let mut result = SolveResult {
+        backend: Default::default(),
         status: Status::Stub,
         candidate: Some(vec![0.0]),
         evaluation: Some(evaluation(true)),

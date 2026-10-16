@@ -1,7 +1,7 @@
 """Python interface to the lp-ip-craft LP / mixed-integer LP contracts.
 
-**Interface draft. No optimizer is implemented.** ``solve`` currently runs a
-dummy backend that evaluates one candidate and returns it with
+**Iteration 1.** Select ``backend="highs"`` for real LP/MIP solves.
+The compatibility default runs a dummy backend that evaluates one candidate and returns it with
 ``status == "stub"``. ``evaluate`` is the solver-independent candidate check;
 it can already be used on solutions from other solvers.
 
@@ -23,9 +23,10 @@ from typing import Iterable, Literal, Optional
 
 from ._native import Cancellation, EvaluationError, Model
 from ._native import evaluate as _evaluate
-from ._native import solve_dummy as _solve_dummy
+from ._native import lp_residuals as _lp_residuals
+from ._native import solve_native as _solve_native
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Cancellation",
@@ -38,6 +39,9 @@ __all__ = [
     "SolveResult",
     "evaluate",
     "solve",
+    "HighsOptions",
+    "LpResiduals",
+    "lp_residuals",
 ]
 
 DEFAULT_FEASIBILITY_TOLERANCE = 1e-7
@@ -92,7 +96,7 @@ class Gap:
 
 @dataclass(frozen=True)
 class SolveResult:
-    status: Literal["stub", "cancelled"]
+    status: str
     """More statuses arrive with real backends."""
     message: str
     candidate: Optional[list[float]]
@@ -107,6 +111,15 @@ class SolveResult:
     """Present when there is a ``best_bound`` and a feasible candidate."""
     nodes: int
     iterations: int
+    backend: str
+    backend_version: Optional[str]
+    raw_status: Optional[str]
+    start_status: str
+    total_seconds: float
+    conversion_seconds: float
+    solve_seconds: float
+    check_seconds: float
+    effective_options: dict[str, str]
 
 
 def _evaluation(raw: Optional[dict]) -> Optional[Evaluation]:
@@ -119,6 +132,8 @@ def solve(
     start: Optional[Iterable[float]] = None,
     options: Optional[Options] = None,
     cancellation: Optional[Cancellation] = None,
+    backend: Literal["dummy", "highs"] = "dummy",
+    backend_options: Optional[HighsOptions] = None,
 ) -> SolveResult:
     """Solve ``model``, optionally from a complete primal ``start`` point.
 
@@ -130,13 +145,16 @@ def solve(
     ``EvaluationError`` if floating-point evaluation overflows.
     """
     options = options or Options()
-    raw = _solve_dummy(
+    from dataclasses import asdict
+    raw = _solve_native(
         model,
         start,
         options.feasibility_tolerance,
         options.integrality_tolerance,
         options.threads,
         cancellation if cancellation is not None else Cancellation(),
+        backend,
+        None if backend_options is None else asdict(backend_options),
     )
     duals = raw["duals"]
     gap = raw["gap"]
@@ -150,6 +168,16 @@ def solve(
         gap=None if gap is None else Gap(**gap),
         nodes=raw["nodes"],
         iterations=raw["iterations"],
+        backend=raw["backend"],
+        backend_version=raw["backend_version"],
+        raw_status=raw["raw_status"],
+        start_status=raw["start_status"],
+        total_seconds=raw["total_seconds"],
+        conversion_seconds=raw["conversion_seconds"],
+        solve_seconds=raw["solve_seconds"],
+        check_seconds=raw["check_seconds"],
+        effective_options=raw["effective_options"],
+
     )
 
 
@@ -169,3 +197,30 @@ def evaluate(
     """
     raw = _evaluate(model, x, feasibility_tolerance, integrality_tolerance)
     return Evaluation(**raw)
+
+
+@dataclass(frozen=True, kw_only=True)
+class HighsOptions:
+    """HiGHS settings. Time includes conversion/checks; limits are cooperative.
+    Gap settings are native stopping rules, not the facade gap definition.
+    """
+    time_limit_seconds: Optional[float] = None
+    node_limit: Optional[int] = None
+    iteration_limit: Optional[int] = None
+    seed: int = 0
+    mip_relative_gap: float = 0.0
+    mip_absolute_gap: float = 0.0
+    dual_tolerance: float = 1e-7
+
+
+@dataclass(frozen=True)
+class LpResiduals:
+    primal: float
+    stationarity: float
+    complementarity: float
+    dual_sign: float
+
+
+def lp_residuals(model: Model, x: Iterable[float], duals: Duals) -> LpResiduals:
+    """Recompute floating-point LP residuals, ignoring integrality."""
+    return LpResiduals(**_lp_residuals(model, x, duals.row_duals, duals.reduced_costs))

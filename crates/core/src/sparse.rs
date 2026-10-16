@@ -76,14 +76,33 @@ impl Bounds {
     /// entries are within them. Absolute and in the units of `values`.
     ///
     /// # Panics
-    /// If `values.len() != self.len()`.
+    /// If bounds/point are invalid or a finite-bound distance overflows. Use
+    /// [`Self::checked_violation`] for a fallible call.
     pub fn violation(&self, values: &[f64]) -> f64 {
-        assert_eq!(values.len(), self.len(), "bounds/values length mismatch");
-        self.lower
-            .iter()
-            .zip(&self.upper)
-            .zip(values)
-            .fold(0.0_f64, |acc, ((&l, &u), &v)| acc.max(l - v).max(v - u))
+        self.checked_violation(values)
+            .expect("invalid bounds/point or nonfinite violation")
+    }
+
+    /// Checked bound violation, rejecting malformed inputs and arithmetic overflow.
+    pub fn checked_violation(&self, values: &[f64]) -> Result<f64> {
+        self.validate(values.len(), "bounds")?;
+        let mut result = 0.0_f64;
+        for (i, &v) in values.iter().enumerate() {
+            ensure(v.is_finite(), || format!("point entry {i} must be finite"))?;
+            if self.lower[i].is_finite() {
+                result = result.max(crate::error::finite(
+                    self.lower[i] - v,
+                    "lower-bound distance",
+                )?);
+            }
+            if self.upper[i].is_finite() {
+                result = result.max(crate::error::finite(
+                    v - self.upper[i],
+                    "upper-bound distance",
+                )?);
+            }
+        }
+        Ok(result)
     }
 }
 
