@@ -3,7 +3,10 @@
 use crate::check::{check_point, evaluate};
 use crate::error::Result;
 use crate::model::Model;
-use crate::solver::{CancellationToken, LpIpSolver, Options, SolveResult, Status, WarmStart};
+use crate::solver::{
+    BackendReport, CancellationToken, LpIpSolver, Options, SolveResult, StartStatus, Status,
+    WarmStart,
+};
 
 /// Evaluates one candidate and stops. **It does not optimize.**
 ///
@@ -39,17 +42,15 @@ impl LpIpSolver for DummySolver {
             check_point(model, &start.primal, "start")?;
         }
 
-        let mut result = SolveResult {
-            backend: Default::default(),
-            status: Status::Cancelled,
-            candidate: None,
-            evaluation: None,
-            duals: None,
-            best_bound: None,
-            nodes: 0,
-            iterations: 0,
-            message: "cancelled before a candidate was evaluated".into(),
-        };
+        let mut report = BackendReport::new("dummy");
+        if start.is_some() {
+            report.start_status = StartStatus::Evaluated;
+        }
+        let mut result = SolveResult::empty(
+            Status::Cancelled,
+            "cancelled before a candidate was evaluated",
+            report,
+        );
         if cancel.is_cancelled() {
             return Ok(result);
         }

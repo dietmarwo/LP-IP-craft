@@ -2,9 +2,10 @@
 //! trait, typed results with explicit bound/gap and dual conventions, and
 //! solver-independent checks.
 //!
-//! **Iteration 1.** This dependency-free core retains [`DummySolver`] as a
-//! contract fixture. The sibling `lp-ip-craft-highs` crate implements real
-//! LP/MIP optimization. Select `backend="highs"` in Python.
+//! This crate has no dependencies. Real optimization is in the sibling crate
+//! `lp-ip-craft-highs`, an adapter to the open HiGHS solver that implements
+//! [`LpIpSolver`]. [`DummySolver`] stays as a contract fixture: it evaluates
+//! one candidate and returns it with [`Status::Stub`].
 //!
 //! ```
 //! use lp_ip_craft::{
@@ -30,7 +31,7 @@
 //! let evaluation = result.evaluation.as_ref().unwrap();
 //! assert_eq!(evaluation.objective, 7.0);
 //! assert!(evaluation.feasible_candidate);
-//! assert!(result.best_bound.is_none() && result.gap(model.sense()).is_none());
+//! assert!(result.best_bound.is_none() && result.gap(model.sense())?.is_none());
 //! # Ok::<(), lp_ip_craft::Error>(())
 //! ```
 #![forbid(unsafe_code)]
@@ -49,6 +50,6 @@ pub use error::{Error, Result};
 pub use model::{Model, ModelData, Sense, VariableKind};
 pub use solver::{
     BackendReport, CancellationToken, Duals, Evaluation, Gap, LpIpSolver, Options, SolveResult,
-    Status, Tolerances, WarmStart,
+    StartStatus, Status, Tolerances, WarmStart,
 };
 pub use sparse::{Bounds, CsrMatrix, CsrPattern};

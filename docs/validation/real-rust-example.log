@@ -1,6 +1,0 @@
-   Compiling lp-ip-craft-highs v0.2.0 (<workspace>/repos/LP-IP-craft/crates/highs)
-    Finished `release` profile [optimized] target(s) in 0.48s
-     Running `validation/build-target/release/examples/solve`
-status: Optimal (HiGHS Optimal; facade optimal)
-evaluation: Evaluation { objective: 2150.0, row_activity: [350.0, 450.0, 60.0], primal_violation: 0.0, integrality_violation: 0.0, feasible_candidate: true }
-LP residuals with the published duals: LpResiduals { primal: 0.0, stationarity: 0.0, complementarity: 0.0, dual_sign: 0.0 }

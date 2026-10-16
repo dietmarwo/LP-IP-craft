@@ -5,6 +5,7 @@ use lp_ip_craft::{CancellationToken, Error, Result};
 use std::ffi::{CStr, c_char, c_void};
 use std::time::Instant;
 
+/// Version of the linked HiGHS library.
 pub fn version() -> String {
     // SAFETY: the API returns a static NUL-terminated version string.
     unsafe {
@@ -20,6 +21,7 @@ fn ok(code: HighsInt, op: &str) -> Result<()> {
         Err(Error::Backend(format!("{op}: status {code}")))
     }
 }
+/// Sets the constant objective term, which the safe wrapper does not expose.
 pub fn offset(model: &mut highs::Model, offset: f64) -> Result<()> {
     // SAFETY: live uniquely borrowed handle; no buffers retained.
     ok(
@@ -27,6 +29,7 @@ pub fn offset(model: &mut highs::Model, offset: f64) -> Result<()> {
         "objective offset",
     )
 }
+/// Reads a 64-bit integer info value, such as `mip_node_count`.
 pub fn int64(model: &highs::SolvedModel, name: &CStr) -> Result<i64> {
     let mut value = 0;
     // SAFETY: live handle, NUL-terminated name and writable out parameter.
@@ -36,29 +39,37 @@ pub fn int64(model: &highs::SolvedModel, name: &CStr) -> Result<i64> {
     )?;
     Ok(value)
 }
-/// Stable boxed context. Must be declared before the handle and retained until
-/// the model is destroyed. HiGHS may call it from a worker; only atomic reads
-/// and immutable monotonic clock state are accessed. No Python or unwinding.
+/// Context of the interrupt callback.
+///
+/// It must stay at a fixed address (boxed) and outlive the HiGHS handle it is
+/// installed on: declare the box before the handle, so the handle is dropped
+/// first. The callback only reads an atomic flag and a monotonic clock; it
+/// never calls Python, allocates or unwinds.
 pub struct Interrupt {
+    /// Cancellation requested by the caller.
     pub token: CancellationToken,
+    /// Start of the time budget (after input validation).
     pub began: Instant,
+    /// Whole-call time budget in seconds, if any.
     pub seconds: Option<f64>,
 }
 impl Interrupt {
+    /// Whether the time budget is used up.
     pub fn timed_out(&self) -> bool {
         self.seconds
             .is_some_and(|s| self.began.elapsed().as_secs_f64() >= s)
     }
-    pub fn install(&mut self, model: &mut highs::Model) -> Result<()> {
-        // SAFETY: caller keeps boxed self alive beyond model destruction.
+
+    /// Registers the callback for the simplex, IPM and MIP interrupt points.
+    ///
+    /// `self` must live in a `Box` that outlives `model`'s native handle.
+    pub fn install(&self, model: &mut highs::Model) -> Result<()> {
+        let data = self as *const Self as *mut c_void;
+        // SAFETY: live, uniquely borrowed handle. `data` is the heap address
+        // of the boxed context, which the caller keeps alive until the handle
+        // is destroyed; the callback only reads through it.
         ok(
-            unsafe {
-                Highs_setCallback(
-                    model.as_mut_ptr(),
-                    Some(callback),
-                    self as *mut Self as *mut c_void,
-                )
-            },
+            unsafe { Highs_setCallback(model.as_mut_ptr(), Some(callback), data) },
             "set callback",
         )?;
         for kind in [
@@ -85,9 +96,11 @@ unsafe extern "C" fn callback(
     if data.is_null() || input.is_null() {
         return;
     }
-    // SAFETY: registration guarantees stable context and callback-scoped input.
+    // SAFETY: `data` is the `Interrupt` registered by `install`, alive for the
+    // whole run; `input` is valid for the duration of this call.
     let ctx = unsafe { &*(data as *const Interrupt) };
     if ctx.token.is_cancelled() || ctx.timed_out() {
+        // SAFETY: see above.
         unsafe {
             (*input).user_interrupt = 1;
         }

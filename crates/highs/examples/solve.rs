@@ -1,6 +1,6 @@
-//! Runs the real HiGHS backend on the production-planning LP of the project's LP/IP
-//! tutorial (Example 1) and checks the solution and duals that Gurobi and
-//! HiGHS report for it: `cargo run -p lp-ip-craft-highs --example solve`.
+//! Solves the production-planning LP of the project's LP/IP tutorial
+//! (Example 1) with HiGHS and re-checks the solution and duals independently:
+//! `cargo run -p lp-ip-craft-highs --example solve`.
 //!
 //! ```text
 //! maximize 45 chair + 80 table + 110 desk
@@ -12,8 +12,8 @@
 
 use lp_ip_craft::check::lp_residuals;
 use lp_ip_craft::{
-    Bounds, CancellationToken, CsrMatrix, Duals, LpIpSolver, Model, ModelData, Options, Result,
-    Sense, VariableKind, WarmStart,
+    Bounds, CancellationToken, CsrMatrix, LpIpSolver, Model, ModelData, Options, Result, Sense,
+    Status, VariableKind,
 };
 use lp_ip_craft_highs::HighsSolver;
 
@@ -28,28 +28,30 @@ fn main() -> Result<()> {
         rows: Bounds::new(vec![f64::NEG_INFINITY; 3], vec![400.0, 450.0, 60.0]),
     })?;
 
-    // Optional complete start; HiGHS must still solve and certify its status.
-    let optimum = vec![30.0, 10.0, 0.0];
     let result = HighsSolver::default().solve(
         &model,
         &Options::default(),
-        Some(&WarmStart::from_primal(optimum.clone())),
+        None,
         &CancellationToken::default(),
     )?;
     println!("status: {:?} ({})", result.status, result.message);
-    assert_eq!(result.status, lp_ip_craft::Status::Optimal);
-    let evaluation = result.evaluation.expect("the start was evaluated");
-    println!("evaluation: {evaluation:?}");
-    assert_eq!(evaluation.objective, 2150.0);
+    println!("backend: {:?}", result.backend);
+    assert_eq!(result.status, Status::Optimal);
 
-    // Row duals (Gurobi Pi, HiGHS row_dual) and reduced costs (RC, col_dual) as
-    // published, in the crate's convention c = A^T y + z for the maximization.
-    let duals = Duals {
-        row_duals: vec![0.0, 11.0 / 3.0, 25.0 / 3.0],
-        reduced_costs: vec![0.0, 0.0, -5.0],
-    };
-    let residuals = lp_residuals(&model, &optimum, &duals)?;
-    println!("LP residuals with the published duals: {residuals:?}");
-    assert!(residuals.max() < 1e-12);
+    let x = result.candidate.as_ref().expect("an optimal candidate");
+    let evaluation = result
+        .evaluation
+        .as_ref()
+        .expect("evaluated with the candidate");
+    println!("x = {x:?}, profit {}", evaluation.objective);
+    assert!((evaluation.objective - 2150.0).abs() < 1e-8);
+
+    // HiGHS's duals in the crate's convention c = A^T y + z; the tutorial
+    // reports row duals (0, 11/3, 25/3) and reduced costs (0, 0, -5).
+    let duals = result.duals.as_ref().expect("LP duals");
+    println!("duals: {duals:?}");
+    let residuals = lp_residuals(&model, x, duals)?;
+    println!("independent LP residuals: {residuals:?}");
+    assert!(residuals.max() < 1e-9);
     Ok(())
 }

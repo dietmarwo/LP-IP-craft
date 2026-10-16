@@ -3,11 +3,13 @@
 //!
 //! There are no Python callbacks: model data is copied into Rust once, when a
 //! `Model` is constructed, and every solve or evaluation runs with the
-//! interpreter detached.
+//! interpreter detached. The HiGHS backend is the default cargo feature
+//! `highs`; without it, `backend="highs"` raises `NotImplementedError`.
 
 use lp_ip_craft::{
-    Bounds, CancellationToken, CsrMatrix, DummySolver, Error, Evaluation, LpIpSolver, Model,
-    ModelData, Options, Sense, Tolerances, VariableKind, WarmStart, evaluate as evaluate_point,
+    BackendReport, Bounds, CancellationToken, CsrMatrix, Duals, DummySolver, Error, Evaluation,
+    LpIpSolver, Model, ModelData, Options, Sense, Tolerances, VariableKind, WarmStart, check,
+    evaluate as evaluate_point,
 };
 use pyo3::create_exception;
 use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError, PyTypeError, PyValueError};
@@ -20,6 +22,12 @@ create_exception!(
     PyRuntimeError,
     "Floating-point evaluation failed, for example a row activity overflowed."
 );
+create_exception!(
+    lp_ip_craft,
+    BackendError,
+    PyRuntimeError,
+    "A native backend failed to set up or run the model."
+);
 
 fn to_py_err(e: Error) -> PyErr {
     let message = e.message().to_owned();
@@ -27,6 +35,7 @@ fn to_py_err(e: Error) -> PyErr {
         Error::InvalidInput(_) => PyValueError::new_err(message),
         Error::Evaluation(_) => EvaluationError::new_err(message),
         Error::Unsupported(_) => PyNotImplementedError::new_err(message),
+        Error::Backend(_) => BackendError::new_err(message),
         _ => PyRuntimeError::new_err(e.to_string()),
     }
 }
@@ -345,9 +354,79 @@ fn evaluation_dict<'py>(py: Python<'py>, e: Evaluation) -> PyResult<Bound<'py, P
     Ok(d)
 }
 
-/// Runs the dummy backend. Use `lp_ip_craft.solve` instead of calling this directly.
+#[cfg(feature = "highs")]
+fn highs_settings(
+    options: Option<&Bound<'_, PyDict>>,
+) -> PyResult<lp_ip_craft_highs::HighsOptions> {
+    fn field<'py, T: for<'a> FromPyObject<'a, 'py>>(
+        value: &Bound<'py, PyAny>,
+        key: &str,
+    ) -> PyResult<T> {
+        let py = value.py();
+        value.extract::<T>().map_err(|e| {
+            let e: PyErr = e.into();
+            PyErr::from_type(
+                e.get_type(py),
+                format!("backend_options.{key}: {}", e.value(py)),
+            )
+        })
+    }
+    let mut settings = lp_ip_craft_highs::HighsOptions::default();
+    let Some(options) = options else {
+        return Ok(settings);
+    };
+    for (key, value) in options.iter() {
+        let key: String = key.extract()?;
+        match key.as_str() {
+            "time_limit_seconds" => settings.time_limit_seconds = field(&value, &key)?,
+            "node_limit" => settings.node_limit = field(&value, &key)?,
+            "iteration_limit" => settings.iteration_limit = field(&value, &key)?,
+            "seed" => settings.seed = field(&value, &key)?,
+            "mip_relative_gap" => settings.mip_relative_gap = field(&value, &key)?,
+            "mip_absolute_gap" => settings.mip_absolute_gap = field(&value, &key)?,
+            "dual_tolerance" => settings.dual_tolerance = field(&value, &key)?,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "backend_options: unknown HiGHS option {key:?}"
+                )));
+            }
+        }
+    }
+    Ok(settings)
+}
+
+/// Backends compiled into this extension.
 #[pyfunction]
-#[pyo3(signature = (model, start, feasibility_tolerance, integrality_tolerance, threads, cancellation, backend="dummy", backend_options=None))]
+fn backends() -> Vec<&'static str> {
+    let mut names = vec!["dummy"];
+    if cfg!(feature = "highs") {
+        names.push("highs");
+    }
+    names
+}
+
+fn report_dict<'py>(py: Python<'py>, r: &BackendReport) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("name", &r.name)?;
+    d.set_item("version", &r.version)?;
+    d.set_item("raw_status", &r.raw_status)?;
+    d.set_item("start_status", r.start_status.as_str())?;
+    let effective = PyDict::new(py);
+    for (key, value) in &r.effective_options {
+        effective.set_item(key, value)?;
+    }
+    d.set_item("effective_options", effective)?;
+    d.set_item("total_seconds", r.total_seconds)?;
+    d.set_item("conversion_seconds", r.conversion_seconds)?;
+    d.set_item("solve_seconds", r.solve_seconds)?;
+    d.set_item("check_seconds", r.check_seconds)?;
+    d.set_item("time_budget_exceeded", r.time_budget_exceeded)?;
+    Ok(d)
+}
+
+/// Runs a backend. Use `lp_ip_craft.solve` instead of calling this directly.
+#[pyfunction]
+#[pyo3(signature = (model, start, feasibility_tolerance, integrality_tolerance, threads, cancellation, backend, backend_options))]
 #[allow(clippy::too_many_arguments)]
 fn solve_native<'py>(
     py: Python<'py>,
@@ -367,83 +446,46 @@ fn solve_native<'py>(
     let options = options(feasibility_tolerance, integrality_tolerance, threads)?;
     let token = cancellation.get().inner.clone();
     let inner: &Model = &model.get().inner;
-    // Only owned or immutable Rust data crosses into the detached region.
+    // Only immutable or owned Rust data enters the detached region; a native
+    // backend handle is created, used and dropped inside it.
     let r = match backend {
         "dummy" => {
-            if backend_options.is_some_and(|d| !d.is_empty()) {
+            if backend_options.is_some() {
                 return Err(PyNotImplementedError::new_err(
-                    "dummy does not implement backend options",
+                    "the dummy backend takes no backend_options",
                 ));
             }
             py.detach(|| DummySolver.solve(inner, &options, start.as_ref(), &token))
                 .map_err(to_py_err)?
         }
+        #[cfg(feature = "highs")]
         "highs" => {
-            #[cfg(feature = "highs")]
-            {
-                let mut settings = lp_ip_craft_highs::HighsOptions::default();
-                if let Some(d) = backend_options {
-                    for (key, value) in d.iter() {
-                        let key: String = key.extract()?;
-                        match key.as_str() {
-                            "time_limit_seconds" => {
-                                settings.time_limit_seconds = value.extract()?
-                            }
-                            "node_limit" => settings.node_limit = value.extract()?,
-                            "iteration_limit" => settings.iteration_limit = value.extract()?,
-                            "seed" => settings.seed = value.extract()?,
-                            "mip_relative_gap" => settings.mip_relative_gap = value.extract()?,
-                            "mip_absolute_gap" => settings.mip_absolute_gap = value.extract()?,
-                            "dual_tolerance" => settings.dual_tolerance = value.extract()?,
-                            _ => {
-                                return Err(PyValueError::new_err(format!(
-                                    "unknown HiGHS option: {key}"
-                                )));
-                            }
-                        }
-                    }
-                }
-                py.detach(|| {
-                    lp_ip_craft_highs::HighsSolver { settings }.solve(
-                        inner,
-                        &options,
-                        start.as_ref(),
-                        &token,
-                    )
-                })
+            let mut solver = lp_ip_craft_highs::HighsSolver::new(highs_settings(backend_options)?);
+            py.detach(|| solver.solve(inner, &options, start.as_ref(), &token))
                 .map_err(to_py_err)?
-            }
-            #[cfg(not(feature = "highs"))]
-            {
-                return Err(PyNotImplementedError::new_err(
-                    "HiGHS support was not compiled",
-                ));
-            }
         }
-        _ => return Err(PyValueError::new_err(format!("unknown backend: {backend}"))),
+        #[cfg(not(feature = "highs"))]
+        "highs" => {
+            return Err(PyNotImplementedError::new_err(
+                "this build of lp_ip_craft has no HiGHS backend; rebuild with the default features",
+            ));
+        }
+        _ => {
+            return Err(PyValueError::new_err(format!(
+                "unknown backend {backend:?}; expected \"dummy\" or \"highs\""
+            )));
+        }
     };
 
     let out = PyDict::new(py);
-    out.set_item("backend", &r.backend.name)?;
-    out.set_item("backend_version", &r.backend.version)?;
-    out.set_item("raw_status", &r.backend.raw_status)?;
-    out.set_item("start_status", &r.backend.start_status)?;
-    out.set_item("total_seconds", r.backend.total_seconds)?;
-    out.set_item("conversion_seconds", r.backend.conversion_seconds)?;
-    out.set_item("solve_seconds", r.backend.solve_seconds)?;
-    out.set_item("check_seconds", r.backend.check_seconds)?;
-    let effective = PyDict::new(py);
-    for (k, v) in &r.backend.effective_options {
-        effective.set_item(k, v)?;
-    }
-    out.set_item("effective_options", effective)?;
     out.set_item("status", r.status.as_str())?;
     out.set_item("message", &r.message)?;
     out.set_item("candidate", &r.candidate)?;
     out.set_item("best_bound", r.best_bound)?;
     out.set_item("nodes", r.nodes)?;
     out.set_item("iterations", r.iterations)?;
-    match r.checked_gap(inner.sense()).map_err(to_py_err)? {
+    out.set_item("backend", report_dict(py, &r.backend)?)?;
+    match r.gap(inner.sense()).map_err(to_py_err)? {
         Some(gap) => {
             let d = PyDict::new(py);
             d.set_item("absolute", gap.absolute)?;
@@ -490,7 +532,7 @@ fn evaluate<'py>(
     evaluation_dict(py, e)
 }
 
-/// Independent LP residual checker, including original-sense dual signs.
+/// Independent LP residuals. Use `lp_ip_craft.lp_residuals` instead.
 #[pyfunction]
 fn lp_residuals<'py>(
     py: Python<'py>,
@@ -500,19 +542,20 @@ fn lp_residuals<'py>(
     reduced_costs: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let x = floats(x, "x")?;
-    let duals = lp_ip_craft::Duals {
+    let duals = Duals {
         row_duals: floats(row_duals, "row_duals")?,
         reduced_costs: floats(reduced_costs, "reduced_costs")?,
     };
-    let inner = &model.get().inner;
+    let inner: &Model = &model.get().inner;
     let r = py
-        .detach(|| lp_ip_craft::check::lp_residuals(inner, &x, &duals))
+        .detach(|| check::lp_residuals(inner, &x, &duals))
         .map_err(to_py_err)?;
     let out = PyDict::new(py);
     out.set_item("primal", r.primal)?;
     out.set_item("stationarity", r.stationarity)?;
     out.set_item("complementarity", r.complementarity)?;
     out.set_item("dual_sign", r.dual_sign)?;
+    out.set_item("duality_gap", r.duality_gap)?;
     Ok(out)
 }
 
@@ -522,6 +565,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyModel>()?;
     m.add_class::<Cancellation>()?;
     m.add("EvaluationError", py.get_type::<EvaluationError>())?;
+    m.add("BackendError", py.get_type::<BackendError>())?;
+    m.add_function(wrap_pyfunction!(backends, m)?)?;
     m.add_function(wrap_pyfunction!(solve_native, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
     m.add_function(wrap_pyfunction!(lp_residuals, m)?)?;

@@ -1,7 +1,8 @@
 # LP/IP — iteration 1 implementation plan
 
-> Archived pre-implementation plan. The implementation and completed checks
-> are recorded in [iteration-1-results.md](iteration-1-results.md).
+> Pre-implementation plan, kept as written. What was implemented, what the
+> review changed and what remains open is in
+> [iteration-1-results.md](iteration-1-results.md).
 
 Planning2027 · Idea 004 · Revision 2 · 16 October 2026 (UTC)
 
@@ -217,6 +218,6 @@ This delivery updates the plan only. Preserve the repository MIT licence and not
 - [HiGHS Rust Model API](https://docs.rs/highs/2.4.0/highs/struct.Model.html): fallible setup/solve methods, starts and ownership restrictions. Version 2.4.0 was shown during review; pin and compile-test the chosen version before adoption.
 - [HiGHS C API](https://ergo-code.github.io/HiGHS/dev/interfaces/c_api/): objective offset and lower-level integration points.
 - [HiGHS callbacks](https://ergo-code.github.io/HiGHS/dev/callbacks/) and [options](https://ergo-code.github.io/HiGHS/dev/options/definitions/): capability-probe references; development documentation must be checked against the pinned release.
-- SQP iteration-1 plan (included in the companion SQP-craft iteration-1 ZIP): separate pilot and scheduling gates.
+- SQP iteration-1 plan (kept with the SQP-craft iteration): separate pilot and scheduling gates.
 
 The API design, work sequence, test thresholds and time boxes above are proposals from this review. They are not statements that these changes are already committed or implemented.

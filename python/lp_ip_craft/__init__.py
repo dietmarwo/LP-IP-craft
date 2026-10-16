@@ -1,9 +1,10 @@
-"""Python interface to the lp-ip-craft LP / mixed-integer LP contracts.
+"""Python interface to lp-ip-craft: LP and mixed-integer LP in Rust.
 
-**Iteration 1.** Select ``backend="highs"`` for real LP/MIP solves.
-The compatibility default runs a dummy backend that evaluates one candidate and returns it with
-``status == "stub"``. ``evaluate`` is the solver-independent candidate check;
-it can already be used on solutions from other solvers.
+``solve(model, backend="highs")`` optimizes with the HiGHS adapter. The
+default ``backend="dummy"`` is kept for compatibility with v0.1: it evaluates
+one candidate and returns ``status == "stub"``. ``evaluate`` and
+``lp_residuals`` are solver-independent checks that also work on solutions
+from other solvers.
 
 The model is::
 
@@ -18,10 +19,11 @@ with ``A`` given in canonical zero-based CSR form (``indptr``, ``indices``,
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Iterable, Literal, Optional
 
-from ._native import Cancellation, EvaluationError, Model
+from ._native import BackendError, Cancellation, EvaluationError, Model
+from ._native import backends as _backends
 from ._native import evaluate as _evaluate
 from ._native import lp_residuals as _lp_residuals
 from ._native import solve_native as _solve_native
@@ -29,28 +31,53 @@ from ._native import solve_native as _solve_native
 __version__ = "0.2.0"
 
 __all__ = [
+    "BACKENDS",
+    "BackendError",
+    "BackendReport",
     "Cancellation",
     "Duals",
     "Evaluation",
     "EvaluationError",
     "Gap",
+    "HighsOptions",
+    "LpResiduals",
     "Model",
     "Options",
     "SolveResult",
+    "Status",
     "evaluate",
-    "solve",
-    "HighsOptions",
-    "LpResiduals",
     "lp_residuals",
+    "solve",
 ]
+
+BACKENDS: tuple[str, ...] = tuple(_backends())
+"""Backends compiled into this build, for example ``("dummy", "highs")``."""
 
 DEFAULT_FEASIBILITY_TOLERANCE = 1e-7
 DEFAULT_INTEGRALITY_TOLERANCE = 1e-7
 
+Status = Literal[
+    "stub",
+    "cancelled",
+    "optimal",
+    "infeasible",
+    "unbounded",
+    "infeasible_or_unbounded",
+    "time_limit",
+    "node_limit",
+    "iteration_limit",
+    "solution_limit",
+    "objective_limit",
+    "memory_limit",
+    "numerical_failure",
+    "unknown",
+]
+"""Why a solve ended. Candidate quality is reported separately."""
+
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    """Solver settings. Only settings a backend honours are exposed."""
+    """Settings every backend honours."""
 
     feasibility_tolerance: float = DEFAULT_FEASIBILITY_TOLERANCE
     """Largest accepted bound violation, absolute and in original units."""
@@ -58,6 +85,29 @@ class Options:
     """Largest accepted distance of an integer variable to an integer, in (0, 0.5)."""
     threads: int = 1
     """Only 1 is supported; run independent solves for parallelism."""
+
+
+@dataclass(frozen=True, kw_only=True)
+class HighsOptions:
+    """Settings of the HiGHS backend; every field is applied or rejected.
+
+    The defaults form a deterministic single-thread reference configuration.
+    """
+
+    time_limit_seconds: Optional[float] = None
+    """Cooperative budget for the whole call (conversion, run, checks)."""
+    node_limit: Optional[int] = None
+    """Branch-and-bound node limit; MIP models only."""
+    iteration_limit: Optional[int] = None
+    """Simplex and interior-point iteration limit; LP models only."""
+    seed: int = 0
+    """HiGHS ``random_seed``."""
+    mip_relative_gap: float = 0.0
+    """HiGHS stopping rule ``mip_rel_gap``; does not change ``SolveResult.gap``."""
+    mip_absolute_gap: float = 0.0
+    """HiGHS stopping rule ``mip_abs_gap``."""
+    dual_tolerance: float = 1e-7
+    """HiGHS dual feasibility tolerance and threshold of the LP optimality checks."""
 
 
 @dataclass(frozen=True)
@@ -95,15 +145,48 @@ class Gap:
 
 
 @dataclass(frozen=True)
+class LpResiduals:
+    """LP residuals of a point with duals; see ``lp_residuals``."""
+
+    primal: float
+    stationarity: float
+    complementarity: float
+    dual_sign: float
+    duality_gap: float
+
+
+@dataclass(frozen=True)
+class BackendReport:
+    """Provenance, applied settings and timings of one solve."""
+
+    name: str
+    version: Optional[str]
+    """Native engine version, for example HiGHS ``"1.15.0"``."""
+    raw_status: Optional[str]
+    """The engine's own status name; ``None`` if the engine never ran."""
+    start_status: Literal["not_provided", "submitted", "rejected", "evaluated"]
+    """``submitted`` means the engine took the start, not that it became the incumbent."""
+    effective_options: dict[str, str]
+    """Native settings applied, by native name."""
+    total_seconds: float
+    conversion_seconds: float
+    solve_seconds: float
+    check_seconds: float
+    time_budget_exceeded: bool
+    """The call outlasted its time budget; ``status`` still says why it stopped."""
+
+
+@dataclass(frozen=True)
 class SolveResult:
-    status: str
-    """More statuses arrive with real backends."""
+    status: Status
+    """Why the solve ended; see the ``Status`` values."""
     message: str
     candidate: Optional[list[float]]
-    """The returned point (the incumbent, for a MIP); None if none was evaluated."""
+    """The returned point (the incumbent, for a MIP); None if none was declared."""
     evaluation: Optional[Evaluation]
     """Independent evaluation of ``candidate``; present exactly when it is."""
     duals: Optional[Duals]
+    """LP duals; never for a MIP."""
     best_bound: Optional[float]
     """A proven bound in the original sense (lower when minimizing, upper when
     maximizing), including the offset. Never estimated."""
@@ -111,41 +194,32 @@ class SolveResult:
     """Present when there is a ``best_bound`` and a feasible candidate."""
     nodes: int
     iterations: int
-    backend: str
-    backend_version: Optional[str]
-    raw_status: Optional[str]
-    start_status: str
-    total_seconds: float
-    conversion_seconds: float
-    solve_seconds: float
-    check_seconds: float
-    effective_options: dict[str, str]
-
-
-def _evaluation(raw: Optional[dict]) -> Optional[Evaluation]:
-    return None if raw is None else Evaluation(**raw)
+    backend: BackendReport
 
 
 def solve(
     model: Model,
     *,
+    backend: Literal["dummy", "highs"] = "dummy",
     start: Optional[Iterable[float]] = None,
     options: Optional[Options] = None,
-    cancellation: Optional[Cancellation] = None,
-    backend: Literal["dummy", "highs"] = "dummy",
     backend_options: Optional[HighsOptions] = None,
+    cancellation: Optional[Cancellation] = None,
 ) -> SolveResult:
-    """Solve ``model``, optionally from a complete primal ``start`` point.
+    """Solve ``model`` with ``backend``, optionally from a complete ``start``.
 
-    The start is used as given: it need not be feasible or integral and is
-    never rounded or repaired. The interpreter is released during the solve.
+    Use ``backend="highs"`` to optimize; the default ``"dummy"`` only evaluates
+    one candidate. The start is used as given: it need not be feasible or
+    integral and is never rounded or repaired. The interpreter is released
+    during the solve, so solves from several threads run in parallel.
 
     Raises ``ValueError`` for malformed input, ``TypeError`` for wrongly typed
-    input, ``NotImplementedError`` for unsupported options, and
-    ``EvaluationError`` if floating-point evaluation overflows.
+    input, ``NotImplementedError`` for unsupported settings or a backend that
+    is not compiled in (see ``BACKENDS``), ``EvaluationError`` if
+    floating-point evaluation overflows and ``BackendError`` if the engine
+    fails to set up or run the model.
     """
     options = options or Options()
-    from dataclasses import asdict
     raw = _solve_native(
         model,
         start,
@@ -156,28 +230,18 @@ def solve(
         backend,
         None if backend_options is None else asdict(backend_options),
     )
-    duals = raw["duals"]
-    gap = raw["gap"]
+    evaluation, duals, gap = raw["evaluation"], raw["duals"], raw["gap"]
     return SolveResult(
         status=raw["status"],
         message=raw["message"],
         candidate=raw["candidate"],
-        evaluation=_evaluation(raw["evaluation"]),
+        evaluation=None if evaluation is None else Evaluation(**evaluation),
         duals=None if duals is None else Duals(**duals),
         best_bound=raw["best_bound"],
         gap=None if gap is None else Gap(**gap),
         nodes=raw["nodes"],
         iterations=raw["iterations"],
-        backend=raw["backend"],
-        backend_version=raw["backend_version"],
-        raw_status=raw["raw_status"],
-        start_status=raw["start_status"],
-        total_seconds=raw["total_seconds"],
-        conversion_seconds=raw["conversion_seconds"],
-        solve_seconds=raw["solve_seconds"],
-        check_seconds=raw["check_seconds"],
-        effective_options=raw["effective_options"],
-
+        backend=BackendReport(**raw["backend"]),
     )
 
 
@@ -199,28 +263,14 @@ def evaluate(
     return Evaluation(**raw)
 
 
-@dataclass(frozen=True, kw_only=True)
-class HighsOptions:
-    """HiGHS settings. Time includes conversion/checks; limits are cooperative.
-    Gap settings are native stopping rules, not the facade gap definition.
-    """
-    time_limit_seconds: Optional[float] = None
-    node_limit: Optional[int] = None
-    iteration_limit: Optional[int] = None
-    seed: int = 0
-    mip_relative_gap: float = 0.0
-    mip_absolute_gap: float = 0.0
-    dual_tolerance: float = 1e-7
-
-
-@dataclass(frozen=True)
-class LpResiduals:
-    primal: float
-    stationarity: float
-    complementarity: float
-    dual_sign: float
-
-
 def lp_residuals(model: Model, x: Iterable[float], duals: Duals) -> LpResiduals:
-    """Recompute floating-point LP residuals, ignoring integrality."""
-    return LpResiduals(**_lp_residuals(model, x, duals.row_duals, duals.reduced_costs))
+    """Check ``x`` and ``duals`` as a solution of the LP, ignoring integrality.
+
+    ``stationarity`` is ``max |c - A.T @ y - z|``; ``complementarity`` the
+    largest ``|dual| * distance to the bound its sign selects``;
+    ``dual_sign`` the largest dual that selects an infinite bound;
+    ``duality_gap`` the relative primal-dual objective gap
+    ``|P - D| / (1 + |P| + |D|)``. All are zero at an optimal pair.
+    """
+    raw = _lp_residuals(model, x, duals.row_duals, duals.reduced_costs)
+    return LpResiduals(**raw)

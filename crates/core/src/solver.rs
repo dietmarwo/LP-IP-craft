@@ -6,37 +6,56 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::error::{Error, Result, ensure};
 use crate::model::{Model, Sense};
 
-/// How a solve ended. More variants (optimal, infeasible, unbounded, limits)
-/// will be added together with real backends, each with a precise definition.
+/// How a solve ended: the termination reason, independent of candidate
+/// quality.
+///
+/// A status says why the backend stopped. Whether a candidate exists and passed
+/// the independent check is in [`SolveResult::candidate`] and
+/// [`SolveResult::evaluation`]: a limit can end a solve with a feasible
+/// incumbent, and a solve without candidate can still carry a proven bound.
+/// Backends map every native status explicitly and keep the native name in
+/// [`BackendReport::raw_status`]; they never report a more precise outcome
+/// than the engine did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Status {
     /// The dummy backend evaluated one candidate and stopped. Not a claim of
     /// feasibility, optimality, infeasibility or unboundedness.
     Stub,
-    /// Stopped by the cancellation token.
+    /// Stopped by the cancellation token before the engine finished.
     Cancelled,
-    /// Backend outcome: optimal.
+    /// The engine reported optimality under its effective tolerances, and the
+    /// adapter's independent checks passed: the candidate is a feasible
+    /// candidate in original units, and for an LP with duals the relative
+    /// primal-dual objective gap, stationarity and dual signs are within the
+    /// backend's documented thresholds. A numerical statement, not an exact
+    /// certificate.
     Optimal,
-    /// Backend outcome: infeasible.
+    /// The engine reported the model infeasible.
     Infeasible,
-    /// Backend outcome: unbounded.
+    /// The engine reported the model unbounded. A returned candidate is only a
+    /// feasible point.
     Unbounded,
-    /// Backend outcome: infeasible_or_unbounded.
+    /// The engine established that the model is infeasible or unbounded, but
+    /// not which.
     InfeasibleOrUnbounded,
-    /// Backend outcome: time_limit.
+    /// A time limit stopped the engine.
     TimeLimit,
-    /// Backend outcome: node_limit.
+    /// A branch-and-bound node limit stopped the engine.
     NodeLimit,
-    /// Backend outcome: iteration_limit.
+    /// An LP iteration limit stopped the engine.
     IterationLimit,
-    /// Backend outcome: solution_limit.
+    /// A limit on the number of solutions (or a native limit the engine
+    /// reports the same way) stopped the engine.
     SolutionLimit,
-    /// Backend outcome: objective_limit.
+    /// An objective bound or target stopped the engine.
     ObjectiveLimit,
-    /// Backend outcome: numerical_failure.
+    /// A memory limit stopped the engine.
+    MemoryLimit,
+    /// The engine failed numerically, or it reported optimality but the
+    /// independent checks rejected the result. The message says which.
     NumericalFailure,
-    /// Backend outcome: unknown.
+    /// The engine stopped without a definite outcome.
     Unknown,
 }
 
@@ -55,6 +74,7 @@ impl Status {
             Status::IterationLimit => "iteration_limit",
             Status::SolutionLimit => "solution_limit",
             Status::ObjectiveLimit => "objective_limit",
+            Status::MemoryLimit => "memory_limit",
             Status::NumericalFailure => "numerical_failure",
             Status::Unknown => "unknown",
         }
@@ -254,21 +274,9 @@ pub struct Gap {
 }
 
 impl Gap {
-    /// Checked arithmetic for external numerical data. Signed infinity is
-    /// intentional only when the incumbent objective is exactly zero.
-    pub fn try_new(sense: Sense, objective: f64, bound: f64) -> Result<Self> {
-        crate::error::finite(objective, "gap objective")?;
-        crate::error::finite(bound, "gap bound")?;
-        let gap = Self::new(sense, objective, bound);
-        crate::error::finite(gap.absolute, "absolute gap")?;
-        if objective != 0.0 {
-            crate::error::finite(gap.relative, "relative gap")?;
-        }
-        Ok(gap)
-    }
-
     /// The gap of a candidate with objective value `objective` against
-    /// `bound` (a lower bound when minimizing, an upper bound when maximizing).
+    /// `bound` (a lower bound when minimizing, an upper bound when maximizing),
+    /// with IEEE arithmetic: an overflow shows up as an infinite value.
     pub fn new(sense: Sense, objective: f64, bound: f64) -> Self {
         let absolute = match sense {
             Sense::Minimize => objective - bound,
@@ -283,22 +291,34 @@ impl Gap {
         };
         Self { absolute, relative }
     }
+
+    /// [`Gap::new`] for external data: rejects non-finite inputs and an
+    /// overflowing result with [`Error::Evaluation`]. The infinite relative gap
+    /// at a zero objective stays intentional.
+    pub fn try_new(sense: Sense, objective: f64, bound: f64) -> Result<Self> {
+        crate::error::finite(objective, "gap objective")?;
+        crate::error::finite(bound, "gap bound")?;
+        let gap = Self::new(sense, objective, bound);
+        crate::error::finite(gap.absolute, "absolute gap")?;
+        if objective != 0.0 {
+            crate::error::finite(gap.relative, "relative gap")?;
+        }
+        Ok(gap)
+    }
 }
 
 /// Outcome of a solve that was not aborted by an error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SolveResult {
-    /// Backend provenance, applied options and phase timings.
-    pub backend: BackendReport,
-    /// How the solve ended.
+    /// How the solve ended (see [`Status`]).
     pub status: Status,
-    /// The returned point (for a MIP: the incumbent). `None` if no complete
-    /// evaluation happened. A cancelled solve keeps the best candidate found
-    /// so far, as MIP solvers keep their incumbent when interrupted.
+    /// The returned point (for a MIP: the incumbent). `None` if the backend
+    /// declared no usable primal solution. A solve stopped by a limit or by
+    /// cancellation keeps the best candidate found so far.
     pub candidate: Option<Vec<f64>>,
     /// Independent evaluation of `candidate`; present exactly when it is.
     pub evaluation: Option<Evaluation>,
-    /// LP duals, when the backend computes them.
+    /// LP duals, when the backend computes them (never for a MIP).
     pub duals: Option<Duals>,
     /// A proven bound on the optimal objective in the original sense (a lower
     /// bound when minimizing, an upper bound when maximizing), including the
@@ -310,11 +330,13 @@ pub struct SolveResult {
     pub iterations: u64,
     /// Human-readable explanation of `status`.
     pub message: String,
+    /// Backend provenance, applied settings and phase timings.
+    pub backend: BackendReport,
 }
 
 impl SolveResult {
-    /// Empty result for a termination before any usable candidate exists.
-    pub fn empty(status: Status, message: impl Into<String>) -> Self {
+    /// A result without candidate, duals or bound.
+    pub fn empty(status: Status, message: impl Into<String>, backend: BackendReport) -> Self {
         Self {
             status,
             candidate: None,
@@ -324,22 +346,15 @@ impl SolveResult {
             nodes: 0,
             iterations: 0,
             message: message.into(),
-            backend: BackendReport::default(),
+            backend,
         }
     }
 
     /// The [`Gap`] between the candidate and `best_bound`, if both exist and
     /// the candidate passed the feasibility check. `sense` is the model's.
-    pub fn gap(&self, sense: Sense) -> Option<Gap> {
-        let evaluation = self.evaluation.as_ref()?;
-        let bound = self.best_bound?;
-        evaluation
-            .feasible_candidate
-            .then(|| Gap::new(sense, evaluation.objective, bound))
-    }
-
-    /// Checked counterpart of [`Self::gap`], rejecting arithmetic overflow.
-    pub fn checked_gap(&self, sense: Sense) -> Result<Option<Gap>> {
+    ///
+    /// Computed with [`Gap::try_new`]: an overflow is an [`Error::Evaluation`].
+    pub fn gap(&self, sense: Sense) -> Result<Option<Gap>> {
         match (&self.evaluation, self.best_bound) {
             (Some(e), Some(bound)) if e.feasible_candidate => {
                 Gap::try_new(sense, e.objective, bound).map(Some)
@@ -369,40 +384,70 @@ pub trait LpIpSolver {
     ) -> Result<SolveResult>;
 }
 
-/// Provenance and timings for one backend invocation.
-#[derive(Clone, Debug, PartialEq)]
-pub struct BackendReport {
-    /// Engine name (dummy or highs).
-    pub name: String,
-    /// Native engine version.
-    pub version: Option<String>,
-    /// Unmodified engine status name.
-    pub raw_status: Option<String>,
-    /// Start handling: not_provided, submitted, or rejected. Submitted is not acceptance.
-    pub start_status: String,
-    /// Entire call after input validation, including conversion and checks.
-    pub total_seconds: f64,
-    /// Input conversion and native setup time.
-    pub conversion_seconds: f64,
-    /// Native optimization time.
-    pub solve_seconds: f64,
-    /// Independent extraction/checking time.
-    pub check_seconds: f64,
-    /// Options actually applied to the engine, represented as strings.
-    pub effective_options: Vec<(String, String)>,
+/// What happened to a [`WarmStart`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StartStatus {
+    /// No start was given.
+    #[default]
+    NotProvided,
+    /// The engine accepted the start for consideration. This does not mean it
+    /// became the incumbent.
+    Submitted,
+    /// The engine refused the start.
+    Rejected,
+    /// The backend has no use for a start (the dummy evaluates it directly).
+    Evaluated,
 }
-impl Default for BackendReport {
-    fn default() -> Self {
+
+impl StartStatus {
+    /// Stable lowercase name, as used by the Python binding.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            StartStatus::NotProvided => "not_provided",
+            StartStatus::Submitted => "submitted",
+            StartStatus::Rejected => "rejected",
+            StartStatus::Evaluated => "evaluated",
+        }
+    }
+}
+
+/// Provenance and timings of one backend invocation.
+///
+/// Timings are wall-clock measurements for reporting; correctness never
+/// depends on them.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BackendReport {
+    /// Backend name (`dummy`, `highs`).
+    pub name: String,
+    /// Version of the native engine, if there is one.
+    pub version: Option<String>,
+    /// The engine's own status name, unmodified.
+    pub raw_status: Option<String>,
+    /// What happened to the start.
+    pub start_status: StartStatus,
+    /// Settings applied to the engine, as `(native name, value)` in the order
+    /// they were set. Not an export of every native default.
+    pub effective_options: Vec<(String, String)>,
+    /// Whole call after input validation: conversion, engine and checks.
+    pub total_seconds: f64,
+    /// Model conversion and engine setup.
+    pub conversion_seconds: f64,
+    /// Engine run.
+    pub solve_seconds: f64,
+    /// Result extraction and independent checks.
+    pub check_seconds: f64,
+    /// The call took longer than its time budget. Limits are cooperative: the
+    /// status still reports why the engine stopped.
+    pub time_budget_exceeded: bool,
+}
+
+impl BackendReport {
+    /// A report for the backend `name`, without engine data yet.
+    pub fn new(name: &str) -> Self {
         Self {
-            name: "dummy".into(),
-            version: None,
-            raw_status: None,
-            start_status: "not_provided".into(),
-            total_seconds: 0.0,
-            conversion_seconds: 0.0,
-            solve_seconds: 0.0,
-            check_seconds: 0.0,
-            effective_options: vec![],
+            name: name.into(),
+            ..Self::default()
         }
     }
 }

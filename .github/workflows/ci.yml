@@ -17,19 +17,23 @@ env:
 
 jobs:
   rust:
-    name: Rust (fmt, clippy, tests)
+    name: Rust (fmt, clippy, tests, examples)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # highs-sys builds HiGHS from source (CMake, C++) and runs bindgen (libclang).
       - run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
-      - run: cargo clippy --release --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --release --workspace --locked
-      - run: cargo run --release -p lp-ip-craft --example production --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo clippy -p lp-ip-craft-python --no-default-features --locked -- -D warnings
+      # Debug profile keeps Rust overflow checks; highs-sys always builds HiGHS in Release.
+      - run: cargo test --workspace --locked
+      - run: cargo run -p lp-ip-craft --example production --locked
+      - run: cargo run -p lp-ip-craft-highs --example solve --locked
 
   msrv:
     name: Rust 1.85 (declared rust-version)
@@ -39,49 +43,46 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85
       - run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --release --workspace --all-targets --locked
+      - run: cargo check --workspace --all-targets --locked
 
   python:
-    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    name: Python ${{ matrix.python }} on ${{ matrix.os }} (HiGHS)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.10", "3.14"]
     env:
       MATURIN_PEP517_ARGS: --locked
-      PYO3_BUILD_EXTENSION_MODULE: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - uses: dtolnay/rust-toolchain@stable
-      - run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
       - uses: Swatinem/rust-cache@v2
       - run: python -m pip install ".[test]"
+      - run: python -c "import lp_ip_craft as m; assert 'highs' in m.BACKENDS, m.BACKENDS"
       - run: python -m pytest -q
       - run: python examples/demo.py
       - run: python examples/solve_highs.py
 
-  portable-python:
-    name: Dummy interface on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest, windows-latest]
-        python: ["3.10", "3.14"]
+  python-dummy-only:
+    name: Python without HiGHS (dummy-only build)
+    runs-on: ubuntu-latest
     env:
       MATURIN_PEP517_ARGS: --locked --no-default-features
-      PYO3_BUILD_EXTENSION_MODULE: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python }}
+          python-version: "3.14"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: python -m pip install ".[test]"
-      - run: python -m pytest -q tests/test_contract.py
+      - run: python -c "import lp_ip_craft as m; assert m.BACKENDS == ('dummy',), m.BACKENDS"
+      - run: python -m pytest -q
       - run: python examples/demo.py

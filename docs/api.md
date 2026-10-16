@@ -1,6 +1,7 @@
 # Contract: model, solve, results
 
-Iteration 1 v0.2.0. Interfaces remain pre-release; `publish = false` prevents accidental releases.
+Version 0.2.0 (iteration 1). Interfaces are pre-release; `publish = false`
+prevents accidental releases.
 
 ## The model
 
@@ -40,11 +41,17 @@ value. Python `kinds` defaults to all `"continuous"`.
 
 ## Solving
 
-Rust: `LpIpSolver::solve(&mut self, model, options, start, cancel)`.
-Python: `solve(model, *, start=None, options=None, cancellation=None, backend="dummy", backend_options=None)`.
+Rust: `LpIpSolver::solve(&mut self, model, options, start, cancel)`, implemented
+by `lp_ip_craft_highs::HighsSolver` (real LP/MIP solves) and
+`lp_ip_craft::DummySolver` (contract fixture).
 
-`backend="highs"` selects `lp_ip_craft_highs::HighsSolver`; its constructor
-settings are `HighsOptions`. `backend_options` is rejected for the dummy.
+Python: `solve(model, *, backend="dummy", start=None, options=None,
+backend_options=None, cancellation=None)`. Pass `backend="highs"` to optimize;
+the default `"dummy"` is kept from v0.1 and only evaluates one candidate.
+`lp_ip_craft.BACKENDS` lists the backends compiled into the extension. An
+unknown backend is a `ValueError`; a known one that is not compiled in (a build
+with `--no-default-features`) is a `NotImplementedError`. There is never a
+silent fallback to the dummy or to an LP relaxation.
 
 `start` is an optional complete primal point (`WarmStart::from_primal` in
 Rust, a sequence in Python). It is used exactly as given: it need not be
@@ -53,12 +60,14 @@ SQP-craft, a start outside the variable bounds is accepted, because a linear
 model is defined everywhere. Partial MIP starts, simplex bases and dual starts
 are deferred until a backend uses them.
 
-`Options` exposes only settings a backend honours: `feasibility_tolerance` and
+`Options` holds the settings every backend honours: `feasibility_tolerance` and
 `integrality_tolerance` (both absolute, unscaled; default `1e-7`; integrality
 in `(0, 0.5)`) and `threads` (only `1`; anything else is
-`Unsupported`/`NotImplementedError`). Backend controls are in `HighsOptions`, listed below. No arbitrary option
-pass-through is exposed; HiGHS handles its normal internal presolve/scaling,
-but the facade adds no model scaling and checks original units.
+`Unsupported`/`NotImplementedError`). Backend-specific settings are typed
+(`HighsOptions`, below); there is no untyped option pass-through, and no setting
+is silently ignored. For comparison, Gurobi's defaults are
+`FeasibilityTol = 1e-6` and `IntFeasTol = 1e-5`: set the tolerances from the
+target card when checking reference solutions.
 
 Input errors are reported before any work and take precedence over a pending
 cancellation. In Python the interpreter is released during the solve.
@@ -67,18 +76,38 @@ cancellation. In Python the interpreter is released during the solve.
 
 | Field | Meaning |
 | --- | --- |
-| `status` | `stub`, `cancelled`, `optimal`, `infeasible`, `unbounded`, `infeasible_or_unbounded`, resource limits, `numerical_failure`, `unknown` |
-| `candidate` | the returned point (the incumbent, for a MIP), or `None` if none was evaluated |
+| `status` | why the solve ended (below) |
+| `candidate` | the returned point (the incumbent, for a MIP), or `None` if the backend declared no usable primal solution |
 | `evaluation` | independent evaluation of the candidate (below); present exactly when `candidate` is |
-| `duals` | LP duals in the convention below, when the backend computes them |
+| `duals` | LP duals in the convention below; never for a MIP |
 | `best_bound` | a **proven** bound on the optimal objective in the original sense, offset included: a lower bound when minimizing, an upper bound when maximizing. Never estimated |
 | `gap` | derived from `evaluation.objective` and `best_bound` (below); Python field, Rust `SolveResult::gap(sense)` |
 | `nodes` | branch-and-bound nodes processed |
 | `iterations` | LP iterations over all nodes |
-| `message` | explanation of the status |
+| `message` | explanation of the status, including why an optimum was rejected |
+| `backend` | `BackendReport`: provenance, applied settings, timings (below) |
 
-A cancelled solve keeps the best candidate found so far, as MIP solvers keep
-their incumbent when interrupted.
+### Statuses
+
+The status is the termination reason; candidate quality is reported
+separately. A limit can end a solve with a feasible incumbent, and a solve
+without candidate can carry a proven bound. A solve stopped by a limit or by
+cancellation keeps the best candidate found so far.
+
+| Status | Meaning |
+| --- | --- |
+| `stub` | the dummy evaluated one candidate; no claim of any kind |
+| `cancelled` | the cancellation token stopped the solve |
+| `optimal` | the engine reported optimality **and** the independent checks passed: the candidate is a feasible candidate in original units, and for an LP with duals, stationarity, dual signs and the relative duality gap are within the backend's thresholds. Numerical, not an exact certificate |
+| `infeasible` | the engine reported the model infeasible |
+| `unbounded` | the engine reported the model unbounded; a returned candidate is just a feasible point |
+| `infeasible_or_unbounded` | the engine established one of the two, not which |
+| `time_limit`, `node_limit`, `iteration_limit`, `solution_limit`, `objective_limit`, `memory_limit` | a limit stopped the engine |
+| `numerical_failure` | the engine failed numerically, or reported optimality but the independent checks rejected the result; the message says which check |
+| `unknown` | the engine stopped without a definite outcome |
+
+Backends map every native status explicitly and keep the native name in
+`backend.raw_status`. They never report a more precise outcome than the engine.
 
 ### Candidate evaluation
 
@@ -98,8 +127,14 @@ solver status: a feasible candidate is not optimal, and an infeasible one does
 not show that the model is infeasible. Every backend's candidate is evaluated
 by this function, so backends with differently scaled internal tolerances are
 compared on one definition. It works on solutions from any solver, including
-commercial reference solvers. Overflow of the objective or a row activity is an
-`Evaluation` error, never a candidate.
+commercial reference solvers. Overflow of the objective, a row activity or a
+bound distance is an `Evaluation` error, never a candidate.
+
+The tolerances are absolute. On rows whose activity is large (around `1e5`),
+an absolute `1e-7` is close to the precision of `f64` sums, and an engine that
+checks feasibility on its scaled model can miss it by roundoff. Such a result
+is reported as `numerical_failure` with the violation in the message; choose
+tolerances that fit the model's magnitudes.
 
 ### Bounds and gaps
 
@@ -114,13 +149,15 @@ relative = absolute / |objective|    (objective ≠ 0)
 relative = 0 if absolute == 0, else ±inf    (objective = 0)
 ```
 
-The quotient is the one Gurobi's `MIPGap` uses (`|bound − incumbent| /
-|incumbent|`); SCIP's default gap divides by the smaller of the two magnitudes
-and is infinite for opposite signs. The zero-objective case is this crate's
-convention. `absolute` keeps its sign: a negative value means the bound is
-invalid, and it is reported, not clamped. A backend may only report a bound it
-has proven; an approximate LP dual value is not a bound (see design notes,
-next steps).
+The quotient is the one Gurobi's `MIPGap` and HiGHS's `mip_rel_gap` use
+(`|bound − incumbent| / |incumbent|`); SCIP's default gap divides by the smaller
+of the two magnitudes and is infinite for opposite signs. The zero-objective
+case is this crate's convention. `absolute` keeps its sign: a negative value
+means the bound is invalid, and it is reported, not clamped. Rust's
+`SolveResult::gap` and `Gap::try_new` return an `Evaluation` error if the
+subtraction overflows; `Gap::new` is the raw IEEE formula. A backend may only
+report a bound it has proven; an approximate LP dual value is not a bound (see
+the iteration-1 results, next steps).
 
 ### LP duals
 
@@ -134,13 +171,12 @@ When minimizing, a positive dual belongs to an active lower bound and a
 negative dual to an active upper bound; when maximizing the signs are
 reversed. Zero means inactive; equalities accept either sign. This is the
 convention of Gurobi's `Pi`/`RC` and HiGHS's `row_dual`/`col_dual`: the tests
-and the Rust example check it against the duals both report for Example 1 of
-the LP/IP tutorial (row duals `0, 11/3, 25/3`, reduced costs `0, 0, −5`).
-For a MIP, duals can only describe an LP relaxation or a fixed-integer LP, and
-a backend must say which.
+check it against the duals HiGHS returns for Example 1 of the LP/IP tutorial
+(row duals `0, 11/3, 25/3`, reduced costs `0, 0, −5`), the values Gurobi also
+reports. MIP results carry no duals.
 
-`check::lp_residuals` / Python `lp_residuals(model, x, duals)` checks a primal point with duals as
-a solution of the LP, ignoring integrality:
+`check::lp_residuals` / Python `lp_residuals(model, x, duals)` checks a primal
+point with duals as a solution of the LP, ignoring integrality:
 
 | Residual | Definition |
 | --- | --- |
@@ -148,9 +184,26 @@ a solution of the LP, ignoring integrality:
 | `stationarity` | `‖c − Aᵀy − z‖∞` |
 | `complementarity` | largest `|μ| · |distance to the bound selected by the sign of μ|` |
 | `dual_sign` | largest `|μ|` whose sign selects an infinite bound |
+| `duality_gap` | `|P − D| / (1 + |P| + |D|)` with `P = cᵀx` and `D = Σ μ · (bound selected by the sign of μ)` over finite selected bounds |
 
-All four are zero at an optimal pair. They are not a bound on the objective
-error and do not certify a MIP.
+All are zero at an optimal pair. `complementarity` is a product of a dual and
+a distance and grows with both magnitudes; `duality_gap` measures the same
+property scale-free and is what acceptance checks use. None of them bounds the
+objective error or certifies a MIP. Intermediate overflow is an `Evaluation`
+error, so a NaN cannot disappear inside a maximum.
+
+### Backend report
+
+| Field | Meaning |
+| --- | --- |
+| `name`, `version` | backend (`dummy`, `highs`) and native engine version |
+| `raw_status` | the engine's own status name; `None` if it never ran |
+| `start_status` | `not_provided`, `submitted` (the engine took the start, which does not mean it became the incumbent), `rejected`, or `evaluated` (dummy) |
+| `effective_options` | native settings applied, by native name; not an export of every native default |
+| `total_seconds`, `conversion_seconds`, `solve_seconds`, `check_seconds` | wall-clock phases after input validation |
+| `time_budget_exceeded` | the call outlasted its time budget; `status` still says why the engine stopped |
+
+Timings are for reporting; no correctness check depends on them.
 
 ### The dummy backend, exactly
 
@@ -164,15 +217,72 @@ error and do not certify a MIP.
 `iterations` zero, even at an analytically optimal candidate: the dummy never
 claims optimality, infeasibility or unboundedness.
 
+## The HiGHS backend
+
+`lp_ip_craft_highs::HighsSolver` drives HiGHS 1.15.0 through the `highs` 2.4.0
+Rust bindings; `highs-sys` builds HiGHS from source. Each solve builds a fresh
+native model on the calling thread and destroys it before returning.
+
+| `HighsOptions` field | Default | Meaning |
+| --- | --- | --- |
+| `time_limit_seconds` | `None` | cooperative budget for the whole call after validation (conversion, run, checks); HiGHS gets the remaining time as `time_limit` and the interrupt callback polls it |
+| `node_limit` | `None` | `mip_max_nodes`; MIP models only (an LP with a node limit is `Unsupported`, HiGHS would ignore it) |
+| `iteration_limit` | `None` | `simplex_iteration_limit` and `ipm_iteration_limit`; LP models only (HiGHS does not apply them to the LP subproblems of a MIP) |
+| `seed` | `0` | `random_seed` |
+| `mip_relative_gap`, `mip_absolute_gap` | `0`, `0` | HiGHS stopping rules `mip_rel_gap`, `mip_abs_gap` (HiGHS defaults `1e-4`, `1e-6`); they do not change the result's `gap` |
+| `dual_tolerance` | `1e-7` | `dual_feasibility_tolerance`, and the LP acceptance threshold below |
+
+Integer settings are limited to `0..=2^31−1`; violations are `InvalidInput`
+naming the field. The adapter always sets `threads = 1`, `output_flag = false`,
+`small_matrix_value = 1e-12` and `primal_feasibility_tolerance` from `Options`;
+for MIPs it sets `mip_feasibility_tolerance` to the smaller of the two
+tolerances, because HiGHS uses one MIP tolerance for integrality and rows.
+
+**Backend limits** (`Unsupported`/`NotImplementedError`, checked before any
+work): tolerances below `1e-10`; finite bounds, objective coefficients, offset
+or start values with magnitude `>= 1e20` (HiGHS's infinity); nonzero matrix
+values outside `(1e-12, 1e15)`; integer bounds or start values beyond
+`±(2^53 − 1)`; more than `2^31 − 1` variables, rows or entries. The general
+model and evaluator keep their wider finite-`f64` domain.
+
+**Status mapping.** Every status of the pinned bindings is mapped explicitly
+(see `crates/highs/src/status.rs`). HiGHS reports a reached `mip_max_nodes` as
+`ReachedSolutionLimit`; with a node limit set and reached, the adapter reports
+`node_limit`. An interrupt becomes `cancelled` or `time_limit` depending on
+which requested it. `NotSet`, `LoadError`, `ModelError` and `ModelEmpty` mean
+HiGHS did not solve the model: a `Backend` error, never a finding about it.
+
+**Acceptance.** A candidate is read only when HiGHS declares a feasible primal
+solution, then evaluated with `evaluate`. For an LP with feasible duals, the
+duals are returned and checked with `lp_residuals`: `optimal` requires
+stationarity and dual sign residuals up to `dual_tolerance · (1 + ‖c‖∞)` and a
+relative duality gap up to `dual_tolerance`. MIP results get no duals;
+`best_bound` is HiGHS's finite `mip_dual_bound` (original sense, offset
+included). A bound on the wrong side of the incumbent by more than
+`feasibility_tolerance · (1 + |objective|)` rejects an optimum. LP results have
+no `best_bound` yet.
+
+**Cancellation.** The interrupt callback (simplex, IPM, MIP) reads the atomic
+token and the time budget; it never calls Python or unwinds. Conversion is
+checked before and after, not interrupted midway. Cancellation is cooperative:
+HiGHS stops at its next interrupt point, which took about 0.3 s in a MIP test.
+A cancellation or budget overrun after HiGHS has returned does not change the
+status; an overrun sets `time_budget_exceeded`.
+
+**Concurrency.** Independent solves on several threads (Rust threads, or
+Python threads with the interpreter released) each use their own HiGHS
+instance with one thread; the tests run them concurrently. Thread counts above
+one per solve are not supported yet.
+
 ## Errors
 
 | Rust `Error` | Python exception | When |
 | --- | --- | --- |
-| `InvalidInput` | `ValueError` | malformed model, start, point, duals or options |
-| `Evaluation` | `lp_ip_craft.EvaluationError` (a `RuntimeError`) | objective or row activity overflow |
-| `Unsupported` | `NotImplementedError` | valid but unimplemented request (`threads != 1`) |
-| `Backend` | `RuntimeError` | native setup/execution failure |
-| — | `TypeError` | wrongly typed input (text where a sequence is expected, floats as indices, ...) |
+| `InvalidInput` | `ValueError` | malformed model, start, point, duals, options or backend settings |
+| `Evaluation` | `lp_ip_craft.EvaluationError` (a `RuntimeError`) | objective, activity, residual or gap overflow |
+| `Unsupported` | `NotImplementedError` | valid but unimplemented request (`threads != 1`, a backend limit, a backend not compiled in) |
+| `Backend` | `lp_ip_craft.BackendError` (a `RuntimeError`) | the engine failed to set up or run the model |
+| — | `TypeError` | wrongly typed input (text where a sequence is expected, floats as indices, a string as `node_limit`, ...) |
 
 Errors never carry partial results.
 
@@ -180,7 +290,8 @@ Errors never carry partial results.
 
 `CancellationToken` (Rust) / `Cancellation` (Python) is a shared, one-way flag
 checked at each backend's documented checkpoints. It is not a hard interrupt
-or a time limit; use a new token for a new run.
+or a time limit; use a new token for a new run. Use a separate process where a
+hard stop is needed.
 
 The core crate has no dependencies. `Model` is immutable and `Sync`;
 `LpIpSolver::solve` takes `&mut self`, so each concurrent solve uses its own
@@ -189,52 +300,3 @@ once, when the Python `Model` is built, and solves run with the interpreter
 detached, so independent solves from several Python threads run in parallel.
 Element-wise conversion of large NumPy arrays costs time at construction; a
 buffer-protocol path can be added once it is measured on the real model.
-
-## HiGHS controls and metadata (0.2.0)
-
-| `HighsOptions` field | Default | Meaning |
-| --- | --- | --- |
-| `time_limit_seconds` | `None` | Cooperative whole-call budget after validation; conversion, solve and extraction included |
-| `node_limit` | `None` | Native MIP node cap, integer 0..2^31-1 |
-| `iteration_limit` | `None` | Native simplex and IPM iteration caps, integer 0..2^31-1 |
-| `seed` | `0` | Native random seed, integer 0..2^31-1 |
-| `mip_relative_gap`, `mip_absolute_gap` | `0`, `0` | Native stopping criteria; do not redefine the public signed gap |
-| `dual_tolerance` | `1e-7` | Native LP dual tolerance and original-unit LP residual acceptance threshold |
-
-Common primal and integrality tolerances must be at least `1e-10` for this
-adapter. Only one engine thread is supported. Finite bounds/objective values
-must have magnitude below `1e20`. A nonzero matrix coefficient must have
-magnitude strictly between `1e-12` and `1e15`. Integral bounds/starts/returned
-values outside ±(2^53−1) are unsupported. Starts are never rounded by the
-facade. These are backend limits; the general model/evaluator retains its
-wider finite-f64 domain.
-
-The adapter retains all raw termination statuses and maps numerical optimum,
-infeasibility, unboundedness/ambiguity and time/node/iteration/solution/objective
-limits separately. An optimal result must have a usable independently checked
-primal candidate; when LP duals are valid, their KKT checks must pass too.
-MIP duals remain absent. `best_bound` is the native finite `mip_dual_bound`,
-including sense/offset, under HiGHS's floating-point assumptions. LP bounds
-remain absent. An independently unacceptable optimal result becomes
-`numerical_failure`; overflow is an evaluation error.
-
-Python result fields add `backend`, `backend_version`, `raw_status`,
-`start_status`, `effective_options`, `total_seconds`, `conversion_seconds`,
-`solve_seconds`, `check_seconds`. Rust groups these in `BackendReport`.
-Effective settings are successful typed option assignments, not an export of
-all native defaults. Start status is `not_provided`, `submitted` or `rejected`;
-submission does not imply that HiGHS used the start as its incumbent.
-
-Cancellation polls an atomic token in the native simplex/IPM/MIP interrupt
-callbacks. Conversion is checked before/after, not interrupted midway. Handles
-are constructed, used and dropped within the detached Python section; no
-unsafe Send/Sync assertion is used. A late cancellation/deadline preserves an
-already checked candidate and changes the termination status. Limits can
-legitimately finish with no candidate. They are not hard real-time interrupts.
-
-`Bounds.checked_violation`, `Gap.try_new` and `SolveResult.checked_gap` are
-checked Rust helpers. Residual, bounds-distance and checked-gap arithmetic reject
-nonfinite intermediates; signed infinity for the relative gap at objective zero
-remains intentional. Legacy `Bounds.violation` panics on invalid input, while
-legacy `Gap.new`/`SolveResult.gap` retain their raw arithmetic compatibility.
-The adapter and Python result path use the checked gap route.

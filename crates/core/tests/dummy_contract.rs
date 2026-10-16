@@ -27,7 +27,7 @@ fn feasible_optimal_start_is_still_only_a_stub() {
     assert_eq!((e.primal_violation, e.integrality_violation), (0.0, 0.0));
     assert!(e.feasible_candidate);
     assert!(r.duals.is_none() && r.best_bound.is_none());
-    assert!(r.gap(model.sense()).is_none());
+    assert!(r.gap(model.sense()).unwrap().is_none());
     assert_eq!((r.nodes, r.iterations), (0, 0));
     assert!(r.message.starts_with("DUMMY"));
 }

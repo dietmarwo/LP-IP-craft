@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Runs every local check. Requires an activated virtual environment with
-# maturin, pytest and (optionally) numpy installed; see README.md.
+# Runs every local check. Requires CMake, a C++ compiler and libclang (for the
+# HiGHS build) and an activated virtual environment with maturin, pytest and
+# numpy; see README.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [ -z "${VIRTUAL_ENV:-}" ]; then
@@ -8,11 +9,12 @@ if [ -z "${VIRTUAL_ENV:-}" ]; then
   exit 1
 fi
 cargo fmt --all --check
-cargo clippy --release --workspace --all-targets --locked -- -D warnings
-cargo test --release --workspace --locked
-cargo run --release -p lp-ip-craft --example production --locked
-PYO3_BUILD_EXTENSION_MODULE=1 python -m maturin develop --release --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo clippy -p lp-ip-craft-python --no-default-features --locked -- -D warnings
+cargo test --workspace --locked
+cargo run -p lp-ip-craft --example production --locked
+cargo run -p lp-ip-craft-highs --example solve --locked
+python -m maturin develop --release --locked
 python -m pytest -q
 python examples/demo.py
-cargo run --release --locked -p lp-ip-craft-highs --example solve
 python examples/solve_highs.py

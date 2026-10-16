@@ -1,5 +1,0 @@
-   Compiling pyo3-ffi v0.30.1
-    Checking lp-ip-craft-highs v0.2.0 (<workspace>/repos/LP-IP-craft/crates/highs)
-   Compiling pyo3 v0.30.1
-    Checking lp-ip-craft-python v0.2.0 (<workspace>/repos/LP-IP-craft/crates/python)
-    Finished `release` profile [optimized] target(s) in 2.34s

@@ -86,6 +86,8 @@ fn complementarity_detects_a_feasible_but_not_optimal_point() {
         (r.complementarity - 450.0 * 11.0 / 3.0).abs() < 1e-9,
         "{r:?}"
     );
+    // P = 0, D = 450 * 11/3 + 60 * 25/3 = 2150: the scale-free gap is large too.
+    assert!((r.duality_gap - 2150.0 / 2151.0).abs() < 1e-12, "{r:?}");
 }
 
 /// minimize or maximize x subject to x >= 1 (as a row), x free.
@@ -194,9 +196,35 @@ fn result_gap_needs_a_bound_and_a_feasible_candidate() {
         iterations: 0,
         message: String::new(),
     };
-    assert!(result.gap(Sense::Minimize).is_none());
+    assert!(result.gap(Sense::Minimize).unwrap().is_none());
     result.best_bound = Some(8.0);
-    assert_eq!(result.gap(Sense::Minimize).unwrap().absolute, 2.0);
+    assert_eq!(result.gap(Sense::Minimize).unwrap().unwrap().absolute, 2.0);
     result.evaluation = Some(evaluation(false));
-    assert!(result.gap(Sense::Minimize).is_none());
+    assert!(result.gap(Sense::Minimize).unwrap().is_none());
+}
+
+#[test]
+fn duality_gap_is_scale_free_where_complementarity_is_not() {
+    // Scaling objective and duals by 1e6 multiplies complementarity by 1e6
+    // but leaves the relative primal-dual gap unchanged.
+    let mut data = production_data();
+    data.objective.iter_mut().for_each(|c| *c *= 1e6);
+    let scaled = Model::new(data).unwrap();
+    let published = production_duals();
+    let duals = Duals {
+        row_duals: published.row_duals.iter().map(|y| y * 1e6).collect(),
+        reduced_costs: published.reduced_costs.iter().map(|z| z * 1e6).collect(),
+    };
+    let near_optimum = [30.0, 10.0 - 1e-9, 0.0];
+    let base = lp_residuals(&production(), &near_optimum, &production_duals()).unwrap();
+    let big = lp_residuals(&scaled, &near_optimum, &duals).unwrap();
+    assert!(
+        big.complementarity > 1e5 * base.complementarity,
+        "{base:?} {big:?}"
+    );
+    assert!(
+        (big.duality_gap - base.duality_gap).abs() < 1e-14,
+        "{base:?} {big:?}"
+    );
+    assert!(base.duality_gap < 1e-10, "{base:?}");
 }

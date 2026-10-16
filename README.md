@@ -1,81 +1,90 @@
 # LP-IP-craft
 
-LP and mixed-integer linear programming in Rust, with Python bindings.
-**Iteration 1 / v0.2.0:** a real HiGHS backend implements the checked-in interface.
-The dependency-free core and the original dummy remain available. This is a
-Rust adapter to HiGHS, not a newly written simplex or MIP engine.
+Linear and mixed-integer linear programming (LP / MIP) in Rust, with Python
+bindings.
 
-## Use from Python
+> **Status: iteration 1 (v0.2.0).** Real LP/MIP solves go through an adapter
+> to the open-source [HiGHS](https://highs.dev/) solver. This is a validated
+> Rust interface to an existing engine, not yet a native Rust simplex or
+> branch-and-bound. The dependency-free core contracts and the original dummy
+> backend remain.
+
+## What is here
+
+| Component | Purpose |
+| --- | --- |
+| `crates/core` (`lp-ip-craft`) | Dependency-free contracts: validated `Model`, the `LpIpSolver` trait, statuses and results with fixed bound/gap and dual conventions, the independent checks `evaluate` and `lp_residuals`, `DummySolver` |
+| `crates/highs` (`lp-ip-craft-highs`) | `HighsSolver`: HiGHS 1.15.0 through the `highs` 2.4.0 bindings, with typed settings, explicit status mapping and independent acceptance checks |
+| `crates/python`, `python/lp_ip_craft` | PyO3 extension and typed Python API (`Model`, `solve`, `evaluate`, `lp_residuals`, `HighsOptions`, result dataclasses) |
+| [`docs/api.md`](docs/api.md) | The contract: data conventions, statuses, bounds and gaps, duals, HiGHS settings and limits, errors |
+| [`docs/iteration-1-results.md`](docs/iteration-1-results.md) | What iteration 1 delivered, the review record, open decisions, next steps |
+| [`docs/target-card.md`](docs/target-card.md) | Application inputs still to be supplied (left TBD on purpose) |
+
+## Python example
 
 ```python
-from lp_ip_craft import Model, HighsOptions, solve
+import math
+from lp_ip_craft import HighsOptions, Model, evaluate, solve
 
+# minimize 2 x + 3 y + 5  subject to  x + 2 y >= 2.5,  0 <= x <= 3,  y binary
 model = Model(
     objective=[2.0, 3.0], objective_offset=5.0,
-    lower=[0.0, 0.0], upper=[1.0, 1.0], kinds=["binary", "binary"],
-    indptr=[0, 2], indices=[0, 1], values=[1.0, 1.0],
-    row_lower=[1.0], row_upper=[1.0],
+    lower=[0.0, 0.0], upper=[3.0, 1.0], kinds=["continuous", "binary"],
+    indptr=[0, 2], indices=[0, 1], values=[1.0, 2.0],   # A in CSR form
+    row_lower=[2.5], row_upper=[math.inf],
 )
 result = solve(model, backend="highs",
                backend_options=HighsOptions(time_limit_seconds=10))
 assert result.status == "optimal"
-assert result.evaluation.objective == 7.0
-print(result.candidate, result.best_bound, result.gap)
+assert abs(result.evaluation.objective - 9.0) < 1e-9   # recomputed, offset included
+print(result.candidate, result.best_bound, result.gap, result.backend.raw_status)
+
+# The independent check works on any solver's solution:
+assert evaluate(model, [0.5, 1.0]).feasible_candidate
 ```
 
-Always select `backend="highs"` for optimization. The compatibility default
-`"dummy"` returns `"stub"`. Unknown or unavailable backends fail explicitly.
-Candidates, primal/integrality checks, LP duals and MIP bounds use original
-model units and objective offsets. Numerical optimality is not an exact certificate.
-
-## Layout
-
-| Path | Role |
-| --- | --- |
-| `crates/core` | Dependency-free model, solver/result contracts, independent checks, dummy |
-| `crates/highs` | HiGHS 2.4.0 Rust wrapper / highs-sys 1.15.0 adapter and scoped C API |
-| `crates/python`, `python/lp_ip_craft` | PyO3 native extension, typed facade and stub |
-| `examples/solve_highs.py`, `crates/highs/examples/solve.rs` | Real Python and Rust solves |
-| `tests/test_highs.py`, `crates/highs/tests` | Analytic, exhaustive-IP, cancellation and process tests |
-| [docs/api.md](docs/api.md) | Data, options, results and errors |
-| [docs/iteration-1-results.md](docs/iteration-1-results.md) | Implemented plan, validation and limitations |
-| [docs/target-card.md](docs/target-card.md) | Real application inputs still needed |
+Always pass `backend="highs"` to optimize: the default `"dummy"` is kept for
+compatibility and only evaluates one candidate (`status == "stub"`). Sequences
+may be lists, tuples or 1-D NumPy arrays. The Rust equivalents are in
+`crates/highs/examples/solve.rs` and the crate documentation
+(`cargo doc --open -p lp-ip-craft-highs`).
 
 ## Build and test
 
-Requires Rust **1.85+**, Python **3.10+**, a C/C++ compiler, CMake and a shared
-libclang for bindgen. HiGHS is built from source by Cargo; no separately
-installed solver is needed. Cargo.lock pins the dependency graph.
-
-Ubuntu/Debian prerequisites:
+Requirements: stable Rust (edition 2024, 1.85 or newer), CPython 3.10 or
+newer, and for the HiGHS backend a C++ compiler, CMake and libclang: `highs-sys`
+builds HiGHS from source and generates its bindings. No separately installed
+solver is needed.
 
 ```bash
-sudo apt-get install build-essential cmake libclang-dev
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install 'maturin>=1.9.4,<2' pytest numpy patchelf
+sudo apt-get install build-essential cmake libclang-dev   # Debian/Ubuntu
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install 'maturin>=1.9.4,<2' pytest numpy
 bash scripts/check.sh
 ```
 
-Without system CMake/libclang, `pip install cmake libclang` is another route;
-set `LIBCLANG_PATH` to that environment's `site-packages/clang/native` directory.
-The validation environment used this route and maturin 1.9.4.
+`scripts/check.sh` runs `cargo fmt --check`, Clippy with `-D warnings`, the
+Rust tests and both Rust examples, builds the extension with `maturin develop`,
+then runs `pytest` and both Python examples. `python -m pip install .` builds
+and installs the package; `python -m maturin build --release` builds an abi3
+wheel. Without the native toolchain:
 
 ```bash
-# Distributable Linux wheel (patchelf required)
-PYO3_BUILD_EXTENSION_MODULE=1 python -m maturin build --release --locked
-# Portable contracts alone, without native backend tool dependencies
-cargo test -p lp-ip-craft --locked
-# Explicit dummy-only extension
-PYO3_BUILD_EXTENSION_MODULE=1 python -m maturin develop --release --locked --no-default-features
+cargo test -p lp-ip-craft                                      # core contracts only
+python -m maturin develop --release --no-default-features      # dummy-only extension
 ```
 
-`scripts/check.sh` runs formatting, Clippy, release tests, Rust examples,
-compiled Python tests and Python examples. Native backend CI targets Linux;
-the portable dummy interface retains macOS/Windows CI. Only Linux was executed
-for this archive. No package is published (`publish = false`).
+In a dummy-only build `lp_ip_craft.BACKENDS == ("dummy",)` and
+`backend="highs"` raises `NotImplementedError`. The binding crate has no Rust
+test executable (it would need to link libpython); it is tested through pytest
+against the compiled module. CI covers Linux, macOS and Windows.
 
-## Related and license
+## Related
 
-[SQP-craft](https://github.com/dietmarwo/SQP-craft) is the nonlinear sibling.
-Project code is MIT; see [LICENSE](LICENSE) and [docs/dependencies.md](docs/dependencies.md).
+[SQP-craft](https://github.com/dietmarwo/SQP-craft) is the sibling repository
+for the nonlinear (SQP) track, with the same conventions.
+
+## License
+
+MIT, see [LICENSE](LICENSE). HiGHS and the `highs` bindings are MIT licensed;
+see [docs/dependencies.md](docs/dependencies.md).
