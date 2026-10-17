@@ -3,6 +3,7 @@
 //! branch and bound with diving, pseudocost branching and independently
 //! checked results.
 #![forbid(unsafe_code)]
+mod boxed;
 mod components;
 mod incumbent;
 mod lp;
@@ -535,6 +536,9 @@ impl LpIpSolver for NativeSolver {
             ));
         }
         let call_started = Instant::now();
+        if self.settings.presolve && model.m() == 0 && !model.is_mip() {
+            return boxed::solve(model, options, &self.settings, start, cancel, call_started);
+        }
         let original_model = model;
         let strengthened = if self.settings.presolve
             && !cancel.is_cancelled()

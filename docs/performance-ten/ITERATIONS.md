@@ -17,3 +17,7 @@ Outcome: workspace tests pass; box-100k 15.82 -> 12.17 ms (1.30x) in three rotat
 
 ## 3. Direct row-free LP solve — plan
 Choose each bound from the objective sign for continuous models with zero rows. Construct original-unit duals and run the same independent KKT, candidate and conservative bound checks as simplex. Preserve validation, starts and budget/cancellation semantics; decline the fast path when presolve is off. Test mixed signs, infinite bounds, zero costs and limits. Benchmark box-100k and all development regressions.
+Outcome: workspace tests pass, including new direct/general box equivalence, objective offsets, both senses, unboundedness and zero-iteration budget tests. Box-100k 11.90 -> 4.50 ms (2.65x). Other pivot/node counts unchanged; small wall-time fluctuations remain.
+
+## 4. Reachability-based BTRAN — plan
+Maintain reusable sparse reach sets and inverse pivot permutations. For sparse right-hand sides on sufficiently large bases, traverse the U-transpose and L-transpose dependency graphs and solve only the reachable entries in pivot order. Abort discovery at one eighth of the basis and use the existing sweep. Keep all nonzeros (no new numerical dropping). Test residuals on large sparse bases, including eta updates, plus the workspace; benchmark packing, network and irregular LPs.
