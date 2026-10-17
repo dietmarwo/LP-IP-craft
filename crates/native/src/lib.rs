@@ -1620,7 +1620,9 @@ fn strong_branch(
             .then(a.cmp(&b))
     });
     candidates.truncate(2);
-    if candidates.is_empty() {
+    // One unreliable candidate is worth probing for its pseudocosts; the
+    // legacy root rule keeps its 0.23 behaviour and probes only a real choice.
+    if candidates.is_empty() || (!budget.settings.reliability_branching && candidates.len() < 2) {
         return Ok(None);
     }
     let basis = lp.snapshot();

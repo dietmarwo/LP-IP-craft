@@ -106,3 +106,56 @@ fn conservative_fixings_reduce_search_without_changing_the_optimum() {
         .unwrap();
     assert!(fixed > 0);
 }
+
+#[test]
+fn legacy_root_probes_need_two_candidates_reliability_probes_one() {
+    // 12-item knapsack with strictly decreasing profit/weight ratios: the root
+    // LP takes items 0..3 and 1/3 of item 3, so exactly one variable is
+    // fractional. The cardinality row only makes the model eligible.
+    let n = 12;
+    let weights: Vec<f64> = (0..n).map(|j| 3. + j as f64).collect();
+    let mut dense = weights.clone();
+    dense.extend(std::iter::repeat_n(1., n));
+    let model = Model::new(ModelData {
+        sense: Sense::Maximize,
+        objective: (0..n).map(|j| 30. - j as f64).collect(),
+        objective_offset: 0.,
+        variables: Bounds::new(vec![0.; n], vec![1.; n]),
+        kinds: vec![VariableKind::Binary; n],
+        matrix: CsrMatrix::from_dense(2, n, &dense).unwrap(),
+        rows: Bounds::new(vec![f64::NEG_INFINITY; 2], vec![14., 7.]),
+    })
+    .unwrap();
+    let solve = |strong: bool, reliability: bool| {
+        NativeSolver::new(NativeOptions {
+            strong_branching: strong,
+            reliability_branching: reliability,
+            component_threads: 1,
+            decompose: false,
+            ..Default::default()
+        })
+        .solve(
+            &model,
+            &Options::default(),
+            None,
+            &CancellationToken::default(),
+        )
+        .unwrap()
+    };
+    let plain = solve(false, false);
+    let legacy = solve(true, false);
+    let reliability = solve(false, true);
+    for r in [&plain, &legacy, &reliability] {
+        assert_eq!(r.status, Status::Optimal);
+        assert_eq!(
+            r.evaluation.as_ref().unwrap().objective,
+            plain.evaluation.as_ref().unwrap().objective
+        );
+    }
+    assert_eq!(probes(&legacy), 0);
+    assert_eq!(
+        (legacy.nodes, legacy.iterations),
+        (plain.nodes, plain.iterations)
+    );
+    assert!(probes(&reliability) > 0);
+}
