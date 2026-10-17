@@ -49,7 +49,7 @@ pub fn evaluate(model: &Model, x: &[f64], tolerances: &Tolerances) -> Result<Eva
         .iter()
         .zip(x)
         .filter(|(kind, _)| kind.is_integral())
-        .map(|(_, v)| (v - v.round()).abs())
+        .map(|(_, &v)| integrality_gap(v))
         .fold(0.0_f64, f64::max);
     Ok(Evaluation {
         objective,
@@ -218,6 +218,18 @@ fn finite(value: f64, what: impl FnOnce() -> String) -> Result<f64> {
     }
 }
 
+/// `|v - round(v)|` for finite `v`. Integers, the common case, skip the libm
+/// `round` call (baseline x86-64 has no rounding instruction): every binary64
+/// of magnitude at least 2^52 is an integer, and below that the i64
+/// conversion is exact truncation.
+fn integrality_gap(v: f64) -> f64 {
+    if v.abs() >= 4_503_599_627_370_496.0 || (v as i64) as f64 == v {
+        0.0
+    } else {
+        (v - v.round()).abs()
+    }
+}
+
 pub(crate) fn check_point(model: &Model, x: &[f64], what: &str) -> Result<()> {
     ensure(x.len() == model.n(), || {
         format!("{what}: expected {} entries, got {}", model.n(), x.len())
@@ -234,5 +246,46 @@ fn activity(model: &Model, x: &[f64]) -> Result<Vec<f64>> {
             row_activity[i]
         ))),
         None => Ok(row_activity),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::integrality_gap;
+    #[test]
+    fn integrality_gap_matches_round_definition() {
+        let mut values = vec![
+            0.0,
+            -0.0,
+            0.5,
+            -0.5,
+            1.5,
+            -2.5,
+            1e-300,
+            4503599627370495.5,
+            -4503599627370495.5,
+            4503599627370496.0,
+            9.2e18,
+            -9.3e18,
+            f64::MAX,
+            -f64::MAX,
+            f64::MIN_POSITIVE,
+        ];
+        let mut seed = 11u64;
+        for _ in 0..20000 {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            values.push(f64::from_bits(seed));
+            values.push(((seed >> 11) % 8192) as f64 / 16.0 - 256.0);
+            values.push(((seed >> 3) as f64) * if seed & 1 == 0 { 1.0 } else { -1.0 });
+        }
+        for v in values.into_iter().filter(|v| v.is_finite()) {
+            assert_eq!(
+                integrality_gap(v).to_bits(),
+                (v - v.round()).abs().to_bits(),
+                "{v:e}"
+            );
+        }
     }
 }

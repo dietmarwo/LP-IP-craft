@@ -110,28 +110,33 @@ fn checked_bound(model: &Model, prices: &[f64], lattice: bool) -> Result<Option<
         .bound
         .map(|v| tighten(model, v, lattice)))
 }
+/// Objective in the same summation order as `check::evaluate`.
+fn objective(model: &Model, x: &[f64]) -> f64 {
+    model.objective_offset()
+        + model
+            .objective()
+            .iter()
+            .zip(x)
+            .map(|(c, v)| c * v)
+            .sum::<f64>()
+}
+/// The objective of a tolerance-feasible point that the conservative
+/// incumbent check also admits, else None. Only such a point is retained
+/// (and therefore never becomes an invalid pruning seed).
+fn admit(model: &Model, options: &Options, point: &[f64]) -> Result<Option<f64>> {
+    let e = check::evaluate(model, point, &options.tolerances)?;
+    Ok((e.feasible_candidate && incumbent::upper(model, point).is_some()).then_some(e.objective))
+}
 fn improve(
     model: &Model,
     options: &Options,
     best: &mut Option<Vec<f64>>,
     point: Vec<f64>,
 ) -> Result<bool> {
-    let e = check::evaluate(model, &point, &options.tolerances)?;
-    // A heuristic may be used for search, but only a conservatively feasible
-    // candidate is retained here (and therefore never an invalid pruning seed).
-    if !e.feasible_candidate || incumbent::upper(model, &point).is_none() {
+    let Some(value) = admit(model, options, &point)? else {
         return Ok(false);
-    }
-    let old = best.as_ref().map(|x| {
-        model.objective_offset()
-            + model
-                .objective()
-                .iter()
-                .zip(x)
-                .map(|(c, v)| c * v)
-                .sum::<f64>()
-    });
-    if old.is_none_or(|v| e.objective > v) {
+    };
+    if best.as_ref().is_none_or(|x| value > objective(model, x)) {
         *best = Some(point);
         Ok(true)
     } else {
@@ -264,14 +269,19 @@ fn ranked_seeds(
             .then(a.0.cmp(&b.0))
     });
     let mut result = Vec::with_capacity(candidates.len());
-    let eligible: BTreeSet<_> = candidates.iter().map(|v| v.0).collect();
+    let mut eligible = vec![false; model.n()];
+    for v in &candidates {
+        eligible[v.0] = true;
+    }
+    let mut prioritized = vec![false; model.n()];
     for &j in priority {
-        if eligible.contains(&j) && !result.contains(&j) {
+        if eligible[j] && !prioritized[j] {
             result.push(j);
         }
+        prioritized[j] = true;
     }
     for (j, _, _) in candidates {
-        if !priority.contains(&j) {
+        if !prioritized[j] {
             result.push(j);
         }
     }
@@ -386,20 +396,31 @@ fn neighborhood_seed(
                     .all(|&i| owner[i].is_none_or(|k| released[k]))
         })
         .collect();
-    available.sort_by(|&a, &b| {
-        (pack.weights[b] * (0.25 + hint[b]))
-            .total_cmp(&(pack.weights[a] * (0.25 + hint[a])))
-            .then(a.cmp(&b))
-    });
+    // Keep the forced seed and the best others by weighted hint. The order is
+    // total (index breaks ties) and the kept columns are sorted below, so
+    // selecting the kept set is enough; a full sort of every alternative is not.
+    let order = |a: &usize, b: &usize| {
+        (pack.weights[*b] * (0.25 + hint[*b]))
+            .total_cmp(&(pack.weights[*a] * (0.25 + hint[*a])))
+            .then(a.cmp(b))
+    };
+    let mut keep = size.saturating_sub(columns.len());
     if let Some(j) = forced {
-        if let Some(at) = available.iter().position(|&k| k == j) {
-            available.remove(at);
-            available.insert(0, j);
-        } else {
+        let Some(at) = available.iter().position(|&k| k == j) else {
             return Ok(None);
+        };
+        available.swap_remove(at);
+        if keep > 0 {
+            columns.push(j);
+            keep -= 1;
         }
     }
-    available.truncate(size.saturating_sub(columns.len()));
+    if available.len() > keep {
+        if keep > 0 {
+            available.select_nth_unstable_by(keep - 1, order);
+        }
+        available.truncate(keep);
+    }
     columns.extend(available);
     columns.sort_unstable();
     if columns.is_empty() {
@@ -567,7 +588,11 @@ fn residual_search(
         } else {
             Vec::new()
         };
-        stats.retained_seeds += priority.iter().filter(|j| seeds.contains(j)).count() as u64;
+        let mut seeded = vec![false; model.n()];
+        for &j in &seeds {
+            seeded[j] = true;
+        }
+        stats.retained_seeds += priority.iter().filter(|&&j| seeded[j]).count() as u64;
         let mut next_priority = Vec::new();
         for base in (0..settings.packing_neighborhoods).step_by(BATCH) {
             if stopped(settings, cancel, began) || best.is_none() {
@@ -613,16 +638,23 @@ fn residual_search(
             let plan = &plan;
             let workers = settings.packing_workers.min(count);
             stats.workers = stats.workers.max(workers);
+            // Workers take the next task as they finish (tasks vary a lot in
+            // cost); results are merged in task order, so the outcome does not
+            // depend on which worker ran what.
+            let next = std::sync::atomic::AtomicUsize::new(0);
+            let next = &next;
             let mut results = std::thread::scope(|scope| -> Result<Vec<_>> {
                 let mut handles = Vec::new();
-                for worker in 0..workers {
+                for _ in 0..workers {
                     handles.push(
                         std::thread::Builder::new()
                             .name("lpip-residual".into())
                             .spawn_scoped(scope, move || {
                                 let mut out = Vec::new();
-                                for at in (worker..count).step_by(workers) {
-                                    if stopped(settings, cancel, began) {
+                                loop {
+                                    let at =
+                                        next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    if at >= count || stopped(settings, cancel, began) {
                                         break;
                                     }
                                     let result = (|| -> Result<Option<_>> {
@@ -663,7 +695,28 @@ fn residual_search(
                                             Some(&start),
                                             cancel,
                                         )?;
-                                        Ok(Some((columns, r, cliques, work, cut_seconds)))
+                                        // Most residuals return their warm start, which is
+                                        // the snapshot and cannot improve on it. A changed
+                                        // point gets its full-model check here, in parallel;
+                                        // the ordered merge only reads the outcome.
+                                        let checked = r
+                                            .candidate
+                                            .as_ref()
+                                            .filter(|x| {
+                                                columns
+                                                    .iter()
+                                                    .zip(x.iter())
+                                                    .any(|(&j, &v)| incumbent[j] != v)
+                                            })
+                                            .map(|x| {
+                                                let mut point = incumbent.clone();
+                                                for (&j, &v) in columns.iter().zip(x) {
+                                                    point[j] = v;
+                                                }
+                                                let value = admit(model, options, &point);
+                                                (point, value)
+                                            });
+                                        Ok(Some((r, cliques, work, cut_seconds, checked)))
                                     })();
                                     out.push((at, result));
                                 }
@@ -684,6 +737,7 @@ fn residual_search(
                 Ok(out)
             })?;
             results.sort_by_key(|v| v.0);
+            let snapshot_objective = objective(model, &snapshot);
             let mut merged = snapshot.clone();
             let mut touched = vec![false; model.n()];
             let mut owners = pack.owners(&snapshot);
@@ -695,19 +749,14 @@ fn residual_search(
                     stats.incumbent_seeds += 1;
                 }
                 match result {
-                    Ok(Some((columns, r, cliques, work, seconds))) => {
+                    Ok(Some((r, cliques, work, seconds, checked))) => {
                         stats.nodes += r.nodes;
                         stats.pivots += r.iterations;
                         stats.cliques += cliques;
                         stats.clique_work += work;
                         stats.clique_seconds += seconds;
-                        if let Some(x) = r.candidate {
-                            let mut point = snapshot.clone();
-                            for (&j, &v) in columns.iter().zip(&x) {
-                                point[j] = v;
-                            }
-                            let mut local_best = Some(snapshot.clone());
-                            if improve(model, options, &mut local_best, point.clone())? {
+                        if let Some((point, value)) = checked {
+                            if let Some(value) = value?.filter(|&v| v > snapshot_objective) {
                                 if let Some(seed) = plan[at] {
                                     next_priority.push(seed.col);
                                 }
@@ -725,7 +774,8 @@ fn residual_search(
                                         stats.merge_rejected += 1;
                                     }
                                 }
-                                if improve(model, options, best, point)? {
+                                if best.as_ref().is_none_or(|b| value > objective(model, b)) {
+                                    *best = Some(point);
                                     stats.improvements += 1;
                                 }
                             }

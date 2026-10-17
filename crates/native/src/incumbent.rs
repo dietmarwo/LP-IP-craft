@@ -23,6 +23,13 @@ fn enclose(v: f64, exact: bool) -> Option<(f64, f64)> {
 fn small_integer(v: f64) -> bool {
     v.abs() <= 1_125_899_906_842_624.0 && (v as i64) as f64 == v
 }
+/// `v.fract() == 0.0` for finite `v`, without the libm call: every binary64
+/// of magnitude at least 2^52 is an integer, and below that the i64
+/// conversion is exact truncation.
+#[inline]
+pub(crate) fn is_integer(v: f64) -> bool {
+    v.abs() >= 4_503_599_627_370_496.0 || (v as i64) as f64 == v
+}
 /// Outward enclosure of `a * b`; None if not finite.
 #[inline]
 pub(crate) fn product(a: f64, b: f64) -> Option<(f64, f64)> {
@@ -72,16 +79,20 @@ pub(crate) fn upper_with_bounds(
         if !v.is_finite()
             || v < bounds.lower[j]
             || v > bounds.upper[j]
-            || (model.kinds()[j].is_integral() && v.fract() != 0.0)
+            || (model.kinds()[j].is_integral() && !is_integer(v))
         {
             return None;
         }
     }
+    // A zero entry of x contributes the exact product ±0 (model data are
+    // finite), which leaves both endpoints unchanged, so it is skipped. Sparse
+    // points such as packing incumbents then cost little more than a scan.
     let a = model.matrix();
     for i in 0..model.m() {
         let (lo, hi) = dot(
             (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
-                .map(|k| (a.values[k], x[a.pattern.indices[k]])),
+                .map(|k| (a.values[k], x[a.pattern.indices[k]]))
+                .filter(|&(_, v)| v != 0.0),
             0.0,
         )?;
         if lo < model.rows().lower[i] || hi > model.rows().upper[i] {
@@ -95,7 +106,12 @@ pub(crate) fn upper_with_bounds(
     };
     Some(
         dot(
-            model.objective().iter().zip(x).map(|(&c, &v)| (s * c, v)),
+            model
+                .objective()
+                .iter()
+                .zip(x)
+                .filter(|&(_, &v)| v != 0.0)
+                .map(|(&c, &v)| (s * c, v)),
             s * model.objective_offset(),
         )?
         .1,
@@ -135,7 +151,7 @@ mod tests {
 
 #[cfg(test)]
 mod small_integer_tests {
-    use super::small_integer;
+    use super::{is_integer, small_integer};
     #[test]
     fn matches_fract_definition() {
         let limit = 1_125_899_906_842_624.0;
@@ -175,6 +191,17 @@ mod small_integer_tests {
                 v.fract() == 0.0 && v.abs() <= limit,
                 "{v:e}"
             );
+            if v.is_finite() {
+                assert_eq!(is_integer(v), v.fract() == 0.0, "{v:e}");
+            }
+        }
+        for v in [
+            4503599627370495.5,
+            4503599627370496.0,
+            -4503599627370495.5,
+            1e300,
+        ] {
+            assert_eq!(is_integer(v), v.fract() == 0.0, "{v:e}");
         }
     }
 }
