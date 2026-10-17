@@ -1,4 +1,5 @@
 mod fixtures;
+mod extended;
 mod imports;
 use lp_ip_craft::*;
 use serde_json::{Value, json};
@@ -100,9 +101,12 @@ fn main() {
     let workers: usize = args.get(4).unwrap().parse().unwrap();
     let repeats: usize = args.get(5).unwrap().parse().unwrap();
     assert!(repeats > 0);
-    let is_family = matches!(name, "packing" | "network" | "irregular" | "selection");
+    let is_family = matches!(name, "packing" | "network" | "irregular" | "selection" | "packing-wide" | "packing-permuted" | "long-row-mip" | "integer-knapsack" | "multi-knapsack" | "graph-mip");
     let began = Instant::now();
     let (model, expected) = match name {
+        "packing-wide" | "packing-permuted" => { let (m,e)=extended::packing(size,name=="packing-permuted"); (m,Some(e)) }
+        "long-row-mip" | "integer-knapsack" => { let (m,e)=extended::knapsack(size,name=="integer-knapsack"); (m,Some(e)) }
+        "multi-knapsack" | "graph-mip" => { let m=extended::binary(size,name=="graph-mip");let e=exact_binary(&m); (m,Some(e)) }
         "packing" => {
             let (m, e) = fixtures::packing(size);
             (m, Some(e))

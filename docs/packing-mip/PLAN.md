@@ -88,3 +88,18 @@ results remain in the evidence. No promise of monotonic speed on every input.
 
 Plan recorded before implementation. Step results will be appended here and
 in RESULTS.md; raw measurements live under data/.
+
+### Step 1 completed
+
+Immutable baseline binaries saved. Added degree-nine and permuted packing,
+long-row binary and general-integer knapsacks (independent capacity DP), and
+multi-knapsack/graph selection (exhaustive enumeration). All 16 smoke cases,
+both warmup and retained solves, passed original-model checks. Existing fixture
+constructors are unchanged. Baseline raw data: `data/step1-baseline.json`.
+
+### Step 2 implementation decision
+
+Test a gather U solve for dense RHS: sum each pivot row into a scalar and write
+its result once, rather than repeatedly updating indirect RHS locations through
+U columns. Keep the existing reach/scatter path for sparse RHS. Apply to static
+and FT factors; no changes to dense-tail arithmetic or eta transformations.
