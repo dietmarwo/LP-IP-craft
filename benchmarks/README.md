@@ -118,3 +118,10 @@ accepted-only timing averages. The twelfth optional harness argument `strong`
 enables root lookahead; default off because the measured overhead did not pay.
 All probe relaxations count as nodes, and all their pivots count against the
 whole-call limit. `diagnostics.strong_branch_probes/pivots` separate probe work.
+
+The thirteenth optional harness argument `no_fix` disables conservative reduced-
+cost fixing. `oracle_worker.py --no-fixing` supplies the same ablation for frozen
+oracle cases. After generating the final raw files and copying the test logs,
+`python benchmarks/audit_packing_mip.py` checks unchanged adjudications, every
+acceptance count, safe bounds, corpus checksums and basis replay. Run
+`python benchmarks/report_packing_mip.py` to regenerate the complete tables.

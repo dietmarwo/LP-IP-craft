@@ -1,3 +1,5 @@
+> Native 0.20: faster packing basis arithmetic and exact block pricing, incremental integer propagation, certified reduced-cost fixing, and broader public/seeded coverage. See [the staged plan](docs/packing-mip/PLAN.md) and [full results](docs/packing-mip/RESULTS.md), including remaining failures and regressions.
+
 > Native 0.19: captured-basis replay, compact indexed elimination, retained blocked dense LU tails, bounded minimum-degree ordering and work-based rebuilds. See [the five plans](docs/irregular-lu/STEPS.md) and [results and validation](docs/irregular-lu/RESULTS.md). The production solver remains pure Rust with no HiGHS or BLAS dependency.
 
 > Native 0.18: measured kernel profiling, Forrest–Tomlin basis updates with checked fallback, and indexed sparse pricing. See [the plan and implementation](docs/basis-updates/PLAN.md) and [benchmarks and validation](docs/basis-updates/RESULTS.md). Choose `basis_update="auto"` (default), `"eta"`, or `"forrest_tomlin"` in Python; Rust uses `BasisUpdate`. The production solver remains pure Rust without HiGHS.
@@ -6,7 +8,7 @@
 
 # LP-IP-craft — native Rust LP/MIP solver
 
-Version **0.19.0** extends the 0.16 architecture, which replaced both 0.15
+Version **0.20.0** extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine
@@ -145,3 +147,17 @@ target card](docs/target-card.md). Earlier native iterations are under
 | `docs/native`, `docs/sparse` | Earlier plans, results and raw measurements |
 
 Project code is MIT. See [dependencies](docs/dependencies.md) and `Cargo.lock`.
+
+### Packing and MIP work (0.20)
+
+The [staged plan](docs/packing-mip/PLAN.md) and
+[complete results](docs/packing-mip/RESULTS.md) cover basis-solve arithmetic,
+exact block pricing, incremental integer propagation and certified reduced-cost
+fixing, with public and seeded coverage cases. Production remains owned Rust.
+`NativeOptions.reduced_cost_fixing` defaults to true and can be disabled for
+comparison. It fixes only integer bound values whose opposite domain is proved
+unable to improve a certified incumbent by the conservative core dual-bound
+calculation. `strong_branching` defaults to false: optional bounded root probes
+can guide branching, and all probe nodes/pivots consume the global limits.
+Public finite-bound restrictions and known numerical failures are documented
+alongside the measured gains and regressions.

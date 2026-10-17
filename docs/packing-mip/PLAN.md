@@ -213,3 +213,31 @@ The fixing switch is enabled by default; optional root probing remains off.
 Original-point exhaustive optimality and limit tests pass. Final oracle and
 benchmark runs now include this change. The public-summary script was also
 fixed to retain unsupported-error records without assuming node counts exist.
+
+### Final coverage gate
+
+Because the first reserved seeds prompted step 5b, label them honestly as
+regression/coverage inputs rather than a pristine holdout. After freezing the
+implementation, also run multi-knapsack seeds 5018/6018/7018, graph4018,
+mixed4016, integer-knapsack49 and long-row112. Report all seven without further
+parameter selection. The implementation is frozen at commit 5b6db9e.
+
+### Steps 6–7 completed
+
+Final evidence: 1,319 retained benchmark solves, 1,295 accepted, with all 24
+known native/public failures visible. Seven fresh validation configurations were
+run after freezing parameters; no subsequent parameter changes were selected.
+Packing4096 263.67 -> 216.34 ms (-18%); instrumented forward U 174.28 ->
+120.63 ms. Nodecopy 105 -> 42 nodes and 1.246 -> .708 ms. Fresh integer-
+knapsack49 149 -> 41 nodes and 1.163 -> .655 ms. Fresh long-row112 is a clear
+regression (.871 -> 1.809 ms despite 65 -> 50 nodes), reflecting proof overhead.
+Large irregular4096 6.832 -> 6.947 s (+1.7%), versus HiGHS 9.405 s. Six of
+seven public LPs pass; 25fv47 numerical failure and three infinitely bounded
+MIPs remain unsupported/failing, unchanged from baseline.
+
+Validation passed: 111 Rust/all-feature checks, strict Clippy, 169 Python tests,
+three MPS-parser contract checks, 20,370 frozen oracle solves with unchanged
+adjudications and zero new discrepancies, 400 exact bound checks (zero unsafe),
+and 84 captured-basis replay records (worst normalized backward error 2.17e-12).
+`audit_packing_mip.py` verifies the complete evidence; RESULTS.md is generated
+from raw records. ZIP includes all source, plans, evidence and ordered history.
