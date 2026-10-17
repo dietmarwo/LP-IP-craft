@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 from ._native import solve_batch_native as _solve_batch_native
 
-__version__ = "0.25.0"
+__version__ = "0.26.0"
 
 __all__ = [
     "BACKENDS",
@@ -150,6 +150,15 @@ class NativeOptions:
     packing_neighborhood_nodes: int = 128
     packing_cuts: bool = False
     packing_cut_work: int = 2_000_000
+    packing_combine_repairs: bool = False
+    packing_rounds: int = 1
+    packing_neighborhood_growth: int = 0
+    packing_seed_strategy: str = "incumbent"
+    packing_residual_cliques: bool = False
+    packing_clique_work: int = 50_000
+    packing_price_diagnostics: bool = False
+    packing_repair_seconds: Optional[float] = None
+    packing_proof_seconds: Optional[float] = None
     partial_dual_bounds: bool = False
     scalable_branching: bool = False
     branch_probe_candidates: int = 4

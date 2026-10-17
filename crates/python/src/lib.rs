@@ -397,6 +397,19 @@ fn native_settings(
             }
             "packing_cuts" => settings.packing_cuts = field(&value, &key)?,
             "packing_cut_work" => settings.packing_cut_work = field(&value, &key)?,
+            "packing_combine_repairs" => settings.packing_combine_repairs = field(&value, &key)?,
+            "packing_rounds" => settings.packing_rounds = field(&value, &key)?,
+            "packing_neighborhood_growth" => {
+                settings.packing_neighborhood_growth = field(&value, &key)?
+            }
+            "packing_seed_strategy" => settings.packing_seed_strategy = field(&value, &key)?,
+            "packing_residual_cliques" => settings.packing_residual_cliques = field(&value, &key)?,
+            "packing_clique_work" => settings.packing_clique_work = field(&value, &key)?,
+            "packing_price_diagnostics" => {
+                settings.packing_price_diagnostics = field(&value, &key)?
+            }
+            "packing_repair_seconds" => settings.packing_repair_seconds = field(&value, &key)?,
+            "packing_proof_seconds" => settings.packing_proof_seconds = field(&value, &key)?,
             "partial_dual_bounds" => settings.partial_dual_bounds = field(&value, &key)?,
             "scalable_branching" => settings.scalable_branching = field(&value, &key)?,
             "branch_probe_candidates" => settings.branch_probe_candidates = field(&value, &key)?,

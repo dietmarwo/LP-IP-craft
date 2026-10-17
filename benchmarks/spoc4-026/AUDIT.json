@@ -1,0 +1,264 @@
+{
+  "solutions": 38,
+  "failures": 0,
+  "records": [
+    {
+      "file": "results/i-cliques.json",
+      "objective_milli": 32701772,
+      "selected": 4317,
+      "solution_sha256": "0b890f377e4a964059a532b36b2c45ce474ca8bf7d556eb92d4367c12f4f9b36"
+    },
+    {
+      "file": "results/i-grown.json",
+      "objective_milli": 32780045,
+      "selected": 4332,
+      "solution_sha256": "b7d322b46f568b7bb19723d02e210bf24f0afc58fd44ab0d859d944508a5427e"
+    },
+    {
+      "file": "results/i-legacy-cold.json",
+      "objective_milli": 32120012,
+      "selected": 4189,
+      "solution_sha256": "fc6bd8ee1981b989fde233c8ada09edb841f45b2101f555325ab6a4c20fea33c"
+    },
+    {
+      "file": "results/i-legacy.json",
+      "objective_milli": 32120012,
+      "selected": 4189,
+      "solution_sha256": "fc6bd8ee1981b989fde233c8ada09edb841f45b2101f555325ab6a4c20fea33c"
+    },
+    {
+      "file": "results/i-merge.json",
+      "objective_milli": 32349711,
+      "selected": 4244,
+      "solution_sha256": "da380b9198e1a1c68515faf07fd221a80fd81476fcd8b3ab676ad719b21026f6"
+    },
+    {
+      "file": "results/i-mixed.json",
+      "objective_milli": 32701772,
+      "selected": 4317,
+      "solution_sha256": "0b890f377e4a964059a532b36b2c45ce474ca8bf7d556eb92d4367c12f4f9b36"
+    },
+    {
+      "file": "results/i-proof.json",
+      "objective_milli": 32701772,
+      "selected": 4317,
+      "solution_sha256": "0b890f377e4a964059a532b36b2c45ce474ca8bf7d556eb92d4367c12f4f9b36"
+    },
+    {
+      "file": "results/i-rejected-1w.json",
+      "objective_milli": 32775974,
+      "selected": 4324,
+      "solution_sha256": "2ae580821465fe3727be76b783944ec62b950d8464aaf296b581edf3503482aa"
+    },
+    {
+      "file": "results/i-rejected-8round.json",
+      "objective_milli": 32847565,
+      "selected": 4343,
+      "solution_sha256": "4416c74e8caa255f4989fb0631fd10e8174fa22790028f4631cf464b0e8b8233"
+    },
+    {
+      "file": "results/i-rejected.json",
+      "objective_milli": 32775974,
+      "selected": 4324,
+      "solution_sha256": "2ae580821465fe3727be76b783944ec62b950d8464aaf296b581edf3503482aa"
+    },
+    {
+      "file": "results/i-repeat.json",
+      "objective_milli": 32705745,
+      "selected": 4331,
+      "solution_sha256": "3ec1c64bbe974c14f9fcfa278b0beaa2a26229d2052441d89ea3f9fdfacabac5"
+    },
+    {
+      "file": "results/ii-cliques.json",
+      "objective_milli": 70157806,
+      "selected": 8652,
+      "solution_sha256": "b08b0f6e467a8cfd225859ed25854d238ded212b1982af54b0d9cd14238bbecf"
+    },
+    {
+      "file": "results/ii-grown.json",
+      "objective_milli": 70322067,
+      "selected": 8704,
+      "solution_sha256": "50872e05aae2fd59757365a61a7d4aa6f3d78c439b832ff28cf5066d93e1c376"
+    },
+    {
+      "file": "results/ii-legacy.json",
+      "objective_milli": 68914100,
+      "selected": 8386,
+      "solution_sha256": "491e4dced14defd6ac7d4377e2ad6065776ef67e56efdbc4223ea4f06f606ed1"
+    },
+    {
+      "file": "results/ii-merge.json",
+      "objective_milli": 69326273,
+      "selected": 8487,
+      "solution_sha256": "4cc204437dd4c836c211cac018fffe84184994bed6bda783e76f71d6be8dd7ed"
+    },
+    {
+      "file": "results/ii-mixed-root1b.json",
+      "objective_milli": 70715443,
+      "selected": 8761,
+      "solution_sha256": "434c928d7358d673996b78dc8b73929813c0422210a391f71c9af2ab8a0de454"
+    },
+    {
+      "file": "results/ii-mixed.json",
+      "objective_milli": 70157806,
+      "selected": 8652,
+      "solution_sha256": "b08b0f6e467a8cfd225859ed25854d238ded212b1982af54b0d9cd14238bbecf"
+    },
+    {
+      "file": "results/ii-proof.json",
+      "objective_milli": 70157806,
+      "selected": 8652,
+      "solution_sha256": "b08b0f6e467a8cfd225859ed25854d238ded212b1982af54b0d9cd14238bbecf"
+    },
+    {
+      "file": "results/ii-rejected-1w.json",
+      "objective_milli": 70392990,
+      "selected": 8697,
+      "solution_sha256": "15f5fee67842cc4d45ebbfe7982b5f469200b2ffad307664cbba6f5635d91407"
+    },
+    {
+      "file": "results/ii-rejected-8round.json",
+      "objective_milli": 70945093,
+      "selected": 8787,
+      "solution_sha256": "cf9b6c2b65f91bbe56de881228ad983d35fde2807a02baeb32e585940f88faba"
+    },
+    {
+      "file": "results/ii-rejected.json",
+      "objective_milli": 70392990,
+      "selected": 8697,
+      "solution_sha256": "15f5fee67842cc4d45ebbfe7982b5f469200b2ffad307664cbba6f5635d91407"
+    },
+    {
+      "file": "results/ii-repeat.json",
+      "objective_milli": 70066954,
+      "selected": 8683,
+      "solution_sha256": "91c100088d8deb779af9aa47df431b6d3a6043e2b241b6cc41f5d92f9626213f"
+    },
+    {
+      "file": "results-adapter/i-cliques.json",
+      "objective_milli": 32743396,
+      "selected": 4338,
+      "solution_sha256": "6a4a32aa4f48322bfa19a0d15f43d05b8dad5dc4d2c2c50c2af0437232b7260a"
+    },
+    {
+      "file": "results-adapter/i-grown.json",
+      "objective_milli": 32745618,
+      "selected": 4331,
+      "solution_sha256": "001b461caacde0177df8ee09cbe98ac41c370f3b62a814143e76d3b93883f311"
+    },
+    {
+      "file": "results-adapter/i-legacy.json",
+      "objective_milli": 32119262,
+      "selected": 4189,
+      "solution_sha256": "4cb9652622475c96660a42d005a55b69bda58d9fa6b221215011224b85c0b84c"
+    },
+    {
+      "file": "results-adapter/i-merge.json",
+      "objective_milli": 32357628,
+      "selected": 4248,
+      "solution_sha256": "62d8a879e3f446bc4b9dccb76b3389270e5b5f69b518dd59cfeed3d1379d78e7"
+    },
+    {
+      "file": "results-adapter/i-mixed.json",
+      "objective_milli": 32743396,
+      "selected": 4338,
+      "solution_sha256": "6a4a32aa4f48322bfa19a0d15f43d05b8dad5dc4d2c2c50c2af0437232b7260a"
+    },
+    {
+      "file": "results-adapter/i-proof.json",
+      "objective_milli": 32743396,
+      "selected": 4338,
+      "solution_sha256": "6a4a32aa4f48322bfa19a0d15f43d05b8dad5dc4d2c2c50c2af0437232b7260a"
+    },
+    {
+      "file": "results-adapter/i-rejected.json",
+      "objective_milli": 32758786,
+      "selected": 4323,
+      "solution_sha256": "eed63bed69878458ff65c74dcae0025777136f2f322d262bf9b9152a4c176340"
+    },
+    {
+      "file": "results-adapter/i-repeat.json",
+      "objective_milli": 32658321,
+      "selected": 4324,
+      "solution_sha256": "7b0a137cc7c9a6fd4b1666bc8f4df4f94fbd9bcc85ed84619d40fa7a15d8badd"
+    },
+    {
+      "file": "results-adapter/ii-cliques.json",
+      "objective_milli": 70157806,
+      "selected": 8652,
+      "solution_sha256": "b08b0f6e467a8cfd225859ed25854d238ded212b1982af54b0d9cd14238bbecf"
+    },
+    {
+      "file": "results-adapter/ii-grown.json",
+      "objective_milli": 70322067,
+      "selected": 8704,
+      "solution_sha256": "50872e05aae2fd59757365a61a7d4aa6f3d78c439b832ff28cf5066d93e1c376"
+    },
+    {
+      "file": "results-adapter/ii-legacy.json",
+      "objective_milli": 68914100,
+      "selected": 8386,
+      "solution_sha256": "491e4dced14defd6ac7d4377e2ad6065776ef67e56efdbc4223ea4f06f606ed1"
+    },
+    {
+      "file": "results-adapter/ii-merge.json",
+      "objective_milli": 69326273,
+      "selected": 8487,
+      "solution_sha256": "4cc204437dd4c836c211cac018fffe84184994bed6bda783e76f71d6be8dd7ed"
+    },
+    {
+      "file": "results-adapter/ii-mixed.json",
+      "objective_milli": 70157806,
+      "selected": 8652,
+      "solution_sha256": "b08b0f6e467a8cfd225859ed25854d238ded212b1982af54b0d9cd14238bbecf"
+    },
+    {
+      "file": "results-adapter/ii-proof.json",
+      "objective_milli": 70157806,
+      "selected": 8652,
+      "solution_sha256": "b08b0f6e467a8cfd225859ed25854d238ded212b1982af54b0d9cd14238bbecf"
+    },
+    {
+      "file": "results-adapter/ii-rejected.json",
+      "objective_milli": 70392990,
+      "selected": 8697,
+      "solution_sha256": "15f5fee67842cc4d45ebbfe7982b5f469200b2ffad307664cbba6f5635d91407"
+    },
+    {
+      "file": "results-adapter/ii-repeat.json",
+      "objective_milli": 70066954,
+      "selected": 8683,
+      "solution_sha256": "91c100088d8deb779af9aa47df431b6d3a6043e2b241b6cc41f5d92f9626213f"
+    }
+  ],
+  "references": [
+    {
+      "file": "ii-highs-ipm-120s.json",
+      "status": "Optimal",
+      "checked_bound": 75359.999
+    },
+    {
+      "file": "ii-highs-ipm.json",
+      "status": "Time limit reached",
+      "checked_bound": null
+    }
+  ],
+  "parallel": [
+    {
+      "instance": "i",
+      "workers": [
+        1,
+        4
+      ],
+      "same_vector_and_work": true
+    },
+    {
+      "instance": "ii",
+      "workers": [
+        1,
+        4
+      ],
+      "same_vector_and_work": true
+    }
+  ]
+}

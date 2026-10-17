@@ -169,6 +169,15 @@ pub struct NativeOptions {
     pub packing_neighborhood_nodes: u64,
     pub packing_cuts: bool,
     pub packing_cut_work: u64,
+    pub packing_combine_repairs: bool,
+    pub packing_rounds: usize,
+    pub packing_neighborhood_growth: usize,
+    pub packing_seed_strategy: String,
+    pub packing_residual_cliques: bool,
+    pub packing_clique_work: u64,
+    pub packing_price_diagnostics: bool,
+    pub packing_repair_seconds: Option<f64>,
+    pub packing_proof_seconds: Option<f64>,
     pub partial_dual_bounds: bool,
     pub scalable_branching: bool,
     pub branch_probe_candidates: usize,
@@ -232,6 +241,15 @@ impl Default for NativeOptions {
             packing_neighborhood_nodes: 128,
             packing_cuts: false,
             packing_cut_work: 2_000_000,
+            packing_combine_repairs: false,
+            packing_rounds: 1,
+            packing_neighborhood_growth: 0,
+            packing_seed_strategy: "incumbent".into(),
+            packing_residual_cliques: false,
+            packing_clique_work: 50_000,
+            packing_price_diagnostics: false,
+            packing_repair_seconds: None,
+            packing_proof_seconds: None,
             partial_dual_bounds: false,
             scalable_branching: false,
             branch_probe_candidates: 4,
@@ -245,6 +263,23 @@ impl Default for NativeOptions {
 impl NativeOptions {
     /// Validate settings before cancellation or numerical work.
     pub fn validate(&self) -> Result<()> {
+        if !(1..=32).contains(&self.packing_rounds)
+            || self
+                .packing_neighborhoods
+                .saturating_mul(self.packing_rounds)
+                > 4096
+            || self.packing_neighborhood_growth > 1024
+            || self.packing_clique_work > 1_000_000
+            || !["incumbent", "rejected", "mixed"].contains(&self.packing_seed_strategy.as_str())
+            || [self.packing_repair_seconds, self.packing_proof_seconds]
+                .into_iter()
+                .flatten()
+                .any(|t| !t.is_finite() || t < 0.)
+        {
+            return Err(Error::InvalidInput(
+                "invalid packing repair/phase controls".into(),
+            ));
+        }
         if self.packing_root_iterations > 100_000
             || self.packing_root_work > 10_000_000_000
             || self.packing_neighborhoods > 4096
@@ -1927,6 +1962,33 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ),
         ("packing_cuts", s.packing_cuts.to_string()),
         ("packing_cut_work", s.packing_cut_work.to_string()),
+        (
+            "packing_combine_repairs",
+            s.packing_combine_repairs.to_string(),
+        ),
+        ("packing_rounds", s.packing_rounds.to_string()),
+        (
+            "packing_neighborhood_growth",
+            s.packing_neighborhood_growth.to_string(),
+        ),
+        ("packing_seed_strategy", s.packing_seed_strategy.to_string()),
+        (
+            "packing_residual_cliques",
+            s.packing_residual_cliques.to_string(),
+        ),
+        ("packing_clique_work", s.packing_clique_work.to_string()),
+        (
+            "packing_price_diagnostics",
+            s.packing_price_diagnostics.to_string(),
+        ),
+        (
+            "packing_repair_seconds",
+            format!("{:?}", s.packing_repair_seconds),
+        ),
+        (
+            "packing_proof_seconds",
+            format!("{:?}", s.packing_proof_seconds),
+        ),
         ("partial_dual_bounds", s.partial_dual_bounds.to_string()),
         ("scalable_branching", s.scalable_branching.to_string()),
         (
