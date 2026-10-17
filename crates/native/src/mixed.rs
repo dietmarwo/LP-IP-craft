@@ -25,9 +25,24 @@ pub(crate) struct Domain {
     first: bool,
     pub stats: Stats,
     pub reasons: Vec<Reason>,
+    scratch: Scratch,
 }
+/// Buffers reused across rows and nodes; apply() runs at every node.
+#[derive(Default)]
+struct Scratch {
+    queue: VecDeque<usize>,
+    queued: Vec<bool>,
+    entries: Vec<(usize, f64)>,
+    terms: Vec<(f64, f64)>,
+    pmin: Vec<f64>,
+    pmax: Vec<f64>,
+    smin: Vec<f64>,
+    smax: Vec<f64>,
+}
+/// Terms between clock reads inside one row; the row loop also checks.
+const POLL: usize = 256;
 fn add(a: f64, b: f64, lower: bool) -> Option<f64> {
-    incumbent::dot(std::iter::once((1., b)), a).map(|v| if lower { v.0 } else { v.1 })
+    incumbent::add(a, b).map(|v| if lower { v.0 } else { v.1 })
 }
 impl Domain {
     pub fn new(model: &Model, enabled: bool) -> Self {
@@ -70,6 +85,10 @@ impl Domain {
             rows: rows.len() as u64,
             ..Default::default()
         };
+        let scratch = Scratch {
+            queued: vec![false; rows.len()],
+            ..Default::default()
+        };
         Self {
             rows,
             incident,
@@ -77,6 +96,7 @@ impl Domain {
             first: true,
             stats,
             reasons: Vec::new(),
+            scratch,
         }
     }
     pub fn apply(
@@ -90,8 +110,20 @@ impl Domain {
         if self.rows.is_empty() {
             return true;
         }
-        let mut queue = VecDeque::new();
-        let mut queued = vec![false; self.rows.len()];
+        let Scratch {
+            queue,
+            queued,
+            entries,
+            terms,
+            pmin,
+            pmax,
+            smin,
+            smax,
+        } = &mut self.scratch;
+        // An earlier call may have stopped at a limit with rows still queued.
+        for r in queue.drain(..) {
+            queued[r] = false;
+        }
         let enqueue = |r: usize, q: &mut VecDeque<usize>, flags: &mut [bool]| {
             if !flags[r] {
                 flags[r] = true;
@@ -100,17 +132,18 @@ impl Domain {
         };
         if self.first {
             for r in 0..self.rows.len() {
-                enqueue(r, &mut queue, &mut queued);
+                enqueue(r, queue, queued);
             }
             self.first = false;
         } else {
             for &j in self.last.iter().chain(changed.iter()) {
                 for &r in &self.incident[j] {
-                    enqueue(r, &mut queue, &mut queued);
+                    enqueue(r, queue, queued);
                 }
             }
         }
-        self.last = changed.clone();
+        self.last.clear();
+        self.last.extend_from_slice(changed);
         let a = model.matrix();
         let cap = model
             .nnz()
@@ -127,10 +160,12 @@ impl Domain {
             let i = self.rows[r];
             self.stats.visits += 1;
             let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
-            let entries: Vec<_> = range
-                .filter(|&k| a.values[k] != 0.)
-                .map(|k| (a.pattern.indices[k], a.values[k]))
-                .collect();
+            entries.clear();
+            entries.extend(
+                range
+                    .filter(|&k| a.values[k] != 0.)
+                    .map(|k| (a.pattern.indices[k], a.values[k])),
+            );
             work += entries.len();
             self.stats.terms += entries.len() as u64;
             if work >= cap {
@@ -138,21 +173,19 @@ impl Domain {
                 break;
             }
             let n = entries.len();
-            let mut pmin = vec![0.; n + 1];
-            let mut pmax = vec![0.; n + 1];
-            let mut smin = vec![0.; n + 1];
-            let mut smax = vec![0.; n + 1];
-            let mut terms = Vec::new();
+            for v in [&mut *pmin, &mut *pmax, &mut *smin, &mut *smax] {
+                v.clear();
+                v.resize(n + 1, 0.);
+            }
+            terms.clear();
             let mut valid = true;
-            for &(j, c) in &entries {
+            for &(j, c) in entries.iter() {
                 let (l, u) = if c > 0. {
                     (bounds.lower[j], bounds.upper[j])
                 } else {
                     (bounds.upper[j], bounds.lower[j])
                 };
-                let pair = incumbent::dot(std::iter::once((c, l)), 0.)
-                    .zip(incumbent::dot(std::iter::once((c, u)), 0.));
-                if let Some((mn, mx)) = pair {
+                if let Some((mn, mx)) = incumbent::product(c, l).zip(incumbent::product(c, u)) {
                     terms.push((mn.0, mx.1));
                 } else {
                     valid = false;
@@ -195,7 +228,7 @@ impl Domain {
                 return false;
             }
             for (k, &(j, c)) in entries.iter().enumerate() {
-                if work >= cap || budget.stop().is_some() {
+                if work >= cap || (k % POLL == POLL - 1 && budget.stop().is_some()) {
                     self.stats.limits += u64::from(work >= cap);
                     return true;
                 }
@@ -264,7 +297,7 @@ impl Domain {
                         && r.new.1 <= r.old.1));
                     self.stats.changes += 1;
                     for &rr in &self.incident[j] {
-                        enqueue(rr, &mut queue, &mut queued);
+                        enqueue(rr, queue, queued);
                     }
                 }
             }
@@ -334,5 +367,42 @@ mod tests {
                 assert_eq!(before.lower[0], b.lower[0]);
             }
         }
+    }
+    #[test]
+    fn rows_left_queued_by_an_infeasible_return_are_requeued_next_time() {
+        let settings = NativeOptions::default();
+        let cancel = CancellationToken::default();
+        let budget = Budget {
+            start: std::time::Instant::now(),
+            settings: &settings,
+            cancel: &cancel,
+            pivots: 0,
+        };
+        // Row 0: x + y <= 1. Row 1: x - y <= 10. x integer, y continuous.
+        let model = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![0.; 2],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0., 0.], vec![5., 1.]),
+            kinds: vec![VariableKind::Integer, VariableKind::Continuous],
+            matrix: CsrMatrix::from_dense(2, 2, &[1., 1., 1., -1.]).unwrap(),
+            rows: Bounds::new(vec![f64::NEG_INFINITY; 2], vec![1., 10.]),
+        })
+        .unwrap();
+        let mut d = Domain::new(&model, true);
+        let fixed = |v: f64| {
+            let mut b = model.variables().clone();
+            b.lower[0] = v;
+            b.upper[0] = v;
+            b
+        };
+        // Row 0 fails first, so row 1 is still queued when apply returns.
+        assert!(!d.apply(&model, &mut fixed(3.), &mut vec![0], &budget));
+        assert_eq!(d.stats.visits, 1);
+        let mut b = fixed(0.);
+        assert!(d.apply(&model, &mut b, &mut vec![0], &budget));
+        // Both rows touch x, so both are visited again; neither tightens y.
+        assert_eq!(d.stats.visits, 3);
+        assert_eq!((b.lower[1], b.upper[1]), (0., 1.));
     }
 }
