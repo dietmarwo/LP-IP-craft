@@ -33,3 +33,7 @@ Outcome: workspace tests pass. Network-2048 104.42 -> 91.43 ms (1.14x); packing 
 
 ## 7. Skip disjoint eta transformations for unit BTRAN — plan
 Store a conservative 64-bit hashed support mask on each eta update. Unit pivot-row BTRAN starts with a known support; skip an eta only when its entire support (including pivot position) is disjoint. Mask collisions merely cause extra work; no nonzeros are discarded. Accumulate support conservatively through transformations. Test unit solves with permutations and updates, dense solves, full workspace and paired performance.
+Outcome: all tests pass. Mask-only timing was inconclusive; added reusable exact support seeds so unit BTRAN also avoids rediscovering its RHS by a full scan. Revised packing-1024 44.45 -> 38.43 ms, network 97.12 -> 95.81 ms; packing-4096 and irregular regressed about 3%. This is a workload-dependent improvement, not a universal speedup; both attempts are retained in the evidence.
+
+## 8. Remove exact cancellation entries during sparse factorization — plan
+After a Schur update, delete exactly-zero entries from both active row and column lists and update Markowitz counts immediately. This avoids pricing artificial fill and traversing canceled dependencies. Do not drop small nonzero values. Verify sparse-factor residuals, singularity and cap tests, and all workspace tests; compare LP families.

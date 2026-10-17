@@ -86,6 +86,7 @@ impl Buckets {
 
 #[derive(Clone, Copy)]
 struct Eta {
+    support: u64,
     position: usize,
     pivot: f64,
     start: usize,
@@ -149,6 +150,18 @@ impl Reach {
         rank: &[usize],
         channel: usize,
     ) -> bool {
+        self.find_seeded(v, graph, keys, rank, channel, None)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn find_seeded(
+        &mut self,
+        v: &[f64],
+        graph: &Lists,
+        keys: Option<&[usize]>,
+        rank: &[usize],
+        channel: usize,
+        seeds: Option<&[usize]>,
+    ) -> bool {
         if self.cooldown[channel] > 0 {
             self.cooldown[channel] -= 1;
             return false;
@@ -161,8 +174,9 @@ impl Reach {
         }
         self.nodes.clear();
         let limit = v.len() / if channel < 2 { 32 } else { 8 };
-        for (i, &x) in v.iter().enumerate() {
-            if x != 0. {
+        for at in 0..seeds.map_or(v.len(), |s| s.len()) {
+            let i = seeds.map_or(at, |s| s[at]);
+            if v[i] != 0. {
                 self.seen[i] = true;
                 self.nodes.push(i);
                 if self.nodes.len() > limit {
@@ -214,6 +228,8 @@ pub(crate) struct Lu {
     col_step: Vec<usize>,
     row_position: Vec<usize>,
     reach: Reach,
+    eta_support: Vec<usize>,
+    eta_marked: Vec<bool>,
 }
 
 impl Lu {
@@ -270,6 +286,8 @@ impl Lu {
             row_step: vec![0; m],
             col_step: vec![0; m],
             row_position: vec![0; m],
+            eta_support: Vec::new(),
+            eta_marked: vec![false; m],
             reach: Reach {
                 seen: vec![false; m],
                 nodes: Vec::new(),
@@ -572,7 +590,25 @@ impl Lu {
     /// Solves `Bᵀ y = v` in place: `v` is indexed by basis position on entry
     /// and by row on return.
     pub fn btran(&mut self, v: &mut [f64]) {
+        self.btran_masked(v, u64::MAX, false);
+    }
+
+    /// The caller supplies a unit vector at `position`.
+    pub fn btran_unit(&mut self, position: usize, v: &mut [f64]) {
+        for &i in &self.eta_support {
+            self.eta_marked[i] = false;
+        }
+        self.eta_support.clear();
+        self.eta_support.push(position);
+        self.eta_marked[position] = true;
+        self.btran_masked(v, 1u64 << (position & 63), true);
+    }
+
+    fn btran_masked(&mut self, v: &mut [f64], mut support: u64, unit: bool) {
         for eta in self.etas.iter().rev() {
+            if support & eta.support == 0 {
+                continue;
+            }
             let range = eta.start..eta.end;
             let mut s = v[eta.position];
             for (&i, &a) in self.eta_index[range.clone()]
@@ -582,12 +618,23 @@ impl Lu {
                 s -= a * v[i];
             }
             v[eta.position] = s / eta.pivot;
+            if unit && v[eta.position] != 0. {
+                support |= 1u64 << (eta.position & 63);
+                if !self.eta_marked[eta.position] {
+                    self.eta_marked[eta.position] = true;
+                    self.eta_support.push(eta.position);
+                }
+            }
         }
         let w = &mut self.work;
-        if self
-            .reach
-            .find(v, &self.u, Some(&self.col_step), &self.col_step, 2)
-        {
+        if self.reach.find_seeded(
+            v,
+            &self.u,
+            Some(&self.col_step),
+            &self.col_step,
+            2,
+            unit.then_some(&self.eta_support),
+        ) {
             w.fill(0.);
             for &p in &self.reach.nodes {
                 let k = self.col_step[p];
@@ -650,14 +697,17 @@ impl Lu {
         indices: impl Iterator<Item = usize>,
     ) {
         let start = self.eta_index.len();
+        let mut support = 1u64 << (position & 63);
         for i in indices {
             let v = alpha[i];
             if i != position && v != 0.0 {
+                support |= 1u64 << (i & 63);
                 self.eta_index.push(i);
                 self.eta_value.push(v);
             }
         }
         self.etas.push(Eta {
+            support,
             position,
             pivot: alpha[position],
             start,
@@ -820,7 +870,7 @@ mod tests {
                     let mut x = vec![0.; m];
                     x[r] = 1.;
                     if transpose {
-                        lu.btran(&mut x);
+                        lu.btran_unit(r, &mut x);
                     } else {
                         lu.ftran(&mut x);
                     }

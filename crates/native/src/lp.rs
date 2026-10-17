@@ -877,7 +877,7 @@ impl Lp {
         self.rho.fill(0.0);
         self.rho[r] = 1.0;
         let lu = self.lu.as_mut().expect("factorized basis");
-        lu.btran(&mut self.rho);
+        lu.btran_unit(r, &mut self.rho);
         if self.controls.steepest_edge {
             self.weight[r] = self.rho.iter().map(|v| v * v).sum::<f64>().max(MIN_WEIGHT);
         }
