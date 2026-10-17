@@ -68,6 +68,7 @@ pub(crate) struct FactorWorkspace {
     pub pivot_col: Vec<(usize, f64)>,
     pub row_slots: Vec<(u32, u32)>,
     pub input: Vec<(usize, f64)>,
+    pub order_cache: crate::ordering::OrderCache,
 }
 #[cfg(test)]
 mod tests {

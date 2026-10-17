@@ -83,3 +83,26 @@ Test: valid deterministic permutations, dense-row/work-budget behavior, changed
 patterns and cache reuse, residuals on all saved matrices, full solver acceptance,
 Rust tests and Python controls. Retain slower policies as explicit options and
 record rejected tuning trials. No weakening of pivot or final checks.
+
+Step 4 status: minimum-degree advice and configurable search compile and pass
+all Rust tests and frozen residual checks. The ordering has setup cost and is
+not uniformly beneficial: the late 1024-row replay becomes slower, while the
+late 4096-row replay is roughly flat. Full policy sweeps determine defaults;
+explicit controls retain the implementation for application-specific use.
+
+## Step 5 — plan
+
+Measure fixed rebuild intervals (32/64/128/256) and compare a work-based policy.
+Count actual eta arithmetic visited by FTRAN/BTRAN, and estimate rebuild work
+from sparse Schur products plus the dense-tail cubic term. For sufficiently
+large dense tails, rebuild when accumulated update work consumes a calibrated
+fraction of rebuild work; retain minimum update spacing, entry cap, numerical
+fallbacks and the configured hard maximum. Keep short intervals for sparse
+bases whose updates are already cheap. Expose an ablation switch and select
+public defaults using the full solver benchmarks.
+
+Test: deterministic trigger/cap tests, frequent-refactor and warm reoptimization
+oracles, forced FT and natural/min-degree controls, independent LP KKT checks,
+conservative-bound fixtures, Rust/Python/Clippy gates. Final comparisons use fresh
+uninstrumented 0.18/new/HiGHS processes, including the large irregular fixture.
+Package complete source, plans, raw evidence and reproducible benchmark tools.

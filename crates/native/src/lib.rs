@@ -11,6 +11,7 @@ mod ft;
 mod incumbent;
 mod lp;
 mod lu;
+mod ordering;
 mod presolve;
 pub mod profile;
 mod propagate;
@@ -45,6 +46,24 @@ impl BasisUpdate {
     }
 }
 
+/// Symbolic column-ordering advice for threshold Markowitz LU.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FactorOrdering {
+    #[default]
+    Auto,
+    Natural,
+    MinDegree,
+}
+impl FactorOrdering {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Natural => "natural",
+            Self::MinDegree => "min_degree",
+        }
+    }
+}
+
 /// Native controls.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NativeOptions {
@@ -64,6 +83,10 @@ pub struct NativeOptions {
     pub refactor_interval: usize,
     /// Basis-update strategy; auto adapts to observed update and factor fill.
     pub basis_update: BasisUpdate,
+    /// Markowitz candidates examined after a feasible pivot is found (1..=64).
+    pub factor_pivot_search: usize,
+    /// Optional bounded minimum-degree advice for sparse pivot selection.
+    pub factor_ordering: FactorOrdering,
     /// Dual steepest-edge pricing; false prices by largest infeasibility.
     pub steepest_edge: bool,
     /// Drop free rows and feasible empty rows before simplex.
@@ -99,6 +122,8 @@ impl Default for NativeOptions {
             max_factor_entries: 4_000_000,
             refactor_interval: 64,
             basis_update: BasisUpdate::Auto,
+            factor_pivot_search: 4,
+            factor_ordering: FactorOrdering::Auto,
             steepest_edge: true,
             presolve: true,
             redundant_rows: true,
@@ -150,6 +175,11 @@ impl NativeOptions {
         if self.decomposition_min_variables == 0 {
             return Err(Error::InvalidInput(
                 "decomposition_min_variables must be positive".into(),
+            ));
+        }
+        if !(1..=64).contains(&self.factor_pivot_search) {
+            return Err(Error::InvalidInput(
+                "factor_pivot_search must be between 1 and 64".into(),
             ));
         }
         if self.max_factor_entries == 0 || self.refactor_interval == 0 {
@@ -1106,6 +1136,8 @@ fn controls(model: &Model, options: &Options, settings: &NativeOptions) -> lp::C
         pivot_tolerance: settings.pivot_tolerance,
         refactor_interval: settings.refactor_interval,
         basis_update: settings.basis_update,
+        factor_pivot_search: settings.factor_pivot_search,
+        factor_ordering: settings.factor_ordering,
         max_factor_entries: settings.max_factor_entries,
         steepest_edge: settings.steepest_edge,
         feasibility: options.tolerances.feasibility,
@@ -1126,6 +1158,8 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ("max_factor_entries", s.max_factor_entries.to_string()),
         ("refactor_interval", s.refactor_interval.to_string()),
         ("basis_update", s.basis_update.as_str().to_string()),
+        ("factor_pivot_search", s.factor_pivot_search.to_string()),
+        ("factor_ordering", s.factor_ordering.as_str().to_string()),
         ("steepest_edge", s.steepest_edge.to_string()),
         ("component_threads", s.component_threads.to_string()),
         (

@@ -151,10 +151,29 @@ pub struct ReplayResult {
 }
 /// Rebuild the saved matrix and validate every RHS in both orientations.
 pub fn run(case: &BasisCase, cap: usize) -> Result<ReplayResult, String> {
+    run_with_options(case, cap, 4, false)
+}
+/// Replay with explicit pivot-search and ordering settings.
+pub fn run_with_options(
+    case: &BasisCase,
+    cap: usize,
+    search: usize,
+    ordered: bool,
+) -> Result<ReplayResult, String> {
+    if !(1..=64).contains(&search) {
+        return Err("search must be between 1 and 64".into());
+    }
     let m = case.columns.len();
     let start = Instant::now();
-    let mut lu = Lu::factor(m, |p, out| out.extend_from_slice(&case.columns[p]), cap)
-        .map_err(|e| format!("{e:?}"))?;
+    let mut workspace = crate::active::FactorWorkspace::default();
+    let mut lu = Lu::factor_with_workspace(
+        m,
+        |p, out| out.extend_from_slice(&case.columns[p]),
+        cap,
+        &mut workspace,
+        crate::lu::FactorOptions { search, ordered },
+    )
+    .map_err(|e| format!("{e:?}"))?;
     let factor_seconds = start.elapsed().as_secs_f64();
     let entries = lu.entries();
     let (dense_dimension, pivot_fingerprint) = lu.replay_details();

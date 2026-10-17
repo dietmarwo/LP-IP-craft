@@ -398,6 +398,19 @@ fn native_settings(
             "presolve" => settings.presolve = field(&value, &key)?,
             "max_factor_entries" => settings.max_factor_entries = field(&value, &key)?,
             "refactor_interval" => settings.refactor_interval = field(&value, &key)?,
+            "factor_pivot_search" => settings.factor_pivot_search = field(&value, &key)?,
+            "factor_ordering" => {
+                settings.factor_ordering = match field::<String>(&value, &key)?.as_str() {
+                    "auto" => lp_ip_craft_native::FactorOrdering::Auto,
+                    "natural" => lp_ip_craft_native::FactorOrdering::Natural,
+                    "min_degree" => lp_ip_craft_native::FactorOrdering::MinDegree,
+                    _ => {
+                        return Err(PyValueError::new_err(
+                            "factor_ordering must be auto, natural, or min_degree",
+                        ));
+                    }
+                }
+            }
             "basis_update" => {
                 settings.basis_update = match field::<String>(&value, &key)?.as_str() {
                     "auto" => lp_ip_craft_native::BasisUpdate::Auto,

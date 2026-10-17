@@ -148,6 +148,13 @@ fn main() {
                 _ => panic!("basis method must be auto, eta, or ft"),
             },
             refactor_interval: args.get(7).map_or(64, |s| s.parse().unwrap()),
+            factor_pivot_search: args.get(8).map_or(4, |s| s.parse().unwrap()),
+            factor_ordering: match args.get(9).map(String::as_str).unwrap_or("auto") {
+                "auto" => lp_ip_craft_native::FactorOrdering::Auto,
+                "natural" => lp_ip_craft_native::FactorOrdering::Natural,
+                "min_degree" => lp_ip_craft_native::FactorOrdering::MinDegree,
+                _ => panic!("ordering must be auto/natural/min_degree"),
+            },
             ..Default::default()
         });
         #[cfg(feature = "backend_highs")]

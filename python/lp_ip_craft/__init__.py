@@ -104,6 +104,8 @@ class NativeOptions:
     max_factor_entries: int = 4_000_000
     refactor_interval: int = 64
     basis_update: Literal["auto", "eta", "forrest_tomlin"] = "auto"
+    factor_pivot_search: int = 4
+    factor_ordering: Literal["auto", "natural", "min_degree"] = "auto"
     steepest_edge: bool = True
     presolve: bool = True
     redundant_rows: bool = True

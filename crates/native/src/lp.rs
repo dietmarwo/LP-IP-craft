@@ -47,6 +47,8 @@ pub(crate) struct Controls {
     pub pivot_tolerance: f64,
     pub refactor_interval: usize,
     pub basis_update: crate::BasisUpdate,
+    pub factor_pivot_search: usize,
+    pub factor_ordering: crate::FactorOrdering,
     pub max_factor_entries: usize,
     pub steepest_edge: bool,
     /// Primal tolerance target in original units.
@@ -727,11 +729,26 @@ impl Lp {
             };
             #[cfg(feature = "basis-replay")]
             crate::replay::capture(self.m, column, &[&self.rho, &self.pi]);
+            let ordered = match self.controls.factor_ordering {
+                crate::FactorOrdering::Natural => false,
+                crate::FactorOrdering::MinDegree => true,
+                crate::FactorOrdering::Auto => {
+                    self.m >= 256
+                        && self
+                            .lu
+                            .as_ref()
+                            .is_some_and(|old| old.dense_dimension() > self.m / 8)
+                }
+            };
             match Lu::factor_with_workspace(
                 self.m,
                 column,
                 self.controls.max_factor_entries,
                 &mut self.factor_workspace,
+                crate::lu::FactorOptions {
+                    search: self.controls.factor_pivot_search,
+                    ordered,
+                },
             ) {
                 Ok(mut lu) => {
                     #[cfg(feature = "kernel-profile")]
@@ -1519,6 +1536,8 @@ mod tests {
             pivot_tolerance: 1e-9,
             refactor_interval: 16,
             basis_update: crate::BasisUpdate::ForrestTomlin,
+            factor_pivot_search: 4,
+            factor_ordering: crate::FactorOrdering::Auto,
             max_factor_entries: usize::MAX,
             steepest_edge: true,
             feasibility: 1e-7,

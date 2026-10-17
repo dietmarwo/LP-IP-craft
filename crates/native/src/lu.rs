@@ -21,7 +21,19 @@ const THRESHOLD: f64 = 0.1;
 /// Absolute pivot tolerance on the (scaled) basis entries.
 const ABS_PIVOT: f64 = 1e-11;
 /// Candidate columns/rows examined after the first acceptable pivot.
-const SEARCH: usize = 4;
+#[derive(Clone, Copy)]
+pub(crate) struct FactorOptions {
+    pub search: usize,
+    pub ordered: bool,
+}
+impl Default for FactorOptions {
+    fn default() -> Self {
+        Self {
+            search: 4,
+            ordered: false,
+        }
+    }
+}
 /// Active-submatrix density that switches to dense elimination.
 const DENSE_DENSITY: f64 = 0.3;
 
@@ -236,7 +248,6 @@ pub(crate) struct Lu {
     sparse_btran: bool,
     update_nnz: usize,
     dense: Option<crate::dense::DenseTail>,
-    #[cfg(feature = "basis-replay")]
     dense_dimension: usize,
 }
 
@@ -244,19 +255,26 @@ impl Lu {
     /// Factorizes the basis whose position `p` has the sparse column written
     /// by `column(p, out)` (entries `(row, value)`, rows `< m`, distinct).
     /// `cap` bounds the stored entries (diagonal, L and U).
-    #[cfg(any(test, feature = "basis-replay"))]
+    #[cfg(test)]
     pub fn factor(
         m: usize,
         column: impl FnMut(usize, &mut Vec<(usize, f64)>),
         cap: usize,
     ) -> Result<Self, FactorError> {
-        Self::factor_with_workspace(m, column, cap, &mut FactorWorkspace::default())
+        Self::factor_with_workspace(
+            m,
+            column,
+            cap,
+            &mut FactorWorkspace::default(),
+            FactorOptions::default(),
+        )
     }
     pub fn factor_with_workspace(
         m: usize,
         mut column: impl FnMut(usize, &mut Vec<(usize, f64)>),
         cap: usize,
         workspace: &mut FactorWorkspace,
+        options: FactorOptions,
     ) -> Result<Self, FactorError> {
         let _profile = crate::profile::enter("factorization");
         let _assembly = crate::profile::enter("factor_assembly");
@@ -267,6 +285,7 @@ impl Lu {
             pivot_col,
             row_slots,
             input,
+            order_cache,
         } = workspace;
         if m > u32::MAX as usize {
             return Err(FactorError::TooLarge);
@@ -284,9 +303,18 @@ impl Lu {
         let mut colb = Buckets::new(m, m);
         let mut rowb = Buckets::new(m, m);
         let mut active = 0usize;
-        for (p, col) in a.cols.iter().enumerate() {
-            colb.insert(p, col.len());
-            active += col.len();
+        if options.ordered {
+            let _order = crate::profile::enter("factor_ordering");
+            order_cache.prepare(a);
+            for &p in order_cache.order.iter().rev() {
+                colb.insert(p, a.cols[p].len());
+                active += a.cols[p].len();
+            }
+        } else {
+            for (p, col) in a.cols.iter().enumerate() {
+                colb.insert(p, col.len());
+                active += col.len();
+            }
         }
         for (i, row) in a.rows.iter().enumerate() {
             rowb.insert(i, row.len());
@@ -323,7 +351,6 @@ impl Lu {
             sparse_btran: false,
             update_nnz: 0,
             dense: None,
-            #[cfg(feature = "basis-replay")]
             dense_dimension: 0,
             reach: Reach {
                 seen: vec![false; m],
@@ -340,7 +367,14 @@ impl Lu {
                 break;
             }
             let _search = crate::profile::enter("factor_pivot_search");
-            let candidate = find_pivot(a, &colb, &rowb, m);
+            let candidate = find_pivot(
+                a,
+                &colb,
+                &rowb,
+                m,
+                options.search,
+                options.ordered.then_some(order_cache.rank.as_slice()),
+            );
             drop(_search);
             let Some((r, p)) = candidate else {
                 singular = true;
@@ -488,10 +522,7 @@ impl Lu {
         {
             let _profile = crate::profile::enter("factor_dense");
             if let Some(tail) = crate::dense::DenseTail::factor(cols, rows, positions, self.m) {
-                #[cfg(feature = "basis-replay")]
-                {
-                    self.dense_dimension = n;
-                }
+                self.dense_dimension = n;
                 for k in 0..n {
                     let (r, p) = (tail.rows[k], tail.cols[k]);
                     row_done[r] = true;
@@ -521,10 +552,7 @@ impl Lu {
         let rows_left: Vec<usize> = (0..m).filter(|&i| !row_done[i]).collect();
         let cols_left: Vec<usize> = (0..m).filter(|&p| !col_done[p]).collect();
         let k = rows_left.len();
-        #[cfg(feature = "basis-replay")]
-        {
-            self.dense_dimension = k;
-        }
+        self.dense_dimension = k;
         if self
             .entries()
             .checked_add(k.saturating_mul(k) / 2)
@@ -591,6 +619,9 @@ impl Lu {
         Ok(())
     }
 
+    pub fn dense_dimension(&self) -> usize {
+        self.dense_dimension
+    }
     #[cfg(feature = "basis-replay")]
     pub fn replay_details(&self) -> (usize, u64) {
         let mut h = 0xcbf29ce484222325u64;
@@ -1051,34 +1082,46 @@ impl Lu {
 /// Markowitz search over columns and rows by increasing active count. Stops
 /// at a zero-cost pivot, after `SEARCH` candidates once one is acceptable, or
 /// when no remaining count class can beat the best cost found.
-fn find_pivot(a: &mut Active, colb: &Buckets, rowb: &Buckets, m: usize) -> Option<(usize, usize)> {
+fn find_pivot(
+    a: &mut Active,
+    colb: &Buckets,
+    rowb: &Buckets,
+    m: usize,
+    search: usize,
+    rank: Option<&[usize]>,
+) -> Option<(usize, usize)> {
     struct Best {
         at: Option<(usize, usize)>,
         cost: usize,
         value: f64,
+        rank: usize,
     }
     impl Best {
-        fn consider(&mut self, i: usize, p: usize, v: f64, max: f64, cost: usize) {
+        fn consider(&mut self, i: usize, p: usize, v: f64, max: f64, cost: usize, rank: usize) {
             let a = v.abs();
             if a > ABS_PIVOT
                 && a >= THRESHOLD * max
-                && (cost < self.cost || (cost == self.cost && a > self.value))
+                && (cost < self.cost
+                    || (cost == self.cost
+                        && (a > self.value || (a == self.value && rank < self.rank))))
             {
                 *self = Self {
                     at: Some((i, p)),
                     cost,
                     value: a,
+                    rank,
                 };
             }
         }
-        fn done(&self, searched: usize) -> bool {
-            self.at.is_some() && (self.cost == 0 || searched >= SEARCH)
+        fn done(&self, searched: usize, search: usize) -> bool {
+            self.at.is_some() && (self.cost == 0 || searched >= search)
         }
     }
     let mut best = Best {
         at: None,
         cost: usize::MAX,
         value: 0.0,
+        rank: usize::MAX,
     };
     let mut searched = 0;
     for count in 1..=m {
@@ -1092,10 +1135,11 @@ fn find_pivot(a: &mut Active, colb: &Buckets, rowb: &Buckets, m: usize) -> Optio
                     e.value,
                     max,
                     (rowb.count[e.row as usize] - 1) * (count - 1),
+                    rank.map_or(usize::MAX, |r| r[p]),
                 );
             }
             searched += 1;
-            if best.done(searched) {
+            if best.done(searched, search) {
                 return best.at;
             }
             p = colb.next[p];
@@ -1112,10 +1156,11 @@ fn find_pivot(a: &mut Active, colb: &Buckets, rowb: &Buckets, m: usize) -> Optio
                     a.cols[p][k].value,
                     max,
                     (count - 1) * (colb.count[p] - 1),
+                    rank.map_or(usize::MAX, |r| r[p]),
                 );
             }
             searched += 1;
-            if best.done(searched) {
+            if best.done(searched, search) {
                 return best.at;
             }
             i = rowb.next[i];
@@ -1245,6 +1290,7 @@ mod tests {
                 |p, out| out.extend_from_slice(&columns[p]),
                 usize::MAX,
                 &mut workspace,
+                FactorOptions::default(),
             )
             .unwrap();
             let other: Vec<_> = (0..7).map(|i| vec![(i, 1.)]).collect();
@@ -1253,6 +1299,7 @@ mod tests {
                 |p, out| out.extend_from_slice(&other[p]),
                 usize::MAX,
                 &mut workspace,
+                FactorOptions::default(),
             )
             .unwrap();
             assert!(residual(&columns, &mut old) < 1e-9);
