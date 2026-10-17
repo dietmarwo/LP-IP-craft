@@ -103,3 +103,24 @@ Test a gather U solve for dense RHS: sum each pivot row into a scalar and write
 its result once, rather than repeatedly updating indirect RHS locations through
 U columns. Keep the existing reach/scatter path for sparse RHS. Apply to static
 and FT factors; no changes to dense-tail arithmetic or eta transformations.
+
+### Step 2 completed
+
+Gather traversal rejected: packing slowed 9–24%. Pivot-order workspace was
+mixed and not retained. Zero-aware division plus cached reciprocal diagonals
+retained: five-round packing2048 63.41 -> 55.89 ms, packing4096 253.10 ->
+223.52 ms; packing1024 unchanged (27.05 -> 27.28 ms). Network512 improved
+5.97 -> 5.24 ms. Irregular1024 regressed 4.2% in this run; final controls will
+revisit it. All 16 fixture families/configurations accepted all five retained
+solves. Added scaled forward/transpose sparse/dense RHS regression coverage;
+existing update/fallback tests pass. All rejected experiments retained as raw
+JSON. Production changes: lu.rs and ft.rs only.
+
+### Step 3 implementation decision
+
+Cache the exact best steepest-edge row in blocks of 64 basis positions. Mark
+blocks touched by primal or edge-weight changes; invalidate all on primal
+recomputation, basis restoration/reset and bound changes. Bound flips use full
+invalidation. Scan block winners with the original strict-greater comparison
+and ascending order, preserving exact ties. Verify cached and uncached choices
+directly under sparse changes, resets and bound changes before benchmarking.

@@ -72,6 +72,7 @@ pub(crate) struct Ft {
     order: Vec<usize>,
     rank: Vec<usize>,
     diag: Vec<f64>,
+    diag_inv: Vec<f64>,
     rows: Vec<Vec<(usize, f64)>>,
     cols: Vec<Vec<(usize, f64)>>,
     row_etas: Vec<(usize, Vec<(usize, f64)>)>,
@@ -94,6 +95,7 @@ impl Ft {
             order: pcol.to_vec(),
             rank: vec![0; m],
             diag: vec![0.; m],
+            diag_inv: vec![0.; m],
             rows: vec![Vec::new(); m],
             cols: vec![Vec::new(); m],
             row_etas: Vec::new(),
@@ -116,6 +118,7 @@ impl Ft {
             f.row_of[p] = prow[k];
             f.rank[p] = k;
             f.diag[p] = diag[k];
+            f.diag_inv[p] = 1. / diag[k];
             let (index, value) = u.get(k);
             for (&q, &v) in index.iter().zip(value) {
                 if v != 0. {
@@ -164,7 +167,12 @@ impl Ft {
             &self.order
         };
         for &p in order.iter().rev() {
-            let t = v[self.row_of[p]] / self.diag[p];
+            let rhs = v[self.row_of[p]];
+            let t = if rhs == 0. {
+                0.
+            } else {
+                rhs * self.diag_inv[p]
+            };
             out[p] = t;
             if t != 0. {
                 if capture {
@@ -193,7 +201,7 @@ impl Ft {
             &self.order
         };
         for &p in order {
-            let t = v[p] / self.diag[p];
+            let t = v[p] * self.diag_inv[p];
             out[self.row_of[p]] = t;
             if t != 0. {
                 if unit.is_some() {
@@ -239,7 +247,7 @@ impl Ft {
             self.scratch.fill(0.);
             self.scratch[p] = 1.;
             for &i in &self.order[self.rank[p]..] {
-                let t = self.scratch[i] / self.diag[i];
+                let t = self.scratch[i] * self.diag_inv[i];
                 if t != 0. {
                     self.ep.push((i, t));
                     for &(j, u) in &self.rows[i] {
@@ -300,6 +308,7 @@ impl Ft {
             .collect();
         self.row_etas.push((p, eta));
         self.diag[p] = pivot;
+        self.diag_inv[p] = 1. / pivot;
         let k = self.rank[p];
         self.order[k..].rotate_left(1);
         for k in k..self.order.len() {

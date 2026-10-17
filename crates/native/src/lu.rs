@@ -225,6 +225,7 @@ pub(crate) struct Lu {
     prow: Vec<usize>,
     pcol: Vec<usize>,
     diag: Vec<f64>,
+    diag_inv: Vec<f64>,
     /// Multipliers per pivot step, by row.
     l: Lists,
     /// The same multipliers per eliminated row, by pivot row.
@@ -335,6 +336,7 @@ impl Lu {
             prow: Vec::with_capacity(m),
             pcol: Vec::with_capacity(m),
             diag: Vec::with_capacity(m),
+            diag_inv: Vec::new(),
             l: empty(),
             l_rows: Lists::default(),
             u: empty(),
@@ -469,6 +471,7 @@ impl Lu {
             });
         }
         let _pack = crate::profile::enter("factor_pack");
+        lu.diag_inv = lu.diag.iter().map(|d| 1. / d).collect();
         // L by eliminated row: entries name the pivot row of their step.
         lu.l_rows = lu.l.transpose(m, &lu.prow);
         // U by position: entries name the pivot row of their step.
@@ -765,7 +768,12 @@ impl Lu {
         }
         for k in (0..prefix).rev() {
             let p = self.pcol[k];
-            let t = v[self.prow[k]] / self.diag[k];
+            let rhs = v[self.prow[k]];
+            let t = if rhs == 0. {
+                0.
+            } else {
+                rhs * self.diag_inv[k]
+            };
             self.work[p] = t;
             if t != 0. {
                 let (ix, val) = self.u_cols.get(p);
@@ -782,7 +790,7 @@ impl Lu {
         let prefix = self.m - tail.len();
         for k in 0..prefix {
             let p = self.pcol[k];
-            let t = v[p] / self.diag[k];
+            let t = v[p] * self.diag_inv[k];
             self.work[self.prow[k]] = t;
             if t != 0. {
                 let (ix, val) = self.u.get(k);
@@ -880,7 +888,12 @@ impl Lu {
                     for &i in self.reach.nodes.iter().rev() {
                         let k = self.row_step[i];
                         let p = self.pcol[k];
-                        let t = v[i] / self.diag[k];
+                        let rhs = v[i];
+                        let t = if rhs == 0. {
+                            0.
+                        } else {
+                            rhs * self.diag_inv[k]
+                        };
                         w[p] = t;
                         if t != 0. {
                             let (index, value) = self.u_cols.get(p);
@@ -892,7 +905,12 @@ impl Lu {
                 } else {
                     for k in (0..self.m).rev() {
                         let p = self.pcol[k];
-                        let t = v[self.prow[k]] / self.diag[k];
+                        let rhs = v[self.prow[k]];
+                        let t = if rhs == 0. {
+                            0.
+                        } else {
+                            rhs * self.diag_inv[k]
+                        };
                         w[p] = t;
                         if t != 0.0 {
                             let (index, value) = self.u_cols.get(p);
@@ -1008,7 +1026,7 @@ impl Lu {
                 w.fill(0.);
                 for &p in &self.reach.nodes {
                     let k = self.col_step[p];
-                    let t = v[p] / self.diag[k];
+                    let t = v[p] * self.diag_inv[k];
                     w[self.prow[k]] = t;
                     if t != 0. {
                         let (index, value) = self.u.get(k);
@@ -1019,7 +1037,7 @@ impl Lu {
                 }
             } else {
                 for k in 0..self.m {
-                    let t = v[self.pcol[k]] / self.diag[k];
+                    let t = v[self.pcol[k]] * self.diag_inv[k];
                     w[self.prow[k]] = t;
                     if t != 0.0 {
                         let (index, value) = self.u.get(k);
@@ -1597,6 +1615,58 @@ mod tests {
         lu.btran(&mut rhs);
         assert!((rhs[0] - 1.).abs() < 1e-3);
         assert_eq!(rhs[1], 1.);
+    }
+
+    #[test]
+    fn reciprocal_diagonals_preserve_scaled_forward_and_transpose_solves() {
+        let m = 192;
+        let mut columns = random_columns(m, 2371, 2);
+        for (p, col) in columns.iter_mut().enumerate() {
+            for (r, value) in col {
+                *value *= 2f64.powi((*r % 13) as i32 - 6) * 2f64.powi((p % 11) as i32 - 5);
+            }
+        }
+        for ft in [false, true] {
+            let mut lu = factor(&columns, usize::MAX).unwrap();
+            if ft {
+                lu.enable_ft();
+            }
+            for sparse in [true, false, true, false] {
+                let rhs: Vec<f64> = (0..m)
+                    .map(|i| {
+                        if sparse && i % 31 != 0 {
+                            0.
+                        } else {
+                            (i % 7) as f64 - 3.
+                        }
+                    })
+                    .collect();
+                for transpose in [false, true] {
+                    let mut x = rhs.clone();
+                    if transpose {
+                        lu.btran(&mut x);
+                    } else {
+                        lu.ftran(&mut x);
+                    }
+                    let mut back = vec![0.; m];
+                    let mut scale = rhs.iter().map(|v| v.abs()).collect::<Vec<_>>();
+                    for (p, col) in columns.iter().enumerate() {
+                        for &(r, a) in col {
+                            let (i, t) = if transpose {
+                                (p, a * x[r])
+                            } else {
+                                (r, a * x[p])
+                            };
+                            back[i] += t;
+                            scale[i] += t.abs();
+                        }
+                    }
+                    for i in 0..m {
+                        assert!((back[i] - rhs[i]).abs() <= 1e-10 * scale[i].max(1.));
+                    }
+                }
+            }
+        }
     }
 
     #[test]
