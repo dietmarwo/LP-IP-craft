@@ -358,8 +358,22 @@ impl Lu {
                         active += 1;
                     }
                 }
-                for &(i, _) in &cols[q] {
+                let mut at = 0;
+                while at < cols[q].len() {
+                    let (i, v) = cols[q][at];
                     slot[i] = NIL;
+                    if v == 0. {
+                        cols[q].swap_remove(at);
+                        let k = rows[i]
+                            .iter()
+                            .position(|&p| p == q)
+                            .expect("row and column lists agree");
+                        rows[i].swap_remove(k);
+                        rowb.change(i, rows[i].len());
+                        active -= 1;
+                    } else {
+                        at += 1;
+                    }
                 }
                 colb.change(q, cols[q].len());
             }

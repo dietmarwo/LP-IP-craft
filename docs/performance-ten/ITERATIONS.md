@@ -37,3 +37,7 @@ Outcome: all tests pass. Mask-only timing was inconclusive; added reusable exact
 
 ## 8. Remove exact cancellation entries during sparse factorization — plan
 After a Schur update, delete exactly-zero entries from both active row and column lists and update Markowitz counts immediately. This avoids pricing artificial fill and traversing canceled dependencies. Do not drop small nonzero values. Verify sparse-factor residuals, singularity and cap tests, and all workspace tests; compare LP families.
+Outcome: all workspace tests pass. Packing-4096 540.55 -> 529.32 ms, irregular-1024 240.55 -> 236.04 ms (about 2% each); network flat within 1.1%. Packing-1024 requires one fewer pivot because exact Markowitz counts change the factor ordering.
+
+## 9. Exact integer domain propagation at MIP nodes — plan
+Round integer variable domains and propagate eligible all-integer rows using i128 arithmetic. Restrict coefficient/domain magnitudes so activity sums cannot overflow. Use at most three row passes, honoring cancellation/time checks. Apply implied bounds to the existing LP for reoptimization, restore them between nodes, and prune exact contradictions before solving an LP. Mixed or large-arithmetic rows retain the existing path. Test negative coefficients, fractional domains, contradictions and enumeration oracles, then paired MIP/LP performance.
