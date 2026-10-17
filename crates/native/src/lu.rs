@@ -138,9 +138,21 @@ impl Lists {
 struct Reach {
     seen: Vec<bool>,
     nodes: Vec<usize>,
+    cooldown: [usize; 4],
 }
 impl Reach {
-    fn find(&mut self, v: &[f64], graph: &Lists, keys: Option<&[usize]>, rank: &[usize]) -> bool {
+    fn find(
+        &mut self,
+        v: &[f64],
+        graph: &Lists,
+        keys: Option<&[usize]>,
+        rank: &[usize],
+        channel: usize,
+    ) -> bool {
+        if self.cooldown[channel] > 0 {
+            self.cooldown[channel] -= 1;
+            return false;
+        }
         if v.len() < 128 {
             return false;
         }
@@ -148,12 +160,13 @@ impl Reach {
             self.seen[i] = false;
         }
         self.nodes.clear();
-        let limit = v.len() / 8;
+        let limit = v.len() / if channel < 2 { 32 } else { 8 };
         for (i, &x) in v.iter().enumerate() {
             if x != 0. {
                 self.seen[i] = true;
                 self.nodes.push(i);
                 if self.nodes.len() > limit {
+                    self.cooldown[channel] = 8;
                     return false;
                 }
             }
@@ -167,6 +180,7 @@ impl Reach {
                     self.seen[j] = true;
                     self.nodes.push(j);
                     if self.nodes.len() > limit {
+                        self.cooldown[channel] = 8;
                         return false;
                     }
                 }
@@ -198,6 +212,7 @@ pub(crate) struct Lu {
     work: Vec<f64>,
     row_step: Vec<usize>,
     col_step: Vec<usize>,
+    row_position: Vec<usize>,
     reach: Reach,
 }
 
@@ -254,9 +269,11 @@ impl Lu {
             work: vec![0.0; m],
             row_step: vec![0; m],
             col_step: vec![0; m],
+            row_position: vec![0; m],
             reach: Reach {
                 seen: vec![false; m],
                 nodes: Vec::new(),
+                cooldown: [0; 4],
             },
         };
         let mut pivot_row: Vec<(usize, f64)> = Vec::new();
@@ -352,6 +369,7 @@ impl Lu {
         for k in 0..m {
             lu.row_step[lu.prow[k]] = k;
             lu.col_step[lu.pcol[k]] = k;
+            lu.row_position[lu.prow[k]] = lu.pcol[k];
         }
         Ok(lu)
     }
@@ -480,24 +498,58 @@ impl Lu {
     /// Solves `B x = v` in place: `v` is indexed by row on entry and by
     /// basis position on return.
     pub fn ftran(&mut self, v: &mut [f64]) {
-        for k in 0..self.m {
-            let t = v[self.prow[k]];
-            if t != 0.0 {
-                let (index, value) = self.l.get(k);
-                for (&i, &l) in index.iter().zip(value) {
-                    v[i] -= l * t;
+        if self
+            .reach
+            .find(v, &self.l, Some(&self.row_step), &self.row_step, 0)
+        {
+            for &i in &self.reach.nodes {
+                let t = v[i];
+                if t != 0. {
+                    let (index, value) = self.l.get(self.row_step[i]);
+                    for (&r, &l) in index.iter().zip(value) {
+                        v[r] -= l * t;
+                    }
+                }
+            }
+        } else {
+            for k in 0..self.m {
+                let t = v[self.prow[k]];
+                if t != 0.0 {
+                    let (index, value) = self.l.get(k);
+                    for (&i, &l) in index.iter().zip(value) {
+                        v[i] -= l * t;
+                    }
                 }
             }
         }
         let w = &mut self.work;
-        for k in (0..self.m).rev() {
-            let p = self.pcol[k];
-            let t = v[self.prow[k]] / self.diag[k];
-            w[p] = t;
-            if t != 0.0 {
-                let (index, value) = self.u_cols.get(p);
-                for (&i, &u) in index.iter().zip(value) {
-                    v[i] -= u * t;
+        if self
+            .reach
+            .find(v, &self.u_cols, Some(&self.row_position), &self.row_step, 1)
+        {
+            w.fill(0.);
+            for &i in self.reach.nodes.iter().rev() {
+                let k = self.row_step[i];
+                let p = self.pcol[k];
+                let t = v[i] / self.diag[k];
+                w[p] = t;
+                if t != 0. {
+                    let (index, value) = self.u_cols.get(p);
+                    for (&r, &u) in index.iter().zip(value) {
+                        v[r] -= u * t;
+                    }
+                }
+            }
+        } else {
+            for k in (0..self.m).rev() {
+                let p = self.pcol[k];
+                let t = v[self.prow[k]] / self.diag[k];
+                w[p] = t;
+                if t != 0.0 {
+                    let (index, value) = self.u_cols.get(p);
+                    for (&i, &u) in index.iter().zip(value) {
+                        v[i] -= u * t;
+                    }
                 }
             }
         }
@@ -534,7 +586,7 @@ impl Lu {
         let w = &mut self.work;
         if self
             .reach
-            .find(v, &self.u, Some(&self.col_step), &self.col_step)
+            .find(v, &self.u, Some(&self.col_step), &self.col_step, 2)
         {
             w.fill(0.);
             for &p in &self.reach.nodes {
@@ -560,7 +612,7 @@ impl Lu {
                 }
             }
         }
-        if self.reach.find(w, &self.l_rows, None, &self.row_step) {
+        if self.reach.find(w, &self.l_rows, None, &self.row_step, 3) {
             for &i in self.reach.nodes.iter().rev() {
                 let t = w[i];
                 if t != 0. {

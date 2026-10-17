@@ -25,3 +25,7 @@ Outcome: all workspace tests pass, including sparse unit right-hand sides on per
 
 ## 5. Reachability-based FTRAN — plan
 Reuse bounded reach discovery for L and U forward solves, with a row-to-position map for U. This targets the entering-column and steepest-edge solves that run every pivot. Preserve elimination order and eta application. Verify sparse and dense residuals, all workspace tests, and the same paired development fixtures.
+Outcome: first attempt regressed large LPs; retained its raw data. Revised the FTRAN reach cap to 1/32 of the basis and added per-triangle eight-call cooldowns after dense discovery. All tests pass. Revised paired medians: packing-1024 40.22 -> 36.78 ms, packing-4096 556.06 -> 526.41 ms, irregular-1024 250.78 -> 236.15 ms; network essentially flat (1.4% slower).
+
+## 6. Reuse entering-column sparsity — plan
+Collect the nonzero basis coordinates once after FTRAN and reuse that list for primal updates, steepest-edge updates, and eta storage (including basis restoration). Preserve ascending arithmetic order and exact nonzero tests. Test the complete workspace, especially warm/cold MIP and factor-update residuals; measure all development fixtures.
