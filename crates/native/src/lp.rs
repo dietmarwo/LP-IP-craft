@@ -723,6 +723,8 @@ impl Lp {
                     out.push((j - self.n, -1.0));
                 }
             };
+            #[cfg(feature = "basis-replay")]
+            crate::replay::capture(self.m, column, &[&self.rho, &self.pi]);
             match Lu::factor(self.m, column, self.controls.max_factor_entries) {
                 Ok(mut lu) => {
                     #[cfg(feature = "kernel-profile")]

@@ -12,6 +12,8 @@ mod lu;
 mod presolve;
 pub mod profile;
 mod propagate;
+#[cfg(feature = "basis-replay")]
+pub mod replay;
 
 use lp::{Basis, Lp};
 use lp_ip_craft::{

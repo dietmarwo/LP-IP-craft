@@ -233,6 +233,8 @@ pub(crate) struct Lu {
     force_refactor: bool,
     sparse_btran: bool,
     update_nnz: usize,
+    #[cfg(feature = "basis-replay")]
+    dense_dimension: usize,
 }
 
 impl Lu {
@@ -245,6 +247,7 @@ impl Lu {
         cap: usize,
     ) -> Result<Self, FactorError> {
         let _profile = crate::profile::enter("factorization");
+        let _assembly = crate::profile::enter("factor_assembly");
         let mut cols: Vec<Vec<(usize, f64)>> = vec![Vec::new(); m];
         for (p, col) in cols.iter_mut().enumerate() {
             column(p, col);
@@ -296,12 +299,15 @@ impl Lu {
             force_refactor: false,
             sparse_btran: false,
             update_nnz: 0,
+            #[cfg(feature = "basis-replay")]
+            dense_dimension: 0,
             reach: Reach {
                 seen: vec![false; m],
                 nodes: Vec::new(),
                 cooldown: [0; 4],
             },
         };
+        drop(_assembly);
         let mut pivot_row: Vec<(usize, f64)> = Vec::new();
         let mut pivot_col: Vec<(usize, f64)> = Vec::new();
         let mut singular = false;
@@ -310,10 +316,14 @@ impl Lu {
             if active as f64 > DENSE_DENSITY * remaining * remaining {
                 break;
             }
-            let Some((r, p)) = find_pivot(&cols, &rows, &colb, &rowb, m) else {
+            let _search = crate::profile::enter("factor_pivot_search");
+            let candidate = find_pivot(&cols, &rows, &colb, &rowb, m);
+            drop(_search);
+            let Some((r, p)) = candidate else {
                 singular = true;
                 break;
             };
+            let _extract = crate::profile::enter("factor_extract");
             // Take row r out of the active columns; keep the U row.
             pivot_row.clear();
             let mut a = 0.0;
@@ -347,6 +357,8 @@ impl Lu {
             rowb.remove(r);
             col_done[p] = true;
             row_done[r] = true;
+            drop(_extract);
+            let _eliminate = crate::profile::enter("factor_sparse_eliminate");
             // Schur complement update of every column of the pivot row.
             for &(q, u) in &pivot_row {
                 if u == 0.0 {
@@ -402,6 +414,7 @@ impl Lu {
                 rows: (0..m).filter(|&i| !row_done[i]).collect(),
             });
         }
+        let _pack = crate::profile::enter("factor_pack");
         // L by eliminated row: entries name the pivot row of their step.
         lu.l_rows = lu.l.transpose(m, &lu.prow);
         // U by position: entries name the pivot row of their step.
@@ -451,10 +464,15 @@ impl Lu {
         col_done: &mut [bool],
         cap: usize,
     ) -> Result<(), FactorError> {
+        let _dense = crate::profile::enter("factor_dense");
         let m = self.m;
         let rows_left: Vec<usize> = (0..m).filter(|&i| !row_done[i]).collect();
         let cols_left: Vec<usize> = (0..m).filter(|&p| !col_done[p]).collect();
         let k = rows_left.len();
+        #[cfg(feature = "basis-replay")]
+        {
+            self.dense_dimension = k;
+        }
         if self
             .entries()
             .checked_add(k.saturating_mul(k) / 2)
@@ -521,6 +539,14 @@ impl Lu {
         Ok(())
     }
 
+    #[cfg(feature = "basis-replay")]
+    pub fn replay_details(&self) -> (usize, u64) {
+        let mut h = 0xcbf29ce484222325u64;
+        for &v in self.prow.iter().chain(&self.pcol) {
+            h = (h ^ v as u64).wrapping_mul(0x100000001b3);
+        }
+        (self.dense_dimension, h)
+    }
     #[cfg(feature = "kernel-profile")]
     pub fn factor_sizes(&self) -> (usize, usize) {
         (self.l.value.len(), self.u.value.len())
