@@ -10,3 +10,6 @@ __pycache__/
 /history/*.bundle
 /MANIFEST.sha256
 /SOURCE-REVISION
+
+# Raw report data ships in the delivery archive; see docs/EVIDENCE.md.
+/docs/*/data/
