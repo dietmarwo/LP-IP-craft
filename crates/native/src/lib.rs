@@ -9,6 +9,7 @@ mod incumbent;
 mod lp;
 mod lu;
 mod presolve;
+pub mod profile;
 mod propagate;
 
 use lp::{Basis, Lp};

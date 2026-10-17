@@ -150,6 +150,8 @@ fn main() {
             iteration_limit: (!mip).then_some(1_000_000),
             ..Default::default()
         });
+        #[cfg(feature = "kernel-profile")]
+        lp_ip_craft_native::profile::reset();
         let t = Instant::now();
         let result = solver.solve(
             &model,
@@ -211,6 +213,8 @@ fn main() {
                 record["message"] = json!(format!("{e:?}"));
             }
         }
+        #[cfg(feature = "kernel-profile")]
+        { record["kernel_profile"] = json!(lp_ip_craft_native::profile::snapshot()); }
         runs.push(record);
     }
     let rss = std::fs::read_to_string("/proc/self/status")

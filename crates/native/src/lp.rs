@@ -754,6 +754,7 @@ impl Lp {
 
     /// Basic values from the nonbasic values: `x_B = −B⁻¹ N x_N`.
     fn compute_primal(&mut self) {
+        let _profile = crate::profile::enter("recompute_primal");
         let (n, m) = (self.n, self.m);
         self.work.fill(0.0);
         for j in 0..n + m {
@@ -783,6 +784,7 @@ impl Lp {
 
     /// Row prices `π = B⁻ᵀ c_B` and reduced costs `d = c − [Ã −I]ᵀ π`.
     fn compute_dual(&mut self) {
+        let _profile = crate::profile::enter("recompute_dual");
         self.dual_stale = false;
         let n = self.n;
         for p in 0..self.m {
@@ -855,6 +857,7 @@ impl Lp {
 
     /// Dual steepest-edge pricing over the primal infeasible basic variables.
     fn choose_row(&self) -> Option<usize> {
+        let _profile = crate::profile::enter("pricing_choose");
         let mut best = None;
         let mut score = 0.0;
         for (p, &j) in self.basic.iter().enumerate() {
@@ -877,6 +880,7 @@ impl Lp {
 
     /// `ρ = B⁻ᵀ e_r` and its pivot row over the nonbasic variables.
     fn compute_row(&mut self, r: usize) {
+        let _profile = crate::profile::enter("pricing_row");
         for &j in &self.touched {
             self.alpha[j] = 0.0;
             self.marked[j] = false;
@@ -923,6 +927,7 @@ impl Lp {
     /// entering variable and the dual step length `θ ≥ 0`; `self.flips`
     /// holds the variables passed on the way.
     fn ratio_test(&mut self, s: f64, infeasibility: f64, slack: f64) -> Option<(usize, f64)> {
+        let _profile = crate::profile::enter("ratio_test");
         self.candidates.clear();
         self.flips.clear();
         let tol = self.controls.pivot_tolerance;
@@ -1010,6 +1015,7 @@ impl Lp {
 
     /// `B⁻¹ a_q` into `self.column`.
     fn compute_column(&mut self, q: usize) {
+        let _profile = crate::profile::enter("column_setup");
         self.column.fill(0.0);
         Self::add_column(
             &self.col_start,
@@ -1032,6 +1038,7 @@ impl Lp {
     }
 
     fn pivot(&mut self, r: usize, q: usize, theta: f64, s: f64, to_upper: bool) {
+        let _profile = crate::profile::enter("pivot_other");
         let (n, m) = (self.n, self.m);
         let p = self.basic[r];
         if !self.flips.is_empty() {

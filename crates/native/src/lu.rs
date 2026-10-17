@@ -241,6 +241,7 @@ impl Lu {
         mut column: impl FnMut(usize, &mut Vec<(usize, f64)>),
         cap: usize,
     ) -> Result<Self, FactorError> {
+        let _profile = crate::profile::enter("factorization");
         let mut cols: Vec<Vec<(usize, f64)>> = vec![Vec::new(); m];
         for (p, col) in cols.iter_mut().enumerate() {
             column(p, col);
@@ -540,6 +541,7 @@ impl Lu {
     /// Solves `B x = v` in place: `v` is indexed by row on entry and by
     /// basis position on return.
     pub fn ftran(&mut self, v: &mut [f64]) {
+        let _triangular = crate::profile::enter("ftran_triangular");
         if self
             .reach
             .find(v, &self.l, Some(&self.row_step), &self.row_step, 0)
@@ -596,6 +598,8 @@ impl Lu {
             }
         }
         v.copy_from_slice(w);
+        drop(_triangular);
+        let _eta = crate::profile::enter("ftran_eta");
         for eta in &self.etas {
             let t = v[eta.position] / eta.pivot;
             v[eta.position] = t;
@@ -629,6 +633,7 @@ impl Lu {
     }
 
     fn btran_masked(&mut self, v: &mut [f64], mut support: u64, unit: bool) {
+        let _eta = crate::profile::enter("btran_eta");
         for eta in self.etas.iter().rev() {
             if support & eta.support == 0 {
                 continue;
@@ -650,6 +655,8 @@ impl Lu {
                 }
             }
         }
+        drop(_eta);
+        let _triangular = crate::profile::enter("btran_triangular");
         let w = &mut self.work;
         if self.reach.find_seeded(
             v,
@@ -720,6 +727,7 @@ impl Lu {
         alpha: &[f64],
         indices: impl Iterator<Item = usize>,
     ) {
+        let _profile = crate::profile::enter("basis_update");
         let start = self.eta_index.len();
         let mut support = 1u64 << (position & 63);
         for i in indices {
