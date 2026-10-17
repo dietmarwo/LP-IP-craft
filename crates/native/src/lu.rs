@@ -639,9 +639,19 @@ impl Lu {
 
     /// Records the replacement of the column at `position` by a column whose
     /// representation in the current basis is `alpha` (`B⁻¹ a`, by position).
+    #[cfg(test)]
     pub fn update(&mut self, position: usize, alpha: &[f64]) {
+        self.update_sparse(position, alpha, 0..alpha.len());
+    }
+    pub fn update_sparse(
+        &mut self,
+        position: usize,
+        alpha: &[f64],
+        indices: impl Iterator<Item = usize>,
+    ) {
         let start = self.eta_index.len();
-        for (i, &v) in alpha.iter().enumerate() {
+        for i in indices {
+            let v = alpha[i];
             if i != position && v != 0.0 {
                 self.eta_index.push(i);
                 self.eta_value.push(v);

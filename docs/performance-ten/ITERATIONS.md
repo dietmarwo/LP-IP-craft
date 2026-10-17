@@ -29,3 +29,7 @@ Outcome: first attempt regressed large LPs; retained its raw data. Revised the F
 
 ## 6. Reuse entering-column sparsity — plan
 Collect the nonzero basis coordinates once after FTRAN and reuse that list for primal updates, steepest-edge updates, and eta storage (including basis restoration). Preserve ascending arithmetic order and exact nonzero tests. Test the complete workspace, especially warm/cold MIP and factor-update residuals; measure all development fixtures.
+Outcome: workspace tests pass. Network-2048 104.42 -> 91.43 ms (1.14x); packing and irregular within about 2%. Reusing support also avoids repeated full scans during basis restoration. Box-path time varied despite no box code changes; final comparisons will use more samples.
+
+## 7. Skip disjoint eta transformations for unit BTRAN — plan
+Store a conservative 64-bit hashed support mask on each eta update. Unit pivot-row BTRAN starts with a known support; skip an eta only when its entire support (including pivot position) is disjoint. Mask collisions merely cause extra work; no nonzeros are discarded. Accumulate support conservatively through transformations. Test unit solves with permutations and updates, dense solves, full workspace and paired performance.

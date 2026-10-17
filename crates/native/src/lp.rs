@@ -125,6 +125,7 @@ pub(crate) struct Lp {
     lu: Option<Lu>,
     rho: Vec<f64>,
     column: Vec<f64>,
+    column_index: Vec<usize>,
     tau: Vec<f64>,
     work: Vec<f64>,
     alpha: Vec<f64>,
@@ -299,6 +300,7 @@ impl Lp {
             lu: None,
             rho: vec![0.0; m],
             column: vec![0.0; m],
+            column_index: Vec::new(),
             tau: vec![0.0; m],
             work: vec![0.0; m],
             alpha: vec![0.0; n + m],
@@ -519,7 +521,7 @@ impl Lp {
                 return false;
             }
             let lu = self.lu.as_mut().expect("factorized basis");
-            lu.update(p, &self.column);
+            lu.update_sparse(p, &self.column, self.column_index.iter().copied());
             self.stats.updates += 1;
             self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
             let leaving = self.basic[p];
@@ -1012,6 +1014,13 @@ impl Lp {
         );
         let lu = self.lu.as_mut().expect("factorized basis");
         lu.ftran(&mut self.column);
+        self.column_index.clear();
+        self.column_index.extend(
+            self.column
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &v)| (v != 0.).then_some(i)),
+        );
     }
 
     fn pivot(&mut self, r: usize, q: usize, theta: f64, s: f64, to_upper: bool) {
@@ -1053,7 +1062,7 @@ impl Lp {
         };
         let step = (self.x[p] - target) / self.column[r];
         if step != 0.0 {
-            for i in 0..m {
+            for &i in &self.column_index {
                 let v = self.column[i];
                 if v != 0.0 {
                     self.x[self.basic[i]] -= step * v;
@@ -1075,7 +1084,7 @@ impl Lp {
             let lu = self.lu.as_mut().expect("factorized basis");
             lu.ftran(&mut self.tau);
             let (wr, ar) = (self.weight[r], self.column[r]);
-            for i in 0..m {
+            for &i in &self.column_index {
                 let v = self.column[i];
                 if i != r && v != 0.0 {
                     let ratio = v / ar;
@@ -1086,7 +1095,7 @@ impl Lp {
             self.weight[r] = (wr / (ar * ar)).max(MIN_WEIGHT);
         }
         let lu = self.lu.as_mut().expect("factorized basis");
-        lu.update(r, &self.column);
+        lu.update_sparse(r, &self.column, self.column_index.iter().copied());
         self.stats.updates += 1;
         self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
         self.basic[r] = q;
