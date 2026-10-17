@@ -17,6 +17,7 @@ mod lp;
 mod lu;
 mod mixed;
 mod ordering;
+mod packing;
 mod presolve;
 pub mod profile;
 mod propagate;
@@ -24,6 +25,7 @@ mod rational;
 #[cfg(feature = "basis-replay")]
 pub mod replay;
 mod root;
+mod tree;
 mod witness;
 
 use lp::{Basis, Lp};
@@ -157,6 +159,23 @@ pub struct NativeOptions {
     pub mip_diagnostics: bool,
     /// Maximum retained search events (0 means summaries only, at most 4096).
     pub mip_trace_limit: usize,
+    /// Opt-in SpOC4 packing, bounded probing and disjoint-frontier controls.
+    pub packing_root: bool,
+    pub packing_root_iterations: usize,
+    pub packing_root_work: u64,
+    pub packing_neighborhoods: usize,
+    pub packing_neighborhood_size: usize,
+    pub packing_workers: usize,
+    pub packing_neighborhood_nodes: u64,
+    pub packing_cuts: bool,
+    pub packing_cut_work: u64,
+    pub partial_dual_bounds: bool,
+    pub scalable_branching: bool,
+    pub branch_probe_candidates: usize,
+    pub branch_probe_pivots: u64,
+    pub branch_probe_work: u64,
+    pub tree_threads: usize,
+    pub tree_split_depth: usize,
 }
 impl Default for NativeOptions {
     fn default() -> Self {
@@ -204,12 +223,45 @@ impl Default for NativeOptions {
             factor_replay: false,
             mip_diagnostics: false,
             mip_trace_limit: 256,
+            packing_root: false,
+            packing_root_iterations: 1000,
+            packing_root_work: 200_000_000,
+            packing_neighborhoods: 0,
+            packing_neighborhood_size: 192,
+            packing_workers: 1,
+            packing_neighborhood_nodes: 128,
+            packing_cuts: false,
+            packing_cut_work: 2_000_000,
+            partial_dual_bounds: false,
+            scalable_branching: false,
+            branch_probe_candidates: 4,
+            branch_probe_pivots: 32,
+            branch_probe_work: 2_000_000,
+            tree_threads: 1,
+            tree_split_depth: 2,
         }
     }
 }
 impl NativeOptions {
     /// Validate settings before cancellation or numerical work.
     pub fn validate(&self) -> Result<()> {
+        if self.packing_root_iterations > 100_000
+            || self.packing_root_work > 10_000_000_000
+            || self.packing_neighborhoods > 4096
+            || !(4..=1024).contains(&self.packing_neighborhood_size)
+            || !(1..=16).contains(&self.packing_workers)
+            || self.packing_neighborhood_nodes > 100_000
+            || self.packing_cut_work > 100_000_000
+            || !(1..=16).contains(&self.branch_probe_candidates)
+            || self.branch_probe_pivots > 1024
+            || self.branch_probe_work > 10_000_000_000
+            || !(1..=16).contains(&self.tree_threads)
+            || self.tree_split_depth > 8
+        {
+            return Err(Error::InvalidInput(
+                "invalid bounded packing/probe/tree controls".into(),
+            ));
+        }
         if !(1..=16).contains(&self.reliability_threshold) || self.reliability_max_probes > 1024 {
             return Err(Error::InvalidInput(
                 "reliability threshold must be 1..=16 and max probes at most 1024".into(),
@@ -757,6 +809,8 @@ struct Counters {
     implied_bounds: u64,
     strong_probes: u64,
     strong_pivots: u64,
+    strong_work: u64,
+    strong_work_exits: u64,
     reduced_cost_fixings: u64,
 }
 
@@ -931,7 +985,7 @@ impl NativeSolver {
                     open.len() + usize::from(dive.is_some()),
                 );
             }
-            let node = match dive.take() {
+            let mut node = match dive.take() {
                 Some(node) => node,
                 None => match open.pop() {
                     Some(Open { node, .. }) => {
@@ -1101,6 +1155,21 @@ impl NativeSolver {
                 continue;
             }
             if s != Status::Optimal {
+                if settings.partial_dual_bounds {
+                    let duals = lp.duals(model);
+                    if duals.row_duals.iter().all(|v| v.is_finite()) {
+                        if let Some(value) =
+                            safe_dual_bound_with_bounds(model, node_bounds, &duals.row_duals)?.bound
+                        {
+                            let b = oriented(model, value);
+                            let b = if lattice { b.ceil() } else { b };
+                            node.bound = Some(node.bound.map_or(b, |old| old.max(b)));
+                            if !model.is_mip() {
+                                result.best_bound = Some(oriented(model, b));
+                            }
+                        }
+                    }
+                }
                 status = if model.is_mip() && s == Status::Unbounded {
                     Status::Unknown
                 } else {
@@ -1236,12 +1305,14 @@ impl NativeSolver {
             }
             let mut probe_seconds = 0.;
             let branch = if branch.is_some()
-                && ((settings.reliability_branching
+                && (((settings.reliability_branching || settings.scalable_branching)
                     && node.depth <= 8
                     && counters.strong_probes < settings.reliability_max_probes)
                     || (node.depth == 0 && settings.strong_branching))
                 && settings.node_reoptimization
-                && (if settings.reliability_branching {
+                && (if settings.scalable_branching {
+                    true
+                } else if settings.reliability_branching {
                     model.n() <= 1024 && model.m() <= 1024 && model.nnz() <= 20000
                 } else {
                     eligible_strong_branching(model)
@@ -1451,6 +1522,8 @@ impl NativeSolver {
                 ("implied_bounds", counters.implied_bounds),
                 ("strong_branch_probes", counters.strong_probes),
                 ("strong_branch_pivots", counters.strong_pivots),
+                ("strong_branch_work", counters.strong_work),
+                ("strong_branch_work_exits", counters.strong_work_exits),
                 ("reduced_cost_fixings", counters.reduced_cost_fixings),
                 ("certification_solves", certifier.lp_attempts),
                 ("rational_witness_attempts", certifier.witness_attempts),
@@ -1603,26 +1676,49 @@ fn strong_branch(
     nodes: &mut u64,
     counters: &mut Counters,
 ) -> Result<Option<usize>> {
-    let mut candidates: Vec<_> = (0..model.n())
-        .filter(|&j| {
-            model.kinds()[j].is_integral()
-                && (x[j] - x[j].round()).abs() > options.tolerances.integrality
-                && (!budget.settings.reliability_branching
-                    || pseudocosts.count[j]
-                        .iter()
-                        .any(|&n| n < budget.settings.reliability_threshold))
-        })
-        .collect();
-    candidates.sort_by(|&a, &b| {
-        (x[b] - x[b].round())
-            .abs()
-            .total_cmp(&(x[a] - x[a].round()).abs())
-            .then(a.cmp(&b))
-    });
-    candidates.truncate(2);
+    let reliable = budget.settings.reliability_branching || budget.settings.scalable_branching;
+    let eligible = |j: usize| {
+        model.kinds()[j].is_integral()
+            && (x[j] - x[j].round()).abs() > options.tolerances.integrality
+            && (!reliable
+                || pseudocosts.count[j]
+                    .iter()
+                    .any(|&n| n < budget.settings.reliability_threshold))
+    };
+    let mut candidates = Vec::new();
+    if budget.settings.scalable_branching {
+        let mut structure = vec![0.; model.n()];
+        let a = model.matrix();
+        for range in a.pattern.indptr.windows(2) {
+            let degree = (range[1] - range[0]).max(1) as f64;
+            for &j in &a.pattern.indices[range[0]..range[1]] {
+                structure[j] += 1. / degree;
+            }
+        }
+        let score = |j: usize| (x[j] - x[j].round()).abs() * (1. + structure[j]);
+        for j in (0..model.n()).filter(|&j| eligible(j)) {
+            let at = candidates
+                .iter()
+                .position(|&k| score(j) > score(k))
+                .unwrap_or(candidates.len());
+            if at < budget.settings.branch_probe_candidates {
+                candidates.insert(at, j);
+                candidates.truncate(budget.settings.branch_probe_candidates);
+            }
+        }
+    } else {
+        candidates = (0..model.n()).filter(|&j| eligible(j)).collect();
+        candidates.sort_by(|&a, &b| {
+            (x[b] - x[b].round())
+                .abs()
+                .total_cmp(&(x[a] - x[a].round()).abs())
+                .then(a.cmp(&b))
+        });
+        candidates.truncate(2);
+    }
     // One unreliable candidate is worth probing for its pseudocosts; the
     // legacy root rule keeps its 0.23 behaviour and probes only a real choice.
-    if candidates.is_empty() || (!budget.settings.reliability_branching && candidates.len() < 2) {
+    if candidates.is_empty() || (!reliable && candidates.len() < 2) {
         return Ok(None);
     }
     let basis = lp.snapshot();
@@ -1633,8 +1729,7 @@ fn strong_branch(
         let mut complete = true;
         for (d, gain) in gains.iter_mut().enumerate() {
             if budget.stop().is_some()
-                || (budget.settings.reliability_branching
-                    && counters.strong_probes >= budget.settings.reliability_max_probes)
+                || (reliable && counters.strong_probes >= budget.settings.reliability_max_probes)
                 || budget.settings.node_limit.is_some_and(|cap| *nodes >= cap)
             {
                 complete = false;
@@ -1650,13 +1745,30 @@ fn strong_branch(
                 complete = false;
                 break;
             }
+            let probe_cap = if budget.settings.scalable_branching {
+                let unit = (model.nnz() + model.n() + model.m()).max(1) as u64;
+                let left = budget
+                    .settings
+                    .branch_probe_work
+                    .saturating_sub(counters.strong_work);
+                let cap = budget.settings.branch_probe_pivots.min(left / unit);
+                if cap == 0 {
+                    counters.strong_work_exits += 1;
+                    complete = false;
+                    break;
+                }
+                counters.strong_work += cap * unit;
+                cap
+            } else {
+                32
+            };
             lp.set_bound(j, lo, hi)?;
             let mut settings = budget.settings.clone();
             settings.iteration_limit = Some(
                 settings
                     .iteration_limit
                     .unwrap_or(u64::MAX)
-                    .min(budget.pivots.saturating_add(32)),
+                    .min(budget.pivots.saturating_add(probe_cap)),
             );
             let mut probe = Budget {
                 start: budget.start,
@@ -1712,7 +1824,7 @@ fn strong_branch(
             }
         }
     }
-    if budget.settings.reliability_branching {
+    if reliable {
         Ok(branching_variable(model, bounds, x, options, pseudocosts).or(best))
     } else {
         Ok(best)
@@ -1797,6 +1909,34 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
             "bounded_dual_revised_simplex+markowitz_lu".into(),
         ),
         ("max_factor_entries", s.max_factor_entries.to_string()),
+        ("packing_root", s.packing_root.to_string()),
+        (
+            "packing_root_iterations",
+            s.packing_root_iterations.to_string(),
+        ),
+        ("packing_root_work", s.packing_root_work.to_string()),
+        ("packing_neighborhoods", s.packing_neighborhoods.to_string()),
+        (
+            "packing_neighborhood_size",
+            s.packing_neighborhood_size.to_string(),
+        ),
+        ("packing_workers", s.packing_workers.to_string()),
+        (
+            "packing_neighborhood_nodes",
+            s.packing_neighborhood_nodes.to_string(),
+        ),
+        ("packing_cuts", s.packing_cuts.to_string()),
+        ("packing_cut_work", s.packing_cut_work.to_string()),
+        ("partial_dual_bounds", s.partial_dual_bounds.to_string()),
+        ("scalable_branching", s.scalable_branching.to_string()),
+        (
+            "branch_probe_candidates",
+            s.branch_probe_candidates.to_string(),
+        ),
+        ("branch_probe_pivots", s.branch_probe_pivots.to_string()),
+        ("branch_probe_work", s.branch_probe_work.to_string()),
+        ("tree_threads", s.tree_threads.to_string()),
+        ("tree_split_depth", s.tree_split_depth.to_string()),
         ("refactor_interval", s.refactor_interval.to_string()),
         ("adaptive_refactor", s.adaptive_refactor.to_string()),
         ("basis_update", s.basis_update.as_str().to_string()),
@@ -1874,6 +2014,28 @@ impl LpIpSolver for NativeSolver {
         start: Option<&WarmStart>,
         cancel: &CancellationToken,
     ) -> Result<SolveResult> {
+        options.validate()?;
+        self.settings.validate()?;
+        if let Some(s) = start {
+            if s.primal.len() != model.n() || s.primal.iter().any(|v| !v.is_finite()) {
+                return Err(Error::InvalidInput(
+                    "start must contain n finite values".into(),
+                ));
+            }
+        }
+        if self.settings.packing_root
+            || self.settings.packing_neighborhoods > 0
+            || self.settings.packing_cuts
+        {
+            if let Some(result) = packing::solve(self, model, options, start, cancel)? {
+                return Ok(result);
+            }
+        }
+        if self.settings.tree_threads > 1 {
+            if let Some(result) = tree::solve(self, model, options, start, cancel, None, None)? {
+                return Ok(result);
+            }
+        }
         root::solve(self, model, options, start, cancel)
     }
 }

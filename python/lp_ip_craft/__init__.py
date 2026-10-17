@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 from ._native import solve_batch_native as _solve_batch_native
 
-__version__ = "0.24.0"
+__version__ = "0.25.0"
 
 __all__ = [
     "BACKENDS",
@@ -141,6 +141,23 @@ class NativeOptions:
     decomposition_min_variables: int = 32
     component_threads: int = 16
     component_parallel_min_entries: int = 2048
+    packing_root: bool = False
+    packing_root_iterations: int = 1000
+    packing_root_work: int = 200_000_000
+    packing_neighborhoods: int = 0
+    packing_neighborhood_size: int = 192
+    packing_workers: int = 1
+    packing_neighborhood_nodes: int = 128
+    packing_cuts: bool = False
+    packing_cut_work: int = 2_000_000
+    partial_dual_bounds: bool = False
+    scalable_branching: bool = False
+    branch_probe_candidates: int = 4
+    branch_probe_pivots: int = 32
+    branch_probe_work: int = 2_000_000
+    tree_threads: int = 1
+    tree_split_depth: int = 2
+
 
 
 @dataclass(frozen=True)
@@ -307,7 +324,7 @@ def solve_batch(models: Iterable[Model], *, workers: int = 1, options: Optional[
                 cancellation: Optional[Cancellation] = None) -> list[SolveResult | Exception]:
     """Solve independent native jobs in order with 1..16 Rust workers.
 
-    Budgets apply per job. Component threading is disabled inside the pool.
+    Budgets apply per job. Nested component, residual and tree workers are disabled inside the pool.
     Returns an exception value for a failed job; batch argument errors raise.
     Cancellation is shared, and queued jobs report cancellation too.
     """

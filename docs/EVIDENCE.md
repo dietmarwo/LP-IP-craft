@@ -58,3 +58,10 @@ hash.
   per-release patches for 0.21–0.24; those arrive as one import commit. The
   directory also contains `.0010-…patch.lX2GNP`, a truncated 15 MB temporary
   copy of patch 0010 from packaging, which was ignored.
+
+
+## Native 0.25 SpOC4 evidence
+
+The 0.25 delivery ZIP contains `benchmarks/spoc4-025/results/` (full-instance JSON records, original-order solution vectors, kernel prefix profiles and the independent audit) plus `docs/spoc4-025/data/` (validation logs and two prior baseline records). These raw directories are not committed. The original ESA inputs and provenance are under `benchmarks/spoc4-025/data/`; those inputs are part of the source patch.
+
+Run `python benchmarks/summarize_spoc4_025.py` to recheck saved vectors and regenerate the 0.25 report from its frozen records. The ZIP includes a complete source snapshot at this baseline plus the new implementation; it does not reconstruct the separate 426.6 MB historical 0.24 evidence archive described above.

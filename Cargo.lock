@@ -16,18 +16,18 @@ checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
 
 [[package]]
 name = "lp-ip-craft"
-version = "0.24.0"
+version = "0.25.0"
 
 [[package]]
 name = "lp-ip-craft-native"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "lp-ip-craft",
 ]
 
 [[package]]
 name = "lp-ip-craft-python"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "lp-ip-craft",
  "lp-ip-craft-native",

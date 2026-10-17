@@ -384,6 +384,26 @@ fn native_settings(
             "incumbent_heuristic" => settings.incumbent_heuristic = field(&value, &key)?,
             "rational_certification" => settings.rational_certification = field(&value, &key)?,
             "feasibility_jump" => settings.feasibility_jump = field(&value, &key)?,
+            "packing_root" => settings.packing_root = field(&value, &key)?,
+            "packing_root_iterations" => settings.packing_root_iterations = field(&value, &key)?,
+            "packing_root_work" => settings.packing_root_work = field(&value, &key)?,
+            "packing_neighborhoods" => settings.packing_neighborhoods = field(&value, &key)?,
+            "packing_neighborhood_size" => {
+                settings.packing_neighborhood_size = field(&value, &key)?
+            }
+            "packing_workers" => settings.packing_workers = field(&value, &key)?,
+            "packing_neighborhood_nodes" => {
+                settings.packing_neighborhood_nodes = field(&value, &key)?
+            }
+            "packing_cuts" => settings.packing_cuts = field(&value, &key)?,
+            "packing_cut_work" => settings.packing_cut_work = field(&value, &key)?,
+            "partial_dual_bounds" => settings.partial_dual_bounds = field(&value, &key)?,
+            "scalable_branching" => settings.scalable_branching = field(&value, &key)?,
+            "branch_probe_candidates" => settings.branch_probe_candidates = field(&value, &key)?,
+            "branch_probe_pivots" => settings.branch_probe_pivots = field(&value, &key)?,
+            "branch_probe_work" => settings.branch_probe_work = field(&value, &key)?,
+            "tree_threads" => settings.tree_threads = field(&value, &key)?,
+            "tree_split_depth" => settings.tree_split_depth = field(&value, &key)?,
             "feasibility_jump_steps" => settings.feasibility_jump_steps = field(&value, &key)?,
             "objective_lattice" => settings.objective_lattice = field(&value, &key)?,
             "node_reoptimization" => settings.node_reoptimization = field(&value, &key)?,

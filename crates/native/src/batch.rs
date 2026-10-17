@@ -7,7 +7,7 @@ use std::sync::{
 impl NativeSolver {
     /// Solve independent models in input order using 1..=16 workers. Each job
     /// has its own limits and result/error. A shared cancellation token affects
-    /// running and queued jobs. Component workers are disabled inside the pool.
+    /// running and queued jobs. Nested component, residual and tree workers are disabled inside the pool.
     /// No warm starts are supplied by this API. Models are borrowed, not copied.
     pub fn solve_batch(
         &self,
@@ -25,6 +25,8 @@ impl NativeSolver {
         }
         let mut settings = self.settings.clone();
         settings.component_threads = 1;
+        settings.packing_workers = 1;
+        settings.tree_threads = 1;
         let workers = workers.min(models.len());
         if workers <= 1 {
             let mut solver = NativeSolver::new(settings);
