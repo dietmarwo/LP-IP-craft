@@ -3,8 +3,11 @@
 Each iteration has a plan, implementation checkpoint, result report,
 release measurements and numerical-oracle output. Earlier history remains
 readable; these reports describe versions through 0.14.0.
-The 0.15.0 sparse pilot is documented separately in [../sparse](../sparse). See performance-6-10.md for
-the latest alternating comparison and validation-6-10.md for acceptance details.
+The 0.15.0 sparse pilot is documented separately in [../sparse](../sparse);
+version 0.16.0 replaced both kernels and the depth-first search, see
+[../simplex](../simplex/README.md). See performance-6-10.md for the iteration
+6–10 comparison and validation-6-10.md for its acceptance details. Raw tool
+logs of these iterations were removed in 0.16.0; they remain in Git history.
 
 | Iteration | Version | Main implementation |
 |---|---|---|

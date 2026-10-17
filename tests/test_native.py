@@ -66,8 +66,8 @@ def test_binary_exhaustive():
         if r.best_bound is not None:assert r.best_bound>=max(feasible)-1e-8
 
 @pytest.mark.parametrize("settings",[
-    NativeOptions(presolve=False),NativeOptions(fast_pivots=False),
-    NativeOptions(dantzig_pricing=False),NativeOptions(node_reoptimization=False),
+    NativeOptions(presolve=False),NativeOptions(steepest_edge=False),
+    NativeOptions(refactor_interval=1),NativeOptions(node_reoptimization=False),
     NativeOptions(incumbent_heuristic=False,objective_lattice=False)])
 def test_optimization_switches(settings):
     m=make(c=[7.,11.,5.,6.],a=[[3.,5.,2.,4.]],ru=[8.5],up=[1.]*4,kinds=["binary"]*4)
@@ -110,7 +110,7 @@ def test_redundant_rows(enabled):
     m=make(c=[3.,2.],a=[[1.,1.],[1.,-1.],[0.,0.]],up=[1.,1.],rl=[0.,-1.,0.],ru=[2.,1.,0.])
     r=solve(m,backend="native",backend_options=NativeOptions(redundant_rows=enabled))
     assert r.status=="optimal" and r.evaluation.objective==pytest.approx(5.)
-    if enabled:assert int(r.backend.effective_options["diagnostics.presolve_removed_row_instances"])==3
+    if enabled:assert int(r.backend.effective_options["diagnostics.presolve_removed_rows"])==3
 
 
 def test_infeasible_root_cannot_certify_tolerance_start_as_optimal():

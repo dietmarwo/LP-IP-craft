@@ -1,6 +1,0 @@
-    Blocking waiting for file lock on build directory
-    Blocking waiting for file lock on artifact directory
-    Checking lp-ip-craft v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/core)
-    Checking lp-ip-craft-native v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/native)
-    Checking lp-ip-craft-python v0.14.0 (/workspace/scratch/2b5b088c7b46/repos/LP-IP-craft-native/crates/python)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.19s

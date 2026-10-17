@@ -1,14 +1,13 @@
 use lp_ip_craft::*;
 use lp_ip_craft_native::*;
 #[allow(dead_code)]
-#[path = "../examples/sparse_benchmark.rs"]
+#[path = "../examples/family_benchmark.rs"]
 mod fixtures;
 fn run(m: &Model, warm: bool, interval: usize) -> SolveResult {
     NativeSolver::new(NativeOptions {
-        sparse: true,
         decompose: false,
         node_reoptimization: warm,
-        sparse_refactor_interval: interval,
+        refactor_interval: interval,
         ..Default::default()
     })
     .solve(m, &Options::default(), None, &CancellationToken::default())
@@ -39,11 +38,9 @@ fn planted_primal_dual_and_network_certificates() {
     }
 }
 #[test]
-fn sparse_ignores_dense_cap_and_enforces_own_cap() {
+fn factor_cap_and_refactor_validation() {
     let (m, expected) = fixtures::packing(96);
     let mut solver = NativeSolver::new(NativeOptions {
-        sparse: true,
-        max_tableau_entries: 4,
         decompose: false,
         ..Default::default()
     });
@@ -52,13 +49,13 @@ fn sparse_ignores_dense_cap_and_enforces_own_cap() {
         .unwrap();
     assert_eq!(r.status, Status::Optimal);
     assert!((r.evaluation.unwrap().objective - expected).abs() < 1e-6);
-    solver.settings.max_sparse_entries = 10;
+    solver.settings.max_factor_entries = 10;
     assert!(matches!(
         solver.solve(&m, &Options::default(), None, &CancellationToken::default()),
         Err(Error::Unsupported(_))
     ));
-    solver.settings.max_sparse_entries = 2_000_000;
-    solver.settings.sparse_refactor_interval = 0;
+    solver.settings.max_factor_entries = 2_000_000;
+    solver.settings.refactor_interval = 0;
     assert!(matches!(
         solver.solve(&m, &Options::default(), None, &CancellationToken::default()),
         Err(Error::InvalidInput(_))
@@ -83,14 +80,11 @@ fn warm_and_cold_mip_match_independent_dynamic_program() {
     }
 }
 #[test]
-fn sparse_limits_cancel_and_primal_start_semantics() {
+fn limits_cancel_and_primal_start_semantics() {
     let (m, _) = fixtures::packing(32);
     let token = CancellationToken::default();
     token.cancel();
-    let mut solver = NativeSolver::new(NativeOptions {
-        sparse: true,
-        ..Default::default()
-    });
+    let mut solver = NativeSolver::default();
     assert_eq!(
         solver
             .solve(&m, &Options::default(), None, &token)
@@ -164,7 +158,7 @@ fn larger_degenerate_basis_drift_regression() {
 }
 
 #[test]
-fn sparse_original_unit_checks_with_scaled_rows() {
+fn original_unit_checks_with_scaled_rows() {
     let (m, expected) = fixtures::packing(32);
     let mut data = m.into_data();
     for i in 0..data.rows.len() {

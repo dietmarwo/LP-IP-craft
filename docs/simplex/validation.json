@@ -1,0 +1,229 @@
+{
+ "description": "Summaries of the 0.16.0 validation runs; regenerate with the commands in docs/simplex/README.md.",
+ "random_oracle": [
+  {
+   "seed": 1,
+   "steepest_edge": true,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "optimal": 336,
+    "infeasible": 42,
+    "unbounded": 171,
+    "scipy_4": 1
+   },
+   "failures": 0,
+   "max_objective_error": 9.999999690535333e-07,
+   "lp_seconds": 0.14163459700284875,
+   "mip_seconds": 0.05555239199929929,
+   "mip_nodes": 2461,
+   "iterations": 14521
+  },
+  {
+   "seed": 2,
+   "steepest_edge": true,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "unbounded": 177,
+    "optimal": 334,
+    "infeasible": 39
+   },
+   "failures": 0,
+   "max_objective_error": 6.250000126328814e-07,
+   "lp_seconds": 0.1493412389918376,
+   "mip_seconds": 0.06314588700115564,
+   "mip_nodes": 2886,
+   "iterations": 16096
+  },
+  {
+   "seed": 3,
+   "steepest_edge": true,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "unbounded": 181,
+    "infeasible": 30,
+    "optimal": 338,
+    "scipy_4": 1
+   },
+   "failures": 0,
+   "max_objective_error": 9.999999903698154e-07,
+   "lp_seconds": 0.14282795299095596,
+   "mip_seconds": 0.06459012900177186,
+   "mip_nodes": 3360,
+   "iterations": 15456
+  },
+  {
+   "seed": 4,
+   "steepest_edge": true,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "infeasible": 32,
+    "optimal": 333,
+    "unbounded": 180,
+    "scipy_4": 5
+   },
+   "failures": 0,
+   "max_objective_error": 1.0000000116860974e-06,
+   "lp_seconds": 0.1463445849931304,
+   "mip_seconds": 0.07118907900348859,
+   "mip_nodes": 2924,
+   "iterations": 15208
+  },
+  {
+   "seed": 5,
+   "steepest_edge": true,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "optimal": 344,
+    "infeasible": 37,
+    "unbounded": 165,
+    "scipy_4": 4
+   },
+   "failures": 0,
+   "max_objective_error": 9.99999993922529e-07,
+   "lp_seconds": 0.15318314600790472,
+   "mip_seconds": 0.06281900500016491,
+   "mip_nodes": 3162,
+   "iterations": 15835
+  },
+  {
+   "seed": 6,
+   "steepest_edge": true,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "unbounded": 180,
+    "optimal": 334,
+    "infeasible": 36
+   },
+   "failures": 0,
+   "max_objective_error": 1.0000005943311407e-06,
+   "lp_seconds": 0.13934470000549481,
+   "mip_seconds": 0.06376809200173739,
+   "mip_nodes": 3079,
+   "iterations": 15112
+  },
+  {
+   "seed": 7,
+   "steepest_edge": true,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "optimal": 327,
+    "unbounded": 201,
+    "infeasible": 19,
+    "scipy_4": 3
+   },
+   "failures": 0,
+   "max_objective_error": 1.9999999949504854e-06,
+   "lp_seconds": 0.1539356340035738,
+   "mip_seconds": 0.059089495001899195,
+   "mip_nodes": 2858,
+   "iterations": 15983
+  },
+  {
+   "seed": 8,
+   "steepest_edge": true,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "unbounded": 168,
+    "optimal": 348,
+    "infeasible": 32,
+    "scipy_4": 2
+   },
+   "failures": 0,
+   "max_objective_error": 1.0000001751109266e-06,
+   "lp_seconds": 0.1419388610001988,
+   "mip_seconds": 0.06490631099586608,
+   "mip_nodes": 2935,
+   "iterations": 15826
+  },
+  {
+   "seed": 2,
+   "steepest_edge": true,
+   "refactor_interval": 8,
+   "cases": 550,
+   "oracle_statuses": {
+    "unbounded": 177,
+    "optimal": 334,
+    "infeasible": 39
+   },
+   "failures": 0,
+   "max_objective_error": 6.250000126328814e-07,
+   "mip_nodes": 2884,
+   "iterations": 16091,
+   "label": "seed 2, refactor_interval 8"
+  },
+  {
+   "seed": 9,
+   "steepest_edge": false,
+   "refactor_interval": 64,
+   "cases": 550,
+   "oracle_statuses": {
+    "infeasible": 37,
+    "unbounded": 162,
+    "optimal": 349,
+    "scipy_4": 2
+   },
+   "failures": 0,
+   "max_objective_error": 1.0000000258969521e-06,
+   "mip_nodes": 2353,
+   "iterations": 15925,
+   "label": "seed 9, dantzig"
+  }
+ ],
+ "native_oracle": [
+  {
+   "args": "--seed 59103",
+   "cases": 600,
+   "passed": 600,
+   "nodes": 2932,
+   "iterations": 5229
+  },
+  {
+   "args": "--seed 91027",
+   "cases": 600,
+   "passed": 600,
+   "nodes": 2946,
+   "iterations": 5249
+  },
+  {
+   "args": "--seed 59103 --dantzig",
+   "cases": 600,
+   "passed": 600,
+   "nodes": 2926,
+   "iterations": 5272
+  },
+  {
+   "args": "--seed 91027 --dantzig",
+   "cases": 600,
+   "passed": 600,
+   "nodes": 2943,
+   "iterations": 5323
+  },
+  {
+   "args": "--seed 91027 --refactor-interval 1",
+   "cases": 600,
+   "passed": 600,
+   "nodes": 2870,
+   "iterations": 5127
+  }
+ ],
+ "components": [
+  {
+   "workers_requested": 1,
+   "cases": 180,
+   "passed": 180
+  },
+  {
+   "workers_requested": 4,
+   "cases": 180,
+   "passed": 180
+  }
+ ]
+}

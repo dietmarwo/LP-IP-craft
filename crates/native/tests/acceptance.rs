@@ -19,27 +19,30 @@ fn model(c: &[f64], a: &[f64], rows: Bounds, bounds: Bounds, sense: Sense, integ
     })
     .unwrap()
 }
+/// Solves with the defaults and, as a differential check, with
+/// largest-infeasibility pricing and a refactorization after every update.
 fn run(m: &Model) -> SolveResult {
-    let dense = NativeSolver::default()
+    let reference = NativeSolver::default()
         .solve(m, &Options::default(), None, &CancellationToken::default())
         .unwrap();
-    let sparse = NativeSolver::new(NativeOptions {
-        sparse: true,
+    let variant = NativeSolver::new(NativeOptions {
+        steepest_edge: false,
+        refactor_interval: 1,
         ..Default::default()
     })
     .solve(m, &Options::default(), None, &CancellationToken::default())
     .unwrap();
     assert_eq!(
-        sparse.status, dense.status,
-        "sparse: {sparse:?}; dense: {dense:?}"
+        variant.status, reference.status,
+        "variant: {variant:?}; reference: {reference:?}"
     );
-    if let (Some(a), Some(b)) = (&sparse.evaluation, &dense.evaluation) {
+    if let (Some(a), Some(b)) = (&variant.evaluation, &reference.evaluation) {
         assert!(
             (a.objective - b.objective).abs() < 1e-6 * (1. + a.objective.abs()),
-            "{sparse:?}"
+            "{variant:?}"
         );
     }
-    dense
+    reference
 }
 #[test]
 fn analytic_lp_both_senses_and_duals() {
@@ -195,7 +198,7 @@ fn limits_and_validation_before_cancel() {
     }
 }
 #[test]
-fn dense_allocation_cap() {
+fn factor_entry_cap() {
     let m = model(
         &[1.; 10],
         &[1.; 100],
@@ -205,11 +208,12 @@ fn dense_allocation_cap() {
         false,
     );
     let r = NativeSolver::new(NativeOptions {
-        max_tableau_entries: 10,
+        max_factor_entries: 5,
+        presolve: false,
         ..Default::default()
     })
     .solve(&m, &Options::default(), None, &CancellationToken::default());
-    assert!(matches!(r, Err(Error::Unsupported(_))));
+    assert!(matches!(r, Err(Error::Unsupported(_))), "{r:?}");
 }
 #[test]
 fn binary_enumeration_oracle() {
@@ -330,7 +334,7 @@ fn presolve_differential_fixed_and_empty() {
 }
 
 #[test]
-fn kernel_and_pricing_modes_agree() {
+fn pricing_refactor_and_presolve_modes_agree() {
     for sense in [Sense::Minimize, Sense::Maximize] {
         let m = model(
             &[3., 2., -1.],
@@ -341,22 +345,25 @@ fn kernel_and_pricing_modes_agree() {
             false,
         );
         let reference = run(&m);
-        for fast in [false, true] {
-            for pricing in [false, true] {
-                let r = NativeSolver::new(NativeOptions {
-                    fast_pivots: fast,
-                    dantzig_pricing: pricing,
-                    ..Default::default()
-                })
-                .solve(&m, &Options::default(), None, &CancellationToken::default())
-                .unwrap();
-                assert_eq!(r.status, reference.status);
-                assert!(
-                    (r.evaluation.unwrap().objective
-                        - reference.evaluation.as_ref().unwrap().objective)
-                        .abs()
-                        < 1e-7
-                );
+        for steepest_edge in [false, true] {
+            for refactor_interval in [1, 3, 64] {
+                for presolve in [false, true] {
+                    let r = NativeSolver::new(NativeOptions {
+                        steepest_edge,
+                        refactor_interval,
+                        presolve,
+                        ..Default::default()
+                    })
+                    .solve(&m, &Options::default(), None, &CancellationToken::default())
+                    .unwrap();
+                    assert_eq!(r.status, reference.status);
+                    assert!(
+                        (r.evaluation.unwrap().objective
+                            - reference.evaluation.as_ref().unwrap().objective)
+                            .abs()
+                            < 1e-7
+                    );
+                }
             }
         }
     }
@@ -402,7 +409,7 @@ fn warm_and_cold_integer_search_agree() {
 }
 
 #[test]
-fn streamed_tableau_compacts_empty_rows() {
+fn empty_rows_are_dropped_or_kept_consistently() {
     let m = model(
         &[-1., -2.],
         &[0., 0., 1., 1., 0., 0.],
@@ -421,4 +428,142 @@ fn streamed_tableau_compacts_empty_rows() {
         assert_eq!(r.status, Status::Optimal);
         assert!((r.evaluation.unwrap().objective + 2.5).abs() < 1e-8);
     }
+}
+
+fn diagnostic(r: &SolveResult, key: &str) -> u64 {
+    r.backend
+        .effective_options
+        .iter()
+        .find(|(k, _)| k == &format!("diagnostics.{key}"))
+        .map(|(_, v)| v.parse().unwrap())
+        .unwrap()
+}
+
+#[test]
+fn free_and_one_sided_columns_need_dual_phase_one() {
+    // minimize x0 + 2 x1 - x2, x0 free, x1 <= 4, x2 >= -1:
+    //   x0 - x1 = 1, x0 + x1 + x2 >= 3, x2 - x0 <= 2.
+    // The slack basis is dual infeasible for all three columns.
+    let m = model(
+        &[1., 2., -1.],
+        &[1., -1., 0., 1., 1., 1., -1., 0., 1.],
+        Bounds::new(vec![1., 3., f64::NEG_INFINITY], vec![1., f64::INFINITY, 2.]),
+        Bounds::new(
+            vec![f64::NEG_INFINITY, f64::NEG_INFINITY, -1.],
+            vec![f64::INFINITY, 4., f64::INFINITY],
+        ),
+        Sense::Minimize,
+        false,
+    );
+    let r = run(&m);
+    assert_eq!(r.status, Status::Optimal, "{r:?}");
+    let k =
+        check::lp_residuals(&m, r.candidate.as_ref().unwrap(), r.duals.as_ref().unwrap()).unwrap();
+    assert!(k.max() < 1e-9, "{k:?}");
+    // By hand: x1 = x0 - 1 and the objective is 3 x0 - 2 - x2, so x2 = 2 + x0
+    // is best; the covering row then needs 3 x0 + 1 >= 3, i.e. x0 >= 2/3,
+    // and the optimum 2 x0 - 4 is -8/3 at x = (2/3, -1/3, 8/3).
+    let x = r.candidate.unwrap();
+    assert!(
+        (r.evaluation.unwrap().objective + 8. / 3.).abs() < 1e-9,
+        "{x:?}"
+    );
+}
+
+#[test]
+fn unbounded_and_infeasible_with_rows_and_free_columns() {
+    // minimize -x0 subject to x0 - x1 <= 1 with x free: unbounded along x0 = x1.
+    let m = model(
+        &[-1., 0.],
+        &[1., -1.],
+        Bounds::new(vec![f64::NEG_INFINITY], vec![1.]),
+        Bounds::free(2),
+        Sense::Minimize,
+        false,
+    );
+    assert_eq!(run(&m).status, Status::Unbounded);
+    // Adding x0 - x1 >= 2 makes the same directions infeasible.
+    let m = model(
+        &[-1., 0.],
+        &[1., -1., 1., -1.],
+        Bounds::new(vec![f64::NEG_INFINITY, 2.], vec![1., f64::INFINITY]),
+        Bounds::free(2),
+        Sense::Minimize,
+        false,
+    );
+    assert_eq!(run(&m).status, Status::Infeasible);
+}
+
+#[test]
+fn certification_lp_enables_pruning_on_mixed_models() {
+    // Continuous columns on tight rows with decimal data: the LP incumbents
+    // do not certify by interval arithmetic as they are.
+    let (n, rows) = (12, 5);
+    let mut seed = 77u64;
+    let mut next = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        ((seed >> 33) % 1000) as f64 / 100.
+    };
+    let a: Vec<f64> = (0..rows * n).map(|_| next() + 0.13).collect();
+    let c: Vec<f64> = (0..n).map(|_| next() + 0.7).collect();
+    let rhs: Vec<f64> = (0..rows)
+        .map(|i| a[i * n..(i + 1) * n].iter().sum::<f64>() * 0.37)
+        .collect();
+    let mut data = model(
+        &c,
+        &a,
+        Bounds::new(vec![f64::NEG_INFINITY; rows], rhs),
+        Bounds::new(vec![0.; n], vec![1.; n]),
+        Sense::Maximize,
+        true,
+    )
+    .into_data();
+    for j in (0..n).step_by(3) {
+        data.kinds[j] = VariableKind::Continuous;
+    }
+    let m = Model::new(data).unwrap();
+    let r = NativeSolver::default()
+        .solve(&m, &Options::default(), None, &CancellationToken::default())
+        .unwrap();
+    assert_eq!(r.status, Status::Optimal, "{r:?}");
+    assert!(diagnostic(&r, "certified_incumbents") > 0, "{r:?}");
+    assert!(diagnostic(&r, "pruned_nodes") > 0, "{r:?}");
+    let b = r.best_bound.unwrap();
+    assert!(b >= r.evaluation.unwrap().objective - 1e-9);
+}
+
+#[test]
+fn best_bound_search_restores_sibling_bases() {
+    let m = model(
+        &[-7., -11., -5., -6., -9., -4., -8., -3.],
+        &[
+            3., 5., 2., 4., 4., 2., 5., 1., 2., 1., 4., 3., 1., 5., 2., 4.,
+        ],
+        Bounds::new(vec![f64::NEG_INFINITY; 2], vec![9.5, 8.5]),
+        Bounds::new(vec![0.; 8], vec![1.; 8]),
+        Sense::Minimize,
+        true,
+    );
+    let r = run(&m);
+    assert_eq!(r.status, Status::Optimal, "{r:?}");
+    assert!(diagnostic(&r, "basis_restores") > 0, "{r:?}");
+    assert_eq!(diagnostic(&r, "cold_fallbacks"), 0);
+    assert_eq!(diagnostic(&r, "unverified_infeasible_nodes"), 0);
+}
+
+#[test]
+fn root_fixed_columns_are_substituted() {
+    let m = model(
+        &[1., 2., 3.],
+        &[1., 1., 1., 2., 0., 1.],
+        Bounds::new(vec![4., f64::NEG_INFINITY], vec![f64::INFINITY, 5.]),
+        Bounds::new(vec![0., 1.5, 0.], vec![10., 1.5, 10.]),
+        Sense::Minimize,
+        false,
+    );
+    let r = run(&m);
+    assert_eq!(r.status, Status::Optimal, "{r:?}");
+    assert_eq!(diagnostic(&r, "presolve_removed_columns"), 1);
+    assert_eq!(r.candidate.as_ref().unwrap()[1], 1.5);
+    assert!((r.evaluation.unwrap().objective - 5.5).abs() < 1e-9);
 }

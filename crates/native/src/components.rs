@@ -1,4 +1,4 @@
-//! Split independent restricted-row components without sharing dictionaries.
+//! Split independent restricted-row components; each is solved with private numerical state.
 use crate::{NativeOptions, NativeSolver, accepted, incumbent, oriented};
 use lp_ip_craft::*;
 use std::time::Instant;
@@ -154,31 +154,11 @@ fn controls(settings: &NativeOptions, started: Instant) -> NativeOptions {
     c
 }
 fn worker_count(parts: &[Part], settings: &NativeOptions) -> usize {
-    let entries = parts
+    let size = parts
         .iter()
-        .map(|p| {
-            let n = (0..p.model.n())
-                .map(|j| {
-                    let (l, u) = (p.model.variables().lower[j], p.model.variables().upper[j]);
-                    if settings.presolve && l == u {
-                        0
-                    } else if !l.is_finite() && !u.is_finite() {
-                        2
-                    } else {
-                        1
-                    }
-                })
-                .sum::<usize>();
-            let rows = p
-                .model
-                .m()
-                .saturating_mul(2)
-                .saturating_add(p.model.n())
-                .saturating_add(2);
-            rows.saturating_mul(n.saturating_add(2))
-        })
+        .map(|p| p.model.nnz() + p.model.n() + p.model.m())
         .fold(0usize, usize::saturating_add);
-    if entries / parts.len() < settings.component_parallel_min_entries {
+    if size / parts.len() < settings.component_parallel_min_entries {
         1
     } else {
         settings.component_threads.min(parts.len())

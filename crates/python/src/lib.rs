@@ -384,8 +384,7 @@ fn native_settings(
             "incumbent_heuristic" => settings.incumbent_heuristic = field(&value, &key)?,
             "objective_lattice" => settings.objective_lattice = field(&value, &key)?,
             "node_reoptimization" => settings.node_reoptimization = field(&value, &key)?,
-            "fast_pivots" => settings.fast_pivots = field(&value, &key)?,
-            "dantzig_pricing" => settings.dantzig_pricing = field(&value, &key)?,
+            "steepest_edge" => settings.steepest_edge = field(&value, &key)?,
             "redundant_row_min_ratio" => settings.redundant_row_min_ratio = field(&value, &key)?,
             "redundant_rows" => settings.redundant_rows = field(&value, &key)?,
             "component_threads" => settings.component_threads = field(&value, &key)?,
@@ -397,10 +396,8 @@ fn native_settings(
                 settings.decomposition_min_variables = field(&value, &key)?
             }
             "presolve" => settings.presolve = field(&value, &key)?,
-            "sparse" => settings.sparse = field(&value, &key)?,
-            "max_sparse_entries" => settings.max_sparse_entries = field(&value, &key)?,
-            "sparse_refactor_interval" => settings.sparse_refactor_interval = field(&value, &key)?,
-            "max_tableau_entries" => settings.max_tableau_entries = field(&value, &key)?,
+            "max_factor_entries" => settings.max_factor_entries = field(&value, &key)?,
+            "refactor_interval" => settings.refactor_interval = field(&value, &key)?,
             _ => {
                 return Err(PyValueError::new_err(format!(
                     "backend_options: unknown native option {key:?}"

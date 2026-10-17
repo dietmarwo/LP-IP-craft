@@ -1,45 +1,43 @@
-# LP-IP-craft — native Rust LP/MIP pilot
+# LP-IP-craft — native Rust LP/MIP solver
 
-Version **0.15.0** replaces the HiGHS adapter with an optimization engine owned
-by this project. Both numerical crates have **no third-party dependencies**.
-The optional Python extension uses PyO3. No HiGHS, C/C++ solver, CMake,
-libclang, BLAS or external numerical library is built or linked by the solver.
+Version **0.16.0** replaces both 0.15 linear kernels (dense tableau and the
+sparse revised-simplex pilot) with one **bounded-variable dual revised
+simplex on a sparse LU factorization**, and replaces depth-first search with
+best-bound search, diving and pseudocost branching. The optimization engine
+is owned by this project: both numerical crates have **no third-party
+dependencies**, and no HiGHS, C/C++ solver, CMake, libclang, BLAS or external
+numerical library is built or linked. The optional Python extension uses PyO3.
 
-Ten implemented native iterations are documented in [docs/native](docs/native):
+What changed, and why it is faster (details in [docs/simplex](docs/simplex/README.md)):
 
-1. Two-phase primal simplex, dual postsolve and finite-box branch-and-bound.
-2. Fixed-column/empty-row presolve and dense allocation preflight.
-3. In-place pivots and most-negative pricing with Bland anti-stall fallback.
-4. Shared parent dictionaries and dual-simplex child reoptimization, with a
-   bounded cold fallback and independent original-unit acceptance checks.
-5. Checked rounding/unit-move incumbents, conservative pruning and conditional
-   integer-objective lattice bounds.
-6. Borrowed node bounds without copying the original sparse model.
-7. Sparse-row streaming into one dictionary allocation and inline substitutions.
-8. Conservative redundant-row presolve with a configurable scan threshold.
-9. Independent component solves with checked primal/dual reconstruction.
-10. Scoped parallel component solves with up to 16 workers and bounded quotas.
+- **Bounds stay bounds.** Variable bounds are no longer explicit rows and
+  branching no longer appends rows: a branch changes a bound in place, and the
+  child reoptimizes from the factorized parent basis with the dual simplex.
+- **Factorization.** Markowitz LU with threshold pivoting and a dense tail,
+  eta updates, and triangular solves that skip zeros in both directions.
+- **Dual simplex.** Dual steepest edge, bound-flipping ratio test with Harris
+  tolerances, power-of-two scaling, auxiliary dual phase 1 and cost
+  perturbation against degeneracy.
+- **Search.** Best-bound node selection with diving, pseudocost branching,
+  and an incumbent-certification LP that lets conservative pruning work on
+  mixed models, where the delivered engine could almost never prune.
 
-Version 0.15 adds an **opt-in sparse revised-simplex pilot** with sparse
-row-pivoted LU, sparse product-form updates, periodic refactorization and
-bordered-row/dual-simplex reuse for MIP children. Select
-`NativeOptions(sparse=True)` in Python or `NativeOptions { sparse: true,
-..Default::default() }` in Rust. The sparse path never allocates a dense
-tableau or basis inverse, and never silently falls back to the dense kernel.
-The previous dense kernel remains the default and a comparison reference.
+Every result is still checked independently: LP optima in original units,
+warm infeasibility claims by a Farkas re-check, incumbents by the core
+evaluator, bounds by the outward-rounded `safe_dual_bound`. Measured against
+the delivered 0.15 build ([docs/simplex](docs/simplex/README.md#performance)):
+the LP benchmark families run 2.6–30× faster than the better 0.15 kernel and
+solve network-2048, which neither 0.15 kernel could; the small
+selection MIPs match dense 0.15 and the warm-start regression of the 0.15
+sparse pilot is gone (selection-20: 1,505 → 93 nodes, 51× faster). On
+randomized models checked against SciPy, the new engine agrees on all 5,500
+cases, where 0.15 failed on up to 2 of 550 per seed, and its MIP search needs
+20–29× fewer nodes and 13–27× less time than dense 0.15.
 
-Both paths are numerical pilots. MIPs still require finite bounds on **all**
-variables, including continuous variables, of magnitude at most 2^53-1. The
-dense cap is 8 million binary64 entries (64 MB per dictionary). Sparse states
-have a separate default cap of 2 million tracked numerical entries. This is
-not a process-memory cap: indexing, work vectors, allocation temporaries and
-pending-node snapshots need additional memory. Sparse LU fill can still grow
-quadratically on unfavorable matrices.
-
-Each connected solve uses one thread. Independent components can use up to
-16 workers. The new [sparse plan, results and benchmark protocol](docs/sparse/README.md)
-uses connected synthetic cases and independent known answers. No real GTOC
-formulation has been supplied; application readiness remains unverified.
+MIPs still require finite bounds on **all** variables, including continuous
+variables, of magnitude at most 2^53-1. Each connected solve uses one thread;
+independent components can use up to 16 workers. No real GTOC formulation has
+been supplied; application readiness remains unverified.
 
 ## Build and use
 
@@ -51,7 +49,7 @@ Python installation:
 cargo test -p lp-ip-craft -p lp-ip-craft-native --locked
 cargo run --release -p lp-ip-craft-native --example solve --locked
 cargo run --release -p lp-ip-craft-native --example benchmark --locked -- 7
-cargo run --release -p lp-ip-craft-native --example sparse_benchmark --locked -- packing 4096 sparse
+cargo run --release -p lp-ip-craft-native --example family_benchmark --locked -- packing 4096
 ```
 
 Rust API:
@@ -86,9 +84,11 @@ assert abs(r.evaluation.objective - 9.) < 1e-7
 ```
 
 The default `backend="dummy"` remains for contract compatibility: it evaluates
-a point and reports `stub`. Select `native` to optimize. `backend="highs"`
-and `HighsOptions` have been removed. `NativeOptions` supports actual native
-controls; seed and HiGHS-specific gap options have no replacement here.
+a point and reports `stub`. Select `native` to optimize. `NativeOptions`
+lists only controls the engine honours; 0.16 removed the kernel-selection
+fields of 0.15 (`sparse`, `max_tableau_entries`, `fast_pivots`,
+`dantzig_pricing`) and renamed the factorization controls to
+`max_factor_entries` and `refactor_interval`. Unknown names are rejected.
 
 ## Numerical guarantees and limits
 
@@ -97,40 +97,45 @@ and relative duality-gap checks in original units. MIP incumbents pass the
 independent primal/integrality check. All solve statuses are numerical,
 including infeasibility; this is not an exact search-tree certificate.
 
-The existing outward-rounded `safe_dual_bound` is retained. Returned bounds
-use this calculation when available; LP bounds can be absent with infinite
-variable bounds. Conservative pruning additionally requires an original-model
-incumbent whose constraint activities are enclosed inside their bounds. This
-can fail on floating-point equality rows; search then continues without that
-pruning opportunity. Integer-lattice tightening has explicit sufficient
-conditions. Neither mechanism certifies phase-I infeasibility or the whole
-branch-and-bound tree. Standard IEEE binary64 with gradual underflow is
-required; fast-math is unsupported.
+The outward-rounded `safe_dual_bound` is retained. Returned bounds use this
+calculation when available; LP bounds can be absent with infinite variable
+bounds. Pruning requires an original-model incumbent whose constraint
+activities and objective are enclosed by outward-rounded arithmetic; the
+certification LP makes such incumbents available on most mixed models, but
+equality rows with continuous variables can still prevent it, and search then
+continues without that pruning opportunity. Integer-lattice tightening has
+explicit sufficient conditions. Neither mechanism certifies infeasibility or
+the whole branch-and-bound tree. Standard IEEE binary64 with gradual
+underflow is required; fast-math is unsupported.
 
 Starts are complete primal points. For a MIP they are evaluated as incumbent
-candidates; LP starts are explicitly rejected because public basis import is not
-implemented. Internal child-node basis reuse works in both kernels. Time/cancellation limits are cooperative and retain an incumbent
-when present. Node limits count relaxations; pivot limits apply across all
-nodes, phase I, dual simplex and cold retries. Parallel components reserve
-shares of the global node/pivot limits; unused shares are not redistributed.
-Serial component execution shares the remaining budget instead. See the API
-for this deliberate limit/performance tradeoff and memory accounting.
+candidates; LP starts are explicitly rejected because public basis import is
+not implemented. Time/cancellation limits are cooperative and retain an
+incumbent when present. Node limits count relaxations; iteration limits apply
+across all nodes, phase 1, certification LPs and retries. Parallel components
+reserve shares of the global node/iteration limits; unused shares are not
+redistributed. Serial component execution shares the remaining budget
+instead. Bases with heavy LU fill (random sparse structure) remain
+solve-bound; hypersparse solves and Forrest–Tomlin updates are the next steps.
 
-See [API](docs/api.md), [validation and results](docs/native/validation-6-10.md),
-[performance](docs/native/performance-6-10.md) and the still-incomplete
-[application target card](docs/target-card.md). Earlier adapter records are
-under [docs/history](docs/history); their timings are not native-engine claims.
+See [API](docs/api.md), [the dual simplex design, validation and
+benchmarks](docs/simplex/README.md) and the still-incomplete [application
+target card](docs/target-card.md). Earlier native iterations are under
+[docs/native](docs/native) and the superseded 0.15 sparse pilot under
+[docs/sparse](docs/sparse); adapter records are under [docs/history](docs/history).
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
 | `crates/core` | Immutable CSR model, contracts and independent checks |
-| `crates/native` | Sparse revised simplex/LU, dense reference, presolve, integer search |
+| `crates/native` | Dual simplex (`lp.rs`), sparse LU (`lu.rs`), presolve, components, integer search |
 | `crates/python`, `python/lp_ip_craft` | Optional PyO3/Python interface |
 | `tests`, `crates/*/tests` | Contract, numeric, exact-oracle and engine tests |
-| `examples/validate_native.py` | Optional SciPy oracle; not a package dependency |
-| `docs/native` | Ten earlier plans, results and raw measurements |
-| `docs/sparse` | Sparse implementation plan, validation and raw scaling results |
+| `examples/validate_native.py` | Optional SciPy/exact oracle on small models; not a package dependency |
+| `examples/validate_random.py` | Optional randomized LP/MIP differential check against SciPy |
+| `scripts/benchmark_families.py` | Isolated-process family benchmark, optionally against a 0.15 baseline |
+| `docs/simplex` | Current kernel and search design, validation and measurements |
+| `docs/native`, `docs/sparse` | Earlier plans, results and raw measurements |
 
 Project code is MIT. See [dependencies](docs/dependencies.md) and `Cargo.lock`.

@@ -93,28 +93,27 @@ class Options:
 
 @dataclass(frozen=True, kw_only=True)
 class NativeOptions:
-    """Controls for our native Rust simplex and branch-and-bound engine."""
+    """Controls for the native Rust engine: a bounded-variable dual revised
+    simplex on a sparse LU factorization inside best-bound branch and bound.
+    Field meanings and units are documented in ``docs/api.md``."""
     time_limit_seconds: Optional[float] = None
     node_limit: Optional[int] = 100_000
-    iteration_limit: Optional[int] = 100_000
-    pivot_tolerance: float = 1e-10
+    iteration_limit: Optional[int] = 1_000_000
+    pivot_tolerance: float = 1e-9
     dual_tolerance: float = 1e-7
-    sparse: bool = False
-    max_sparse_entries: int = 2_000_000
-    sparse_refactor_interval: int = 64
-    max_tableau_entries: int = 8_000_000
+    max_factor_entries: int = 4_000_000
+    refactor_interval: int = 64
+    steepest_edge: bool = True
     presolve: bool = True
     redundant_rows: bool = True
     redundant_row_min_ratio: float = 1.0
-    fast_pivots: bool = True
-    dantzig_pricing: bool = True
     node_reoptimization: bool = True
     incumbent_heuristic: bool = True
     objective_lattice: bool = True
     decompose: bool = True
     decomposition_min_variables: int = 32
     component_threads: int = 16
-    component_parallel_min_entries: int = 4096
+    component_parallel_min_entries: int = 2048
 
 
 @dataclass(frozen=True)

@@ -34,7 +34,8 @@ def exact_mixed(c,a,rl,ru):
 def main():
     import argparse
     parser=argparse.ArgumentParser()
-    parser.add_argument("--sparse", action="store_true")
+    parser.add_argument("--dantzig", action="store_true", help="largest-infeasibility pricing")
+    parser.add_argument("--refactor-interval", type=int, default=64)
     parser.add_argument("--seed", type=int, default=59103)
     parser.add_argument("--cases", type=int, default=200)
     args=parser.parse_args()
@@ -58,7 +59,7 @@ def main():
                 oracle=linprog(c,A_ub=np.vstack([a,-a]),b_ub=np.r_[ru,-rl],bounds=list(zip(lower,upper)),method="highs")
                 assert oracle.success
                 reference=oracle.fun
-            r=solve(m,backend="native",backend_options=NativeOptions(sparse=args.sparse))
+            r=solve(m,backend="native",backend_options=NativeOptions(steepest_edge=not args.dantzig,refactor_interval=args.refactor_interval))
             assert r.status=="optimal",(domain,case,r,reference)
             assert abs(r.evaluation.objective-float(reference))<1e-5,(domain,case,r,reference)
             assert r.evaluation.feasible_candidate
@@ -66,5 +67,5 @@ def main():
             if not integer:
                 k=lp_residuals(m,r.candidate,r.duals);assert k.duality_gap<1e-7
             records.append({"domain":domain,"case":case,"objective":r.evaluation.objective,"oracle":float(reference),"nodes":r.nodes,"pivots":r.iterations})
-    print(json.dumps({"sparse":args.sparse,"seed":args.seed,"cases":len(records),"passed":len(records),"results":records},indent=2))
+    print(json.dumps({"steepest_edge":not args.dantzig,"refactor_interval":args.refactor_interval,"seed":args.seed,"cases":len(records),"passed":len(records),"results":records},indent=2))
 if __name__=="__main__":main()

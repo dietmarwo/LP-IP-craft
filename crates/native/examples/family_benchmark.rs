@@ -1,4 +1,8 @@
 //! Deterministic connected fixtures with independent known objective values.
+//!
+//! `cargo run --release -p lp-ip-craft-native --example family_benchmark --
+//! <packing|irregular|network|selection> <size> [warm|cold] [dse|dantzig]`
+//! prints one JSON record; the solve must reach the known optimum.
 use lp_ip_craft::*;
 use lp_ip_craft_native::*;
 use std::time::Instant;
@@ -158,8 +162,8 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     let family = args.get(1).map(String::as_str).unwrap_or("packing");
     let size = args.get(2).map(|s| s.parse().unwrap()).unwrap_or(128);
-    let sparse = args.get(3).is_none_or(|s| s == "sparse");
-    let warm = args.get(4).is_none_or(|s| s != "cold");
+    let warm = args.get(3).is_none_or(|s| s != "cold");
+    let steepest_edge = args.get(4).is_none_or(|s| s != "dantzig");
     let (model, expected) = match family {
         "packing" => packing(size),
         "irregular" => irregular(size),
@@ -168,20 +172,22 @@ fn main() {
         _ => panic!("unknown family"),
     };
     let settings = NativeOptions {
-        sparse,
         decompose: false,
         component_threads: 1,
         node_reoptimization: warm,
+        steepest_edge,
         time_limit_seconds: Some(30.),
         ..Default::default()
     };
     let t = Instant::now();
-    let result = NativeSolver::new(settings).solve(
-        &model,
-        &Options::default(),
-        None,
-        &CancellationToken::default(),
-    );
+    let r = NativeSolver::new(settings)
+        .solve(
+            &model,
+            &Options::default(),
+            None,
+            &CancellationToken::default(),
+        )
+        .unwrap();
     let seconds = t.elapsed().as_secs_f64();
     let peak_rss_kib = std::fs::read_to_string("/proc/self/status")
         .ok()
@@ -192,49 +198,38 @@ fn main() {
                 .and_then(|s| s.parse::<u64>().ok())
         })
         .unwrap_or(0);
-
-    match result {
-        Ok(r) => {
-            let status = r.status.as_str();
-            if r.status == Status::Optimal {
-                let objective = r.evaluation.as_ref().unwrap().objective;
-                assert!(
-                    (objective - expected).abs() < 1e-6 * (1. + expected.abs()),
-                    "{objective} != {expected}"
-                );
-            }
-            let objective = r
-                .evaluation
-                .as_ref()
-                .map(|e| e.objective.to_string())
-                .unwrap_or("null".into());
-            let d = |key: &str| {
-                r.backend
-                    .effective_options
-                    .iter()
-                    .find(|(k, _)| k == key)
-                    .map(|(_, v)| v.as_str())
-                    .unwrap_or("0")
-            };
-            println!(
-                "{{\"family\":\"{family}\",\"size\":{size},\"sparse\":{sparse},\"warm\":{warm},\"n\":{},\"m\":{},\"nnz\":{},\"peak_rss_kib\":{peak_rss_kib},\"seconds\":{seconds},\"status\":\"{status}\",\"objective\":{objective},\"expected\":{expected},\"pivots\":{},\"nodes\":{},\"peak_entries\":{},\"refactors\":{},\"warm_nodes\":{},\"cold_fallbacks\":{}}}",
-                model.n(),
-                model.m(),
-                model.nnz(),
-                r.iterations,
-                r.nodes,
-                d("diagnostics.sparse_peak_entries"),
-                d("diagnostics.sparse_refactors"),
-                d("diagnostics.reoptimized_nodes"),
-                d("diagnostics.cold_fallbacks")
-            );
-        }
-        Err(Error::Unsupported(_)) if !sparse => println!(
-            "{{\"family\":\"{family}\",\"size\":{size},\"sparse\":false,\"warm\":{warm},\"n\":{},\"m\":{},\"nnz\":{},\"peak_rss_kib\":{peak_rss_kib},\"seconds\":{seconds},\"status\":\"dense_guard\"}}",
-            model.n(),
-            model.m(),
-            model.nnz()
-        ),
-        Err(e) => panic!("{e:?}"),
+    let status = r.status.as_str();
+    if r.status == Status::Optimal {
+        let objective = r.evaluation.as_ref().unwrap().objective;
+        assert!(
+            (objective - expected).abs() < 1e-6 * (1. + expected.abs()),
+            "{objective} != {expected}"
+        );
     }
+    let objective = r
+        .evaluation
+        .as_ref()
+        .map(|e| e.objective.to_string())
+        .unwrap_or("null".into());
+    let d = |key: &str| {
+        r.backend
+            .effective_options
+            .iter()
+            .find(|(k, _)| k == &format!("diagnostics.{key}"))
+            .map(|(_, v)| v.as_str())
+            .unwrap_or("0")
+    };
+    println!(
+        "{{\"family\":\"{family}\",\"size\":{size},\"warm\":{warm},\"steepest_edge\":{steepest_edge},\"n\":{},\"m\":{},\"nnz\":{},\"peak_rss_kib\":{peak_rss_kib},\"seconds\":{seconds},\"status\":\"{status}\",\"objective\":{objective},\"expected\":{expected},\"iterations\":{},\"nodes\":{},\"factor_peak_entries\":{},\"refactorizations\":{},\"bound_flips\":{},\"warm_nodes\":{},\"cold_fallbacks\":{}}}",
+        model.n(),
+        model.m(),
+        model.nnz(),
+        r.iterations,
+        r.nodes,
+        d("factor_peak_entries"),
+        d("refactorizations"),
+        d("bound_flips"),
+        d("reoptimized_nodes"),
+        d("cold_fallbacks")
+    );
 }

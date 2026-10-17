@@ -1,5 +1,10 @@
 # Sparse revised-simplex pilot, version 0.15.0
 
+> **Superseded in 0.16.0.** Both 0.15 kernels were replaced by the bounded
+> dual revised simplex described in [../simplex](../simplex/README.md). This
+> directory is kept as the record of the pilot; its commands, option names
+> and the `sparse_benchmark` example no longer exist.
+
 We can develop sparse numerical infrastructure without access to the real GTOC
 application. This release implements and tests the first three milestones in
 [plan.md](plan.md). Synthetic tests establish specific numerical behavior and

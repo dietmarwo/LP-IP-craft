@@ -33,10 +33,10 @@ def test_component_status_composition():
     m=make(c=[1.,1.,1.,1.],a=[[1.,-1.,0.,0.],[0.,0.,1.,1.]],lo=[0.]*4,up=[math.inf]*4,rl=[0.,-math.inf],ru=[0.,1.])
     assert solve(m,backend="native",backend_options=controls()).status=="unbounded"
 
-def test_component_cap_is_per_dictionary():
+def test_component_cap_is_per_factorization():
     m=make(c=[3.,2.,5.,1.],a=[[1.,1.,0.,0.],[0.,0.,1.,1.]],up=[1.]*4,ru=[1.5,1.5])
-    assert solve(m,backend="native",backend_options=controls(max_tableau_entries=30)).status=="optimal"
-    with pytest.raises(NotImplementedError):solve(m,backend="native",backend_options=controls(max_tableau_entries=30,decompose=False))
+    assert solve(m,backend="native",backend_options=controls(max_factor_entries=1)).status=="optimal"
+    with pytest.raises(NotImplementedError):solve(m,backend="native",backend_options=controls(max_factor_entries=1,decompose=False))
 
 def test_isolated_contradictory_row_is_not_lost():
     m=make(c=[1.,1.,1.,1.],a=[[1.,1.,0.,0.],[0.,0.,1.,1.],[0.,0.,0.,0.]],up=[1.]*4,ru=[1.,1.,-1.])
@@ -72,9 +72,10 @@ def test_parallel_invalid_worker_count(workers):
 def test_parallel_child_error_is_propagated():
     from lp_ip_craft import Cancellation
     token=Cancellation()
-    m=make(c=[1.]*10,a=[[1.,1.]+[0.]*8,[0.,0.]+[1.]*8],up=[1.]*10,ru=[1.5,3.5])
-    with pytest.raises(NotImplementedError,match="tableau"):
-        solve(m,backend="native",cancellation=token,backend_options=controls(component_threads=2,component_parallel_min_entries=0,max_tableau_entries=30))
+    # The second block has two rows, so its basis needs two factor entries.
+    m=make(c=[1.]*10,a=[[1.,1.]+[0.]*8,[0.,0.]+[1.]*8,[0.,0.,1.,1.]+[0.]*6],up=[1.]*10,ru=[1.5,3.5,1.5])
+    with pytest.raises(NotImplementedError,match="max_factor_entries"):
+        solve(m,backend="native",cancellation=token,backend_options=controls(component_threads=2,component_parallel_min_entries=0,max_factor_entries=1,presolve=False))
     assert not token.cancelled
 
 def test_parallel_deadline_does_not_return_partial_vector():

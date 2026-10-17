@@ -15,6 +15,12 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo run -p lp-ip-craft-native --release --example benchmark --locked -- 1
+      - name: Family benchmark smoke run (checks the known optima)
+        run: |
+          cargo run -p lp-ip-craft-native --release --example family_benchmark --locked -- packing 1024
+          cargo run -p lp-ip-craft-native --release --example family_benchmark --locked -- network 512
+          cargo run -p lp-ip-craft-native --release --example family_benchmark --locked -- selection 32 warm
+          cargo run -p lp-ip-craft-native --release --example family_benchmark --locked -- selection 32 cold dantzig
       - name: Numerical dependency audit
         shell: bash
         run: |
@@ -55,5 +61,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: python -m pip install ".[test]" scipy
       - run: python examples/validate_native.py > native-oracle.json
+      - run: python examples/validate_native.py --seed 91027 --dantzig > native-oracle-dantzig.json
+      - run: python examples/validate_random.py --seed 1 > random-oracle-1.json
+      - run: python examples/validate_random.py --seed 2 --refactor-interval 8 > random-oracle-2.json
       - run: python examples/validate_components.py 1 > components-serial.json
       - run: python examples/validate_components.py 4 > components-parallel.json

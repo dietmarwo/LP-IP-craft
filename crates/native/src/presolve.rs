@@ -1,4 +1,5 @@
 //! Conservative reductions over the original box; no approximate dropping.
+use crate::NativeOptions;
 use lp_ip_craft::{Bounds, Model};
 
 pub(crate) fn supported_arithmetic() -> bool {
@@ -7,6 +8,36 @@ pub(crate) fn supported_arithmetic() -> bool {
     (bb(f64::MIN_POSITIVE) * bb(0.5)).to_bits() == 1_u64 << 51
         && (tiny + tiny).to_bits() == 2
         && (tiny * bb(2.)).to_bits() == 2
+}
+
+/// Rows the LP keeps. With presolve, free rows and feasible empty rows are
+/// dropped exactly; with `redundant_rows` also rows whose activity over the
+/// root box is conservatively inside their bounds (then over every node box).
+pub(crate) fn kept_rows(model: &Model, bounds: &Bounds, settings: &NativeOptions) -> Vec<bool> {
+    if !settings.presolve {
+        return vec![true; model.m()];
+    }
+    let scan = settings.redundant_rows
+        && model.m() as f64 >= settings.redundant_row_min_ratio * model.n() as f64;
+    let mut keep = active_rows(model, bounds, scan);
+    let matrix = model.matrix();
+    for (i, kept) in keep.iter_mut().enumerate() {
+        let (l, u) = (model.rows().lower[i], model.rows().upper[i]);
+        let empty = (matrix.pattern.indptr[i]..matrix.pattern.indptr[i + 1])
+            .all(|k| matrix.values[k] == 0.);
+        if (l == f64::NEG_INFINITY && u == f64::INFINITY) || (empty && l <= 0. && u >= 0.) {
+            *kept = false;
+        }
+    }
+    keep
+}
+
+/// Columns the LP keeps: with presolve, columns fixed by their root bounds
+/// are substituted into the rows.
+pub(crate) fn kept_columns(model: &Model, bounds: &Bounds, settings: &NativeOptions) -> Vec<bool> {
+    (0..model.n())
+        .map(|j| !settings.presolve || bounds.lower[j] != bounds.upper[j])
+        .collect()
 }
 
 pub(crate) fn active_rows(model: &Model, bounds: &Bounds, enabled: bool) -> Vec<bool> {

@@ -1,4 +1,0 @@
-fixed [22.4637, 0.3634, 0.2392, 0.2115, 0.2004] ms 112.09 x baseline/final
-pivot [64.804, 61.1389, 1.5578, 1.4266, 1.4316] ms 45.27 x baseline/final
-knapsack [0.7302, 0.471, 0.245, 0.1873, 0.0806] ms 9.06 x baseline/final
-partition [0.4644, 0.2708, 0.2094, 0.227, 0.193] ms 2.41 x baseline/final
