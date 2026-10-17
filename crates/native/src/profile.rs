@@ -68,6 +68,13 @@ mod enabled {
 pub use enabled::*;
 #[cfg(not(feature = "kernel-profile"))]
 pub(crate) struct Guard;
+// Scope guards are ended early with `drop(guard)`; an empty `Drop` keeps those
+// calls meaningful (and lint-clean) when profiling is compiled out.
+#[cfg(not(feature = "kernel-profile"))]
+impl Drop for Guard {
+    #[inline(always)]
+    fn drop(&mut self) {}
+}
 #[cfg(not(feature = "kernel-profile"))]
 #[inline(always)]
 pub(crate) fn enter(_: &'static str) -> Guard {
