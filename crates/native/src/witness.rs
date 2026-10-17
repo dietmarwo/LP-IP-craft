@@ -1,15 +1,38 @@
 //! Exact rational reconstruction of a nearby feasible point with fixed integers.
 //! A rational witness may exist when no exactly feasible binary64 display point does.
-use crate::{Budget, rational::Rat};
+//!
+//! Effort is bounded by limb operations of the exact arithmetic (see
+//! [`crate::rational::work`]), not by wall time, so whether a certificate is
+//! found does not depend on machine speed or load.
+use crate::{
+    Budget,
+    rational::{self, Rat},
+};
 use lp_ip_craft::{Model, Sense};
 use std::cmp::Ordering;
 pub(crate) struct Witness {
     pub upper: f64,
     pub point: Vec<f64>,
 }
-pub(crate) fn upper(model: &Model, x: &[f64], budget: &Budget<'_>) -> Option<Witness> {
-    let began = std::time::Instant::now();
-    let stopped = || budget.stop().is_some() || began.elapsed().as_millis() >= 250;
+/// Limb operations allowed for one witness attempt (the largest public-model
+/// attempt measured needs about 7e4).
+pub(crate) const ATTEMPT_WORK: u64 = 8_000_000;
+
+/// Tries to certify `x` (integers rounded and fixed) by an exactly feasible
+/// rational point. Returns the witness, if any, and the limb operations used.
+pub(crate) fn upper(
+    model: &Model,
+    x: &[f64],
+    budget: &Budget<'_>,
+    limit: u64,
+) -> (Option<Witness>, u64) {
+    rational::reset_work();
+    let witness = reconstruct(model, x, budget, limit);
+    (witness, rational::work())
+}
+
+fn reconstruct(model: &Model, x: &[f64], budget: &Budget<'_>, limit: u64) -> Option<Witness> {
+    let stopped = || budget.stop().is_some() || rational::work() >= limit;
     if model.m() > 1024 || model.nnz() > 20000 || stopped() {
         return None;
     }
@@ -182,12 +205,23 @@ mod tests {
             pivots: 0,
         };
         let m = make(1.);
-        let u = upper(&m, &[0., 1. / 3.], &budget).unwrap().upper;
+        let u = upper(&m, &[0., 1. / 3.], &budget, ATTEMPT_WORK)
+            .0
+            .unwrap()
+            .upper;
         assert!((2. + 1. / 3. ..2. + 1. / 3. + 1e-14).contains(&u));
         assert!(crate::incumbent::upper(&m, &[0., 1. / 3.]).is_none());
-        assert!(upper(&make(1. / 3.), &[0., 1. / 3.], &budget).is_none());
+        assert!(
+            upper(&make(1. / 3.), &[0., 1. / 3.], &budget, ATTEMPT_WORK)
+                .0
+                .is_none()
+        );
+        assert!(
+            upper(&m, &[0., 1. / 3.], &budget, 1).0.is_none(),
+            "work cap"
+        );
         cancel.cancel();
-        assert!(upper(&m, &[0., 1. / 3.], &budget).is_none());
+        assert!(upper(&m, &[0., 1. / 3.], &budget, ATTEMPT_WORK).0.is_none());
     }
 }
 
@@ -226,6 +260,6 @@ mod incompatible_decimal_test {
             cancel: &c,
             pivots: 0,
         };
-        assert!(upper(&model, &x, &b).is_none());
+        assert!(upper(&model, &x, &b, ATTEMPT_WORK).0.is_none());
     }
 }

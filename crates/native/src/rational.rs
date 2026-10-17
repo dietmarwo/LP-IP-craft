@@ -1,7 +1,24 @@
 //! Bounded owned exact arithmetic for primal witnesses, never a numerical LP kernel.
 //! Every binary64 datum is interpreted exactly. Exceeding 8192 bits fails closed.
+//!
+//! Multiplication and division charge their limb operations to a per-thread
+//! work counter, so callers can bound exact computations deterministically
+//! (independently of machine speed) with [`reset_work`] and [`work`].
+use std::cell::Cell;
 use std::cmp::Ordering;
 const LIMBS: usize = 256;
+thread_local! { static WORK: Cell<u64> = const { Cell::new(0) }; }
+fn charge(amount: usize) {
+    WORK.with(|w| w.set(w.get().saturating_add(amount as u64)));
+}
+/// Resets this thread's limb-operation counter.
+pub(crate) fn reset_work() {
+    WORK.with(|w| w.set(0));
+}
+/// Limb operations performed on this thread since [`reset_work`].
+pub(crate) fn work() -> u64 {
+    WORK.with(Cell::get)
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Nat(Vec<u32>);
 impl Nat {
@@ -56,6 +73,7 @@ impl Nat {
         if self.0.len() + b.0.len() > LIMBS {
             return None;
         }
+        charge(self.0.len() * b.0.len() + 1);
         let mut v = vec![0; self.0.len() + b.0.len()];
         for (i, &a) in self.0.iter().enumerate() {
             let mut carry = 0u64;
@@ -84,29 +102,95 @@ impl Nat {
         }
         if v.len() > LIMBS { None } else { Some(Self(v)) }
     }
+    /// Quotient and remainder by word-level long division (Knuth, TAOCP vol. 2,
+    /// algorithm D, in the formulation of Hacker's Delight `divmnu`).
     fn div_rem(&self, b: &Self) -> (Self, Self) {
         assert!(!b.zero());
-        if b == &Self::small(1) {
-            return (self.clone(), Self::small(0));
-        }
         if self.cmp(b) == Ordering::Less {
             return (Self::small(0), self.clone());
         }
-        let mut rem = Self::small(0);
-        let mut q = vec![0; self.0.len()];
-        for bit in (0..self.bits()).rev() {
-            rem = rem
-                .shift(1)
-                .expect("division remainder bounded by numerator");
-            if (self.0[bit / 32] >> (bit % 32)) & 1 != 0 {
-                rem = rem.add(&Self::small(1));
+        let (u, v) = (&self.0, &b.0);
+        let (m, n) = (u.len(), v.len());
+        charge((m - n + 1) * n + 1);
+        if n == 1 {
+            let d = u64::from(v[0]);
+            let mut q = vec![0u32; m];
+            let mut k = 0u64;
+            for j in (0..m).rev() {
+                let t = (k << 32) | u64::from(u[j]);
+                q[j] = (t / d) as u32;
+                k = t % d;
             }
-            if rem.cmp(b) != Ordering::Less {
-                rem = rem.sub(b);
-                q[bit / 32] |= 1 << (bit % 32);
+            return (Self::new(q), Self::small(k));
+        }
+        // Normalize so that the divisor's top limb has its high bit set.
+        let s = v[n - 1].leading_zeros();
+        let spill = |hi: u32, lo: u32| {
+            if s == 0 {
+                hi
+            } else {
+                (hi << s) | (lo >> (32 - s))
+            }
+        };
+        let mut vn = vec![0u32; n];
+        for i in (1..n).rev() {
+            vn[i] = spill(v[i], v[i - 1]);
+        }
+        vn[0] = v[0] << s;
+        let mut un = vec![0u32; m + 1];
+        un[m] = if s == 0 { 0 } else { u[m - 1] >> (32 - s) };
+        for i in (1..m).rev() {
+            un[i] = spill(u[i], u[i - 1]);
+        }
+        un[0] = u[0] << s;
+        const BASE: u64 = 1 << 32;
+        let mut q = vec![0u32; m - n + 1];
+        for j in (0..=m - n).rev() {
+            let top = (u64::from(un[j + n]) << 32) | u64::from(un[j + n - 1]);
+            let mut qhat = top / u64::from(vn[n - 1]);
+            let mut rhat = top % u64::from(vn[n - 1]);
+            while qhat >= BASE
+                || qhat * u64::from(vn[n - 2]) > (rhat << 32) + u64::from(un[j + n - 2])
+            {
+                qhat -= 1;
+                rhat += u64::from(vn[n - 1]);
+                if rhat >= BASE {
+                    break;
+                }
+            }
+            // Multiply and subtract qhat * vn from un[j..=j + n].
+            let mut k = 0i64;
+            for i in 0..n {
+                let p = qhat * u64::from(vn[i]);
+                let t = i64::from(un[i + j]) - k - (p & 0xFFFF_FFFF) as i64;
+                un[i + j] = t as u32;
+                k = (p >> 32) as i64 - (t >> 32);
+            }
+            let t = i64::from(un[j + n]) - k;
+            un[j + n] = t as u32;
+            q[j] = qhat as u32;
+            if t < 0 {
+                // qhat was one too large: add the divisor back.
+                q[j] = q[j].wrapping_sub(1);
+                let mut c = 0u64;
+                for i in 0..n {
+                    let t = u64::from(un[i + j]) + u64::from(vn[i]) + c;
+                    un[i + j] = t as u32;
+                    c = t >> 32;
+                }
+                un[j + n] = un[j + n].wrapping_add(c as u32);
             }
         }
-        (Self::new(q), rem)
+        let mut r = vec![0u32; n];
+        for i in 0..n - 1 {
+            r[i] = if s == 0 {
+                un[i]
+            } else {
+                (un[i] >> s) | (un[i + 1] << (32 - s))
+            };
+        }
+        r[n - 1] = un[n - 1] >> s;
+        (Self::new(q), Self::new(r))
     }
     fn gcd(mut a: Self, mut b: Self) -> Self {
         while !b.zero() {
@@ -356,5 +440,100 @@ mod independent_tests {
         let q = Nat::small(1).shift(500).unwrap().sub(&Nat::small(3));
         let product = p.mul(&q).unwrap();
         assert_eq!(product.div_rem(&p), (q, Nat::small(0)));
+    }
+}
+
+#[cfg(test)]
+mod division_tests {
+    use super::*;
+    /// `a = q * b + r` with `r < b` built from structured limbs, where the
+    /// trial quotient of algorithm D is often too large; the division must
+    /// return exactly `(q, r)`, also on the rare add-back path.
+    #[test]
+    fn long_division_recovers_planted_quotients() {
+        let special = [
+            0u32,
+            1,
+            2,
+            0x7FFF_FFFF,
+            0x8000_0000,
+            0xFFFF_FFFE,
+            0xFFFF_FFFF,
+        ];
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let limbs = |len: usize, next: &mut dyn FnMut() -> u64| -> Vec<u32> {
+            (0..len)
+                .map(|_| {
+                    let r = next();
+                    if r % 3 == 0 {
+                        r as u32 >> 7
+                    } else {
+                        special[(r >> 8) as usize % special.len()]
+                    }
+                })
+                .collect()
+        };
+        let mut checked = 0;
+        for _ in 0..20_000 {
+            let bl = 1 + (next() % 6) as usize;
+            let ql = 1 + (next() % 6) as usize;
+            let b = Nat::new(limbs(bl, &mut next));
+            if b.zero() {
+                continue;
+            }
+            let q = Nat::new(limbs(ql, &mut next));
+            let r = Nat::new(limbs(bl, &mut next));
+            let r = if r.cmp(&b) == Ordering::Less {
+                r
+            } else {
+                r.div_rem_bitwise(&b).1
+            };
+            let a = q.mul(&b).unwrap().add(&r);
+            assert_eq!(a.div_rem(&b), (q.clone(), r.clone()), "a={a:?} b={b:?}");
+            assert_eq!(a.div_rem(&b), a.div_rem_bitwise(&b));
+            checked += 1;
+        }
+        assert!(checked > 19_000);
+    }
+
+    impl Nat {
+        /// The original bit-serial division, kept as an independent oracle.
+        fn div_rem_bitwise(&self, b: &Self) -> (Self, Self) {
+            if self.cmp(b) == Ordering::Less {
+                return (Self::small(0), self.clone());
+            }
+            let mut rem = Self::small(0);
+            let mut q = vec![0; self.0.len()];
+            for bit in (0..self.bits()).rev() {
+                rem = rem.shift(1).unwrap();
+                if (self.0[bit / 32] >> (bit % 32)) & 1 != 0 {
+                    rem = rem.add(&Self::small(1));
+                }
+                if rem.cmp(b) != Ordering::Less {
+                    rem = rem.sub(b);
+                    q[bit / 32] |= 1 << (bit % 32);
+                }
+            }
+            (Self::new(q), rem)
+        }
+    }
+
+    #[test]
+    fn work_counter_charges_products_and_divisions() {
+        reset_work();
+        let a = Nat::small(u64::MAX).shift(200).unwrap();
+        let b = Nat::small(12345).shift(40).unwrap();
+        let before = work();
+        let _ = a.mul(&b);
+        let _ = a.div_rem(&b);
+        assert!(work() > before);
+        reset_work();
+        assert_eq!(work(), 0);
     }
 }

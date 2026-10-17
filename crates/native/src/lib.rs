@@ -419,8 +419,12 @@ struct Certifier {
     lp_attempts: u64,
     witness_attempts: u64,
     witness_successes: u64,
+    witness_work: u64,
 }
 const MAX_CERTIFICATIONS: u64 = 64;
+/// Exact-arithmetic limb operations for all rational witness attempts of one
+/// solve; see [`witness::ATTEMPT_WORK`] for the per-attempt cap.
+const WITNESS_WORK: u64 = 64_000_000;
 
 #[allow(clippy::too_many_arguments)]
 fn certify(
@@ -445,12 +449,17 @@ fn certify(
     }
     certifier.last = Some(x.clone());
     certifier.attempts += 1;
-    certifier.witness_attempts += u64::from(settings.rational_certification);
-    if let Some(witness) = settings
-        .rational_certification
-        .then(|| witness::upper(pool.original_model, x, budget))
-        .flatten()
-    {
+    let remaining = WITNESS_WORK.saturating_sub(certifier.witness_work);
+    let witness = if settings.rational_certification && remaining > 0 {
+        certifier.witness_attempts += 1;
+        let limit = remaining.min(witness::ATTEMPT_WORK);
+        let (witness, work) = witness::upper(pool.original_model, x, budget, limit);
+        certifier.witness_work += work;
+        witness
+    } else {
+        None
+    };
+    if let Some(witness) = witness {
         let point = witness.point;
         let upper = witness.upper;
         let evaluation = check::evaluate(model, &point, &options.tolerances)?;
@@ -899,6 +908,7 @@ impl NativeSolver {
             lp_attempts: 0,
             witness_attempts: 0,
             witness_successes: 0,
+            witness_work: 0,
         };
         let keep = presolve::kept_rows(model, root, settings);
         let mut closed_bound = f64::INFINITY;
@@ -1445,6 +1455,7 @@ impl NativeSolver {
                 ("certification_solves", certifier.lp_attempts),
                 ("rational_witness_attempts", certifier.witness_attempts),
                 ("rational_witness_successes", certifier.witness_successes),
+                ("rational_witness_work", certifier.witness_work),
                 ("certified_incumbents", certifier.certified),
             ]
             .map(|(k, v)| (format!("diagnostics.{k}"), v.to_string())),
