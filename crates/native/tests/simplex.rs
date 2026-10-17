@@ -72,7 +72,7 @@ fn warm_and_cold_mip_match_independent_dynamic_program() {
                 assert!((r.evaluation.unwrap().objective - expected).abs() < 1e-7);
                 let d: std::collections::BTreeMap<_, _> =
                     r.backend.effective_options.into_iter().collect();
-                if warm {
+                if warm && r.nodes > 1 {
                     assert!(d["diagnostics.reoptimized_nodes"].parse::<u64>().unwrap() > 0);
                 }
             }

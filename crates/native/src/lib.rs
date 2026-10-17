@@ -535,6 +535,16 @@ impl LpIpSolver for NativeSolver {
             ));
         }
         let call_started = Instant::now();
+        let original_model = model;
+        let strengthened = if self.settings.presolve
+            && !cancel.is_cancelled()
+            && self.settings.time_limit_seconds != Some(0.)
+        {
+            presolve::strengthen_integer_rows(model)?
+        } else {
+            None
+        };
+        let model = strengthened.as_ref().unwrap_or(model);
         if self.settings.decompose
             && model.n() >= self.settings.decomposition_min_variables
             && !cancel.is_cancelled()
@@ -941,6 +951,9 @@ impl LpIpSolver for NativeSolver {
             .backend
             .effective_options
             .push(("diagnostics.objective_lattice".into(), lattice.to_string()));
+        if let Some(x) = result.candidate.as_ref().filter(|_| strengthened.is_some()) {
+            result.evaluation = Some(check::evaluate(original_model, x, &options.tolerances)?);
+        }
         result.status = status;
         result.iterations = budget.pivots;
         result.message = format!(
