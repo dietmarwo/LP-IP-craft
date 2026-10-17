@@ -826,6 +826,9 @@ fn local_cliques(
     }
     let n = model.n();
     let mut graph = vec![vec![false; n]; n];
+    // Degrees in the (possibly partial) conflict graph, counted as edges
+    // appear instead of recounting a dense row per sort comparison.
+    let mut degree = vec![0usize; n];
     let mut work = 0u64;
     let cap = settings.packing_clique_work;
     'build: for row in &pack.rows {
@@ -835,18 +838,17 @@ fn local_cliques(
                     break 'build;
                 }
                 work += 1;
-                graph[a][b] = true;
-                graph[b][a] = true;
+                if !graph[a][b] {
+                    graph[a][b] = true;
+                    graph[b][a] = true;
+                    degree[a] += 1;
+                    degree[b] += 1;
+                }
             }
         }
     }
     let mut order: Vec<_> = (0..n).collect();
-    order.sort_by_key(|&j| {
-        (
-            std::cmp::Reverse(graph[j].iter().filter(|&&v| v).count()),
-            j,
-        )
-    });
+    order.sort_by_key(|&j| (std::cmp::Reverse(degree[j]), j));
     let mut cuts = BTreeSet::new();
     'seeds: for &first in &order {
         if work >= cap || cuts.len() == 64 || stopped(settings, cancel, began) {
