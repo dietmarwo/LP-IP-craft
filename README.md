@@ -1,8 +1,10 @@
+> Native 0.18: measured kernel profiling, Forrest–Tomlin basis updates with checked fallback, and indexed sparse pricing. See [the plan and implementation](docs/basis-updates/PLAN.md) and [benchmarks and validation](docs/basis-updates/RESULTS.md). Choose `basis_update="auto"` (default), `"eta"`, or `"forrest_tomlin"` in Python; Rust uses `BasisUpdate`. The production solver remains pure Rust without HiGHS.
+
 > Native 0.17 performance update: ten measured iterations add integral row strengthening, short-row integer propagation, a direct box-LP path, reachability-based sparse triangular solves, sparse eta work and adaptive refactorization. See [the iteration plans](docs/performance-ten/ITERATIONS.md) and [the complete results](docs/performance-ten/RESULTS.md). The core and native solver remain dependency-free Rust.
 
 # LP-IP-craft — native Rust LP/MIP solver
 
-Version **0.17.0** extends the 0.16 architecture, which replaced both 0.15
+Version **0.18.0** extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine
@@ -16,7 +18,7 @@ What changed, and why it is faster (details in [docs/simplex](docs/simplex/READM
   branching no longer appends rows: a branch changes a bound in place, and the
   child reoptimizes from the factorized parent basis with the dual simplex.
 - **Factorization.** Markowitz LU with threshold pivoting and a dense tail,
-  eta updates, and triangular solves that skip zeros in both directions.
+  adaptive Forrest–Tomlin / eta updates, and sparse triangular solves in both directions.
 - **Dual simplex.** Dual steepest edge, bound-flipping ratio test with Harris
   tolerances, power-of-two scaling, auxiliary dual phase 1 and cost
   perturbation against degeneracy.

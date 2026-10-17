@@ -21,6 +21,26 @@ use lp_ip_craft::{
 use std::sync::Arc;
 use std::time::Instant;
 
+/// Basis-update strategy. Auto chooses from measured factor/update sparsity.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BasisUpdate {
+    #[default]
+    Auto,
+    /// Product-form column eta file.
+    Eta,
+    /// Forrest–Tomlin row updates; unsafe updates fall back to eta and rebuild.
+    ForrestTomlin,
+}
+impl BasisUpdate {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Eta => "eta",
+            Self::ForrestTomlin => "forrest_tomlin",
+        }
+    }
+}
+
 /// Native controls.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NativeOptions {
@@ -38,8 +58,8 @@ pub struct NativeOptions {
     pub max_factor_entries: usize,
     /// Maximum basis updates before rebuilding LU; excessive eta fill rebuilds sooner.
     pub refactor_interval: usize,
-    /// Use Forrest–Tomlin basis updates; false retains product-form etas.
-    pub forrest_tomlin: bool,
+    /// Basis-update strategy; auto adapts to observed update and factor fill.
+    pub basis_update: BasisUpdate,
     /// Dual steepest-edge pricing; false prices by largest infeasibility.
     pub steepest_edge: bool,
     /// Drop free rows and feasible empty rows before simplex.
@@ -74,7 +94,7 @@ impl Default for NativeOptions {
             dual_tolerance: 1e-7,
             max_factor_entries: 4_000_000,
             refactor_interval: 64,
-            forrest_tomlin: true,
+            basis_update: BasisUpdate::Auto,
             steepest_edge: true,
             presolve: true,
             redundant_rows: true,
@@ -979,6 +999,7 @@ impl LpIpSolver for NativeSolver {
                 ("factor_peak_entries", stats.peak_entries as u64),
                 ("refactorizations", stats.refactors),
                 ("basis_updates", stats.updates),
+                ("forrest_tomlin_updates", stats.ft_updates),
                 ("bound_flips", stats.bound_flips),
                 ("basis_repairs", stats.repairs),
                 ("basis_restores", stats.restores),
@@ -1080,7 +1101,7 @@ fn controls(model: &Model, options: &Options, settings: &NativeOptions) -> lp::C
     lp::Controls {
         pivot_tolerance: settings.pivot_tolerance,
         refactor_interval: settings.refactor_interval,
-        forrest_tomlin: settings.forrest_tomlin,
+        basis_update: settings.basis_update,
         max_factor_entries: settings.max_factor_entries,
         steepest_edge: settings.steepest_edge,
         feasibility: options.tolerances.feasibility,
@@ -1100,7 +1121,7 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ),
         ("max_factor_entries", s.max_factor_entries.to_string()),
         ("refactor_interval", s.refactor_interval.to_string()),
-        ("forrest_tomlin", s.forrest_tomlin.to_string()),
+        ("basis_update", s.basis_update.as_str().to_string()),
         ("steepest_edge", s.steepest_edge.to_string()),
         ("component_threads", s.component_threads.to_string()),
         (

@@ -8,6 +8,65 @@
 //! fixed makes the cyclic permutation implicit in `order`.
 use super::lu::Lists;
 
+struct SparseReach {
+    seen: Vec<bool>,
+    nodes: Vec<usize>,
+    cooldown: [usize; 2],
+}
+impl SparseReach {
+    fn find(
+        &mut self,
+        v: &[f64],
+        row_of: Option<&[usize]>,
+        graph: &[Vec<(usize, f64)>],
+        rank: &[usize],
+        unit: Option<usize>,
+        channel: usize,
+    ) -> bool {
+        if self.cooldown[channel] > 0 {
+            self.cooldown[channel] -= 1;
+            return false;
+        }
+        if v.len() < 128 {
+            return false;
+        }
+        for &i in &self.nodes {
+            self.seen[i] = false;
+        }
+        self.nodes.clear();
+        let limit = v.len() / 8;
+        for at in 0..if unit.is_some() { 1 } else { v.len() } {
+            let p = unit.unwrap_or(at);
+            let r = row_of.map_or(p, |rows| rows[p]);
+            if v[r] != 0. {
+                self.seen[p] = true;
+                self.nodes.push(p);
+            }
+            if self.nodes.len() > limit {
+                self.cooldown[channel] = 8;
+                return false;
+            }
+        }
+        let mut at = 0;
+        while at < self.nodes.len() {
+            let p = self.nodes[at];
+            for &(q, _) in &graph[p] {
+                if !self.seen[q] {
+                    self.seen[q] = true;
+                    self.nodes.push(q);
+                    if self.nodes.len() > limit {
+                        self.cooldown[channel] = 8;
+                        return false;
+                    }
+                }
+            }
+            at += 1;
+        }
+        self.nodes.sort_unstable_by_key(|&p| rank[p]);
+        true
+    }
+}
+
 pub(crate) struct Ft {
     row_of: Vec<usize>,
     order: Vec<usize>,
@@ -21,9 +80,14 @@ pub(crate) struct Ft {
     ep: Vec<(usize, f64)>,
     ep_position: Option<usize>,
     scratch: Vec<f64>,
+    reach: SparseReach,
+    row_support: Vec<usize>,
+    sparse_btran: bool,
+    column_support: Vec<usize>,
 }
 impl Ft {
     pub fn new(prow: &[usize], pcol: &[usize], diag: &[f64], u: &Lists) -> Self {
+        let _profile = crate::profile::enter("factor_setup");
         let m = prow.len();
         let mut f = Self {
             row_of: vec![0; m],
@@ -38,6 +102,14 @@ impl Ft {
             ep: Vec::new(),
             ep_position: None,
             scratch: vec![0.; m],
+            reach: SparseReach {
+                seen: vec![false; m],
+                nodes: Vec::new(),
+                cooldown: [0; 2],
+            },
+            row_support: Vec::new(),
+            sparse_btran: false,
+            column_support: Vec::new(),
         };
         for k in 0..m {
             let p = pcol[k];
@@ -73,6 +145,8 @@ impl Ft {
             }
         }
         if capture {
+            self.column_support.clear();
+            let _timer = crate::profile::enter("spike_capture");
             self.spike.clear();
             for (p, &r) in self.row_of.iter().enumerate() {
                 if v[r] != 0. {
@@ -80,10 +154,22 @@ impl Ft {
                 }
             }
         }
-        for &p in self.order.iter().rev() {
+        let sparse = self
+            .reach
+            .find(v, Some(&self.row_of), &self.cols, &self.rank, None, 0);
+        let order = if sparse {
+            out.fill(0.);
+            &self.reach.nodes
+        } else {
+            &self.order
+        };
+        for &p in order.iter().rev() {
             let t = v[self.row_of[p]] / self.diag[p];
             out[p] = t;
             if t != 0. {
+                if capture {
+                    self.column_support.push(p);
+                }
                 for &(i, u) in &self.cols[p] {
                     v[self.row_of[i]] -= u * t;
                 }
@@ -91,12 +177,22 @@ impl Ft {
         }
         v.copy_from_slice(out);
     }
+    pub fn column_support(&self) -> &[usize] {
+        &self.column_support
+    }
     pub fn btran(&mut self, v: &mut [f64], out: &mut [f64], unit: Option<usize>) {
         if unit.is_some() {
             self.ep.clear();
             self.ep_position = unit;
         }
-        for &p in &self.order {
+        self.sparse_btran = self.reach.find(v, None, &self.rows, &self.rank, unit, 1);
+        let order = if self.sparse_btran {
+            out.fill(0.);
+            &self.reach.nodes
+        } else {
+            &self.order
+        };
+        for &p in order {
             let t = v[p] / self.diag[p];
             out[self.row_of[p]] = t;
             if t != 0. {
@@ -114,9 +210,21 @@ impl Ft {
             if t != 0. {
                 for &(i, a) in eta {
                     out[self.row_of[i]] -= a * t;
+                    if self.sparse_btran && !self.reach.seen[i] {
+                        self.reach.seen[i] = true;
+                        self.reach.nodes.push(i);
+                    }
                 }
             }
         }
+        self.row_support.clear();
+        if self.sparse_btran {
+            self.row_support
+                .extend(self.reach.nodes.iter().map(|&p| self.row_of[p]));
+        }
+    }
+    pub fn row_support(&self) -> Option<&[usize]> {
+        self.sparse_btran.then_some(&self.row_support)
     }
     /// Return false without mutation if the pivot/spike is unsafe. The
     /// caller records a conventional eta and rebuilds at the next safe point.

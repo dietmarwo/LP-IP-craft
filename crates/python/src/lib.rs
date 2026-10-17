@@ -398,7 +398,18 @@ fn native_settings(
             "presolve" => settings.presolve = field(&value, &key)?,
             "max_factor_entries" => settings.max_factor_entries = field(&value, &key)?,
             "refactor_interval" => settings.refactor_interval = field(&value, &key)?,
-            "forrest_tomlin" => settings.forrest_tomlin = field(&value, &key)?,
+            "basis_update" => {
+                settings.basis_update = match field::<String>(&value, &key)?.as_str() {
+                    "auto" => lp_ip_craft_native::BasisUpdate::Auto,
+                    "eta" => lp_ip_craft_native::BasisUpdate::Eta,
+                    "forrest_tomlin" => lp_ip_craft_native::BasisUpdate::ForrestTomlin,
+                    _ => {
+                        return Err(PyValueError::new_err(
+                            "basis_update must be auto, eta, or forrest_tomlin",
+                        ));
+                    }
+                }
+            }
             _ => {
                 return Err(PyValueError::new_err(format!(
                     "backend_options: unknown native option {key:?}"

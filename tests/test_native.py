@@ -128,3 +128,14 @@ def test_strengthened_integer_rows_do_not_block_continuous_certification():
     assert r.status == "optimal"
     assert abs(r.evaluation.objective - case["objective"]) < 1e-6
     assert r.nodes < 1000
+
+@pytest.mark.parametrize("method", ["auto", "eta", "forrest_tomlin"])
+def test_basis_update_controls(method):
+    r = solve(make(), backend="native", backend_options=NativeOptions(basis_update=method))
+    assert r.status == "optimal"
+    assert r.evaluation.objective == pytest.approx(9.)
+    assert dict(r.backend.effective_options)["basis_update"] == method
+
+def test_unknown_basis_update_is_rejected():
+    with pytest.raises(ValueError, match="basis_update"):
+        solve(make(), backend="native", backend_options=NativeOptions(basis_update="unknown"))

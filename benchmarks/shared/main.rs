@@ -141,6 +141,13 @@ fn main() {
             component_threads: workers,
             decompose: !is_family,
             node_reoptimization: warm,
+            basis_update: match args.get(6).map(String::as_str).unwrap_or("auto") {
+                "eta" => lp_ip_craft_native::BasisUpdate::Eta,
+                "ft" => lp_ip_craft_native::BasisUpdate::ForrestTomlin,
+                "auto" => lp_ip_craft_native::BasisUpdate::Auto,
+                _ => panic!("basis method must be auto, eta, or ft"),
+            },
+            refactor_interval: args.get(7).map_or(64, |s| s.parse().unwrap()),
             ..Default::default()
         });
         #[cfg(feature = "backend_highs")]

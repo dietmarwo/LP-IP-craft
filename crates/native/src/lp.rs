@@ -46,7 +46,7 @@ pub(crate) enum State {
 pub(crate) struct Controls {
     pub pivot_tolerance: f64,
     pub refactor_interval: usize,
-    pub forrest_tomlin: bool,
+    pub basis_update: crate::BasisUpdate,
     pub max_factor_entries: usize,
     pub steepest_edge: bool,
     /// Primal tolerance target in original units.
@@ -61,6 +61,7 @@ pub(crate) struct Stats {
     pub peak_entries: usize,
     pub refactors: u64,
     pub updates: u64,
+    pub ft_updates: u64,
     pub bound_flips: u64,
     pub repairs: u64,
     pub restores: u64,
@@ -125,6 +126,7 @@ pub(crate) struct Lp {
     weight: Vec<f64>,
     lu: Option<Lu>,
     rho: Vec<f64>,
+    rho_index: Vec<usize>,
     column: Vec<f64>,
     column_index: Vec<usize>,
     tau: Vec<f64>,
@@ -300,6 +302,7 @@ impl Lp {
             weight: vec![1.0; m],
             lu: None,
             rho: vec![0.0; m],
+            rho_index: Vec::new(),
             column: vec![0.0; m],
             column_index: Vec::new(),
             tau: vec![0.0; m],
@@ -533,6 +536,7 @@ impl Lp {
             if !lu.update_sparse(p, &self.column, self.column_index.iter().copied()) {
                 return false;
             }
+            self.stats.ft_updates += u64::from(lu.uses_ft());
             self.stats.updates += 1;
             self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
             let leaving = self.basic[p];
@@ -698,6 +702,7 @@ impl Lp {
     /// Factorizes the basis, replacing dependent columns by logicals.
     /// Returns whether the basis had to be repaired.
     fn refactor(&mut self) -> Result<bool> {
+        let _profile = crate::profile::enter("refactor_other");
         let mut repaired = false;
         for attempt in 0..4 {
             if attempt == 3 {
@@ -720,7 +725,29 @@ impl Lp {
             };
             match Lu::factor(self.m, column, self.controls.max_factor_entries) {
                 Ok(mut lu) => {
-                    if self.controls.forrest_tomlin {
+                    #[cfg(feature = "kernel-profile")]
+                    if std::env::var_os("LPIP_TRACE_FACTORS").is_some() {
+                        eprintln!(
+                            "factor {:?}",
+                            (
+                                self.m,
+                                lu.factor_sizes(),
+                                self.lu.as_ref().map_or(0, |old| old.average_update_nnz())
+                            )
+                        );
+                    }
+                    // FT avoids dense eta files on sparse factors. Keep the
+                    // compact product form when previous updates stayed sparse
+                    // or the new factors themselves have substantial fill.
+                    if self.controls.basis_update == crate::BasisUpdate::ForrestTomlin
+                        || (self.controls.basis_update == crate::BasisUpdate::Auto
+                            && lu.ft_suitable()
+                            && self.lu.as_ref().is_some_and(|old| {
+                                old.average_update_nnz()
+                                    .saturating_mul(self.controls.refactor_interval)
+                                    > 4 * lu.entries()
+                            }))
+                    {
                         lu.enable_ft();
                     }
                     self.stats.refactors += 1;
@@ -892,15 +919,22 @@ impl Lp {
             self.marked[j] = false;
         }
         self.touched.clear();
-        self.rho.fill(0.0);
+        for &i in &self.rho_index {
+            self.rho[i] = 0.;
+        }
         self.rho[r] = 1.0;
         let lu = self.lu.as_mut().expect("factorized basis");
-        lu.btran_unit(r, &mut self.rho);
+        lu.btran_unit_indexed(r, &mut self.rho, &mut self.rho_index);
         if self.controls.steepest_edge {
-            self.weight[r] = self.rho.iter().map(|v| v * v).sum::<f64>().max(MIN_WEIGHT);
+            self.weight[r] = self
+                .rho_index
+                .iter()
+                .map(|&i| self.rho[i] * self.rho[i])
+                .sum::<f64>()
+                .max(MIN_WEIGHT);
         }
         let n = self.n;
-        for k in 0..self.m {
+        for &k in &self.rho_index {
             let v = self.rho[k];
             if v.abs() <= DROP {
                 continue;
@@ -1022,7 +1056,13 @@ impl Lp {
     /// `B⁻¹ a_q` into `self.column`.
     fn compute_column(&mut self, q: usize) {
         let _profile = crate::profile::enter("column_setup");
-        self.column.fill(0.0);
+        if self.column_index.len() < self.m / 8 {
+            for &i in &self.column_index {
+                self.column[i] = 0.;
+            }
+        } else {
+            self.column.fill(0.);
+        }
         Self::add_column(
             &self.col_start,
             &self.col_index,
@@ -1033,14 +1073,7 @@ impl Lp {
             &mut self.column,
         );
         let lu = self.lu.as_mut().expect("factorized basis");
-        lu.ftran_entering(&mut self.column);
-        self.column_index.clear();
-        self.column_index.extend(
-            self.column
-                .iter()
-                .enumerate()
-                .filter_map(|(i, &v)| (v != 0.).then_some(i)),
-        );
+        lu.ftran_entering_indexed(&mut self.column, &mut self.column_index);
     }
 
     fn pivot(&mut self, r: usize, q: usize, theta: f64, s: f64, to_upper: bool) {
@@ -1117,6 +1150,7 @@ impl Lp {
         }
         let lu = self.lu.as_mut().expect("factorized basis");
         lu.update_sparse(r, &self.column, self.column_index.iter().copied());
+        self.stats.ft_updates += u64::from(lu.uses_ft());
         self.stats.updates += 1;
         self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
         self.basic[r] = q;
@@ -1475,7 +1509,7 @@ mod tests {
         Controls {
             pivot_tolerance: 1e-9,
             refactor_interval: 16,
-            forrest_tomlin: true,
+            basis_update: crate::BasisUpdate::ForrestTomlin,
             max_factor_entries: usize::MAX,
             steepest_edge: true,
             feasibility: 1e-7,

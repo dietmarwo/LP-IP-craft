@@ -8,7 +8,7 @@ import time
 import lp_ip_craft as lp
 
 p=argparse.ArgumentParser();p.add_argument('dataset');p.add_argument('backend',choices=['native','highs']);p.add_argument('output')
-p.add_argument('--variant',choices=['default','dantzig','refactor1','refactor8','workers4'],default='default')
+p.add_argument('--variant',choices=['default','dantzig','refactor1','refactor8','workers4','ft','eta'],default='default')
 p.add_argument('--suite',choices=['random','exact','components']);p.add_argument('--seed',type=int);a=p.parse_args()
 data=Path(a.dataset).read_bytes();dataset=json.loads(data)
 records=[]
@@ -18,7 +18,7 @@ for entry in dataset['records']:
     model=lp.Model(**entry['model'])
     mip=any(k!='continuous' for k in entry['model']['kinds'])
     if a.backend=='native':
-        settings=lp.NativeOptions(time_limit_seconds=30.,component_threads=4 if a.variant=='workers4' else 1,
+        settings=lp.NativeOptions(basis_update="forrest_tomlin" if a.variant=="ft" else "eta" if a.variant=="eta" else "auto",time_limit_seconds=30.,component_threads=4 if a.variant=='workers4' else 1,
                                   steepest_edge=a.variant!='dantzig',refactor_interval=1 if a.variant=='refactor1' else 8 if a.variant=='refactor8' else 64,
                                   decomposition_min_variables=1 if entry['suite']=='components' else 32,
                                   component_parallel_min_entries=0 if entry['suite']=='components' else 2048)

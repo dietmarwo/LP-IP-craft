@@ -34,3 +34,29 @@ For Python validation, install a release build using `maturin develop --release`
 `measure.py` reproduces a development iteration comparison when `binaries/iteration-N` and its preceding binary are present next to the script. Historical changes are supplied as ten ordered patches in the ZIP's `history` folder. Final results are in `docs/performance-ten/RESULTS.md`; all regressions and unsuccessful tuning attempts remain visible in the raw evidence.
 
 Run `python benchmarks/audit.py` to re-audit the bundled raw oracle and ablation records against the preserved adjudications. `analyze_results.py` recomputes the summary tables from that data. This is a read/reanalysis of the saved solver outcomes, not a new solve.
+
+## Kernel profiling and basis-update comparisons (0.18)
+
+The optional sixth/seventh positional arguments select `auto`, `eta`, or `ft`,
+and the maximum refactor interval (default 64):
+
+```sh
+cargo build --release --manifest-path benchmarks/Cargo.toml
+benchmarks/target/release/performance-native packing 4096 warm 1 5 auto 64
+cargo build --release --manifest-path benchmarks/Cargo.toml --features kernel-profile
+benchmarks/target/release/performance-native packing 4096 warm 1 5 ft 64
+```
+
+The feature adds `kernel_profile`: triples of name, exclusive nanoseconds and
+call count. Nested timed operations are subtracted from their parent. Profile
+on one solving thread; worker-thread timings are not aggregated. Call
+`lp_ip_craft_native::profile::reset()` before a solve and `snapshot()` afterwards
+when using your own harness. Normal builds compile out all kernel clocks.
+Use uninstrumented builds for reported performance. `LPIP_TRACE_FACTORS=1`
+with this feature prints basis dimension, L/U nonzeros and previous average
+update support to stderr at refactorization.
+
+`oracle_worker.py --variant ft` forces Forrest–Tomlin even for tiny/dense bases;
+`--variant eta` exercises the retained product-form implementation. Automatic
+selection is deterministic and uses observed update support and factor fill,
+not benchmark names or measured wall-clock timings. See `docs/basis-updates`.

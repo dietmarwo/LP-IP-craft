@@ -1,12 +1,11 @@
 //! Sparse LU factorization of simplex bases with Markowitz pivot selection
-//! and a relative threshold, plus product-form (eta) column replacements.
+//! and a relative threshold, plus adaptive product-form / Forrest–Tomlin updates.
 //!
 //! The basis `B` has one column per basis position. Factorization chooses a
 //! pivot sequence `(row r_k, position p_k)` and stores, per pivot `k`, the
 //! multipliers `L_k` of the rows it eliminates and the remaining pivot row
-//! `U_k` over positions pivoted later. Values that cancel to exactly zero
-//! stay in the active submatrix as structural entries (pivot selection
-//! skips them), so row and column lists never need rescanning. Once the
+//! `U_k` over positions pivoted later. Exact cancellations are removed from
+//! both active orientations and their Markowitz counts. Once the
 //! active submatrix is dense enough, elimination finishes with a dense
 //! partial-pivoting kernel.
 //!
@@ -206,7 +205,7 @@ impl Reach {
     }
 }
 
-/// An LU factorization of a basis with an eta file of column replacements.
+/// A basis factorization with product-form or Forrest–Tomlin updates.
 pub(crate) struct Lu {
     m: usize,
     prow: Vec<usize>,
@@ -232,6 +231,8 @@ pub(crate) struct Lu {
     eta_marked: Vec<bool>,
     ft: Option<super::ft::Ft>,
     force_refactor: bool,
+    sparse_btran: bool,
+    update_nnz: usize,
 }
 
 impl Lu {
@@ -293,6 +294,8 @@ impl Lu {
             eta_marked: vec![false; m],
             ft: None,
             force_refactor: false,
+            sparse_btran: false,
+            update_nnz: 0,
             reach: Reach {
                 seen: vec![false; m],
                 nodes: Vec::new(),
@@ -518,6 +521,19 @@ impl Lu {
         Ok(())
     }
 
+    #[cfg(feature = "kernel-profile")]
+    pub fn factor_sizes(&self) -> (usize, usize) {
+        (self.l.value.len(), self.u.value.len())
+    }
+    pub fn ft_suitable(&self) -> bool {
+        self.m >= 128 && self.l.value.len() <= self.m / 8 && self.entries() <= 16 * self.m
+    }
+    pub fn average_update_nnz(&self) -> usize {
+        self.update_nnz / self.updates().max(1)
+    }
+    pub fn uses_ft(&self) -> bool {
+        self.ft.is_some() && !self.force_refactor
+    }
     pub fn enable_ft(&mut self) {
         self.ft = Some(super::ft::Ft::new(
             &self.prow, &self.pcol, &self.diag, &self.u,
@@ -560,32 +576,48 @@ impl Lu {
     pub fn ftran_entering(&mut self, v: &mut [f64]) {
         self.ftran_impl(v, true);
     }
+    pub fn ftran_entering_indexed(&mut self, v: &mut [f64], indices: &mut Vec<usize>) {
+        self.ftran_entering(v);
+        indices.clear();
+        match &self.ft {
+            Some(ft) if self.etas.is_empty() => indices.extend_from_slice(ft.column_support()),
+            _ => indices.extend(
+                v.iter()
+                    .enumerate()
+                    .filter_map(|(i, &x)| (x != 0.).then_some(i)),
+            ),
+        }
+    }
     fn ftran_impl(&mut self, v: &mut [f64], capture: bool) {
         let _triangular = crate::profile::enter("ftran_triangular");
-        if self
-            .reach
-            .find(v, &self.l, Some(&self.row_step), &self.row_step, 0)
-        {
-            for &i in &self.reach.nodes {
-                let t = v[i];
-                if t != 0. {
-                    let (index, value) = self.l.get(self.row_step[i]);
-                    for (&r, &l) in index.iter().zip(value) {
-                        v[r] -= l * t;
+        let _lower = crate::profile::enter("ftran_lower");
+        if !self.l.value.is_empty() {
+            if self
+                .reach
+                .find(v, &self.l, Some(&self.row_step), &self.row_step, 0)
+            {
+                for &i in &self.reach.nodes {
+                    let t = v[i];
+                    if t != 0. {
+                        let (index, value) = self.l.get(self.row_step[i]);
+                        for (&r, &l) in index.iter().zip(value) {
+                            v[r] -= l * t;
+                        }
                     }
                 }
-            }
-        } else {
-            for k in 0..self.m {
-                let t = v[self.prow[k]];
-                if t != 0.0 {
-                    let (index, value) = self.l.get(k);
-                    for (&i, &l) in index.iter().zip(value) {
-                        v[i] -= l * t;
+            } else {
+                for k in 0..self.m {
+                    let t = v[self.prow[k]];
+                    if t != 0.0 {
+                        let (index, value) = self.l.get(k);
+                        for (&i, &l) in index.iter().zip(value) {
+                            v[i] -= l * t;
+                        }
                     }
                 }
             }
         }
+        drop(_lower);
         let w = &mut self.work;
         if let Some(ft) = &mut self.ft {
             ft.ftran(v, w, capture);
@@ -656,6 +688,21 @@ impl Lu {
         self.btran_masked(v, 1u64 << (position & 63), true);
     }
 
+    pub fn btran_unit_indexed(&mut self, position: usize, v: &mut [f64], indices: &mut Vec<usize>) {
+        self.btran_unit(position, v);
+        indices.clear();
+        if self.sparse_btran {
+            indices.extend(self.reach.nodes.iter().copied().filter(|&i| v[i] != 0.));
+            indices.sort_unstable();
+        } else {
+            indices.extend(
+                v.iter()
+                    .enumerate()
+                    .filter_map(|(i, &x)| (x != 0.).then_some(i)),
+            );
+        }
+    }
+
     fn btran_masked(&mut self, v: &mut [f64], mut support: u64, unit: bool) {
         let _eta = crate::profile::enter("btran_eta");
         for eta in self.etas.iter().rev() {
@@ -683,7 +730,11 @@ impl Lu {
         let _triangular = crate::profile::enter("btran_triangular");
         let w = &mut self.work;
         if let Some(ft) = &mut self.ft {
-            ft.btran(v, w, unit.then(|| self.eta_support[0]));
+            ft.btran(
+                v,
+                w,
+                (unit && self.etas.is_empty()).then(|| self.eta_support[0]),
+            );
         } else {
             if self.reach.find_seeded(
                 v,
@@ -718,7 +769,15 @@ impl Lu {
                 }
             }
         }
-        if self.reach.find(w, &self.l_rows, None, &self.row_step, 3) {
+        self.sparse_btran = self.reach.find_seeded(
+            w,
+            &self.l_rows,
+            None,
+            &self.row_step,
+            3,
+            self.ft.as_ref().and_then(|f| f.row_support()),
+        );
+        if self.sparse_btran {
             for &i in self.reach.nodes.iter().rev() {
                 let t = w[i];
                 if t != 0. {
@@ -753,9 +812,10 @@ impl Lu {
         &mut self,
         position: usize,
         alpha: &[f64],
-        indices: impl Iterator<Item = usize>,
+        indices: impl ExactSizeIterator<Item = usize>,
     ) -> bool {
         let _profile = crate::profile::enter("basis_update");
+        self.update_nnz += indices.len();
         if let Some(ft) = &mut self.ft {
             if !self.force_refactor && ft.update(position, alpha[position]) {
                 return true;
@@ -1060,6 +1120,44 @@ mod tests {
                 assert!(residual(&columns, &mut lu) < 1e-8, "m={m} step={step}");
             }
             assert_eq!(lu.updates(), 80);
+        }
+    }
+
+    #[test]
+    fn ft_replacements_move_spikes_across_permuted_bases() {
+        for m in [17, 128, 257] {
+            for seed in 0..6 {
+                let mut columns: Vec<_> = (0..m).map(|p| vec![((p * 7 + 3) % m, 4.)]).collect();
+                let mut lu = factor(&columns, usize::MAX).unwrap();
+                lu.enable_ft();
+                for step in 0..100 {
+                    let p = (step * 19 + seed * 7) % m;
+                    let new = vec![
+                        ((p * 7 + 3) % m, 4. + (step % 3) as f64),
+                        (((p + 1 + seed) * 7 + 3) % m, -0.75),
+                        (((p + 7 + seed) * 7 + 3) % m, 0.5),
+                    ];
+                    let mut rhs = vec![0.; m];
+                    let mut indices = Vec::new();
+                    for &(i, v) in &new {
+                        rhs[i] = v;
+                    }
+                    lu.ftran_entering_indexed(&mut rhs, &mut indices);
+                    assert_eq!(indices.len(), rhs.iter().filter(|&&v| v != 0.).count());
+                    assert!(lu.update_sparse(p, &rhs, indices.iter().copied()));
+                    columns[p] = new;
+                    assert!(residual(&columns, &mut lu) < 1e-9);
+                    // Verify sparse transpose traversal, including canceled entries.
+                    let mut unit = vec![0.; m];
+                    unit[p] = 1.;
+                    lu.btran_unit_indexed(p, &mut unit, &mut indices);
+                    assert_eq!(indices.len(), unit.iter().filter(|&&v| v != 0.).count());
+                    for (q, col) in columns.iter().enumerate() {
+                        let back: f64 = col.iter().map(|&(i, v)| v * unit[i]).sum();
+                        assert!((back - f64::from(q == p)).abs() < 1e-9);
+                    }
+                }
+            }
         }
     }
 
