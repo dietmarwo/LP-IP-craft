@@ -1,4 +1,4 @@
-> Native 0.26: compatible repair merging, successive rounds, rejected-transfer/root-price seeds, local residual clique cuts and separate repair/proof budgets. See [plan](docs/spoc4-026/PLAN.md), [API](docs/spoc4-026/IMPLEMENTATION.md), [results](docs/spoc4-026/RESULTS.md) and [reproduction](docs/spoc4-026/REPRODUCE.md).
+> Native 0.26: compatible repair merging, successive rounds, rejected-transfer/root-price seeds, local residual clique cuts and separate repair/proof budgets. See [plan](docs/spoc4-026/PLAN.md), [API](docs/spoc4-026/IMPLEMENTATION.md), [results](docs/spoc4-026/RESULTS.md), [reproduction](docs/spoc4-026/REPRODUCE.md) and [review changes](docs/spoc4-026/REVIEW.md), which cover 0.25 too.
 
 > Native 0.25: opt-in packing primal-dual root bounds, early weighted incumbents, parallel residual neighborhoods, cross-resource triangle/odd-cycle cuts, work-budgeted scalable branching and disjoint-frontier parallel B&B. See [the plan](docs/spoc4-025/PLAN.md), [implementation/API](docs/spoc4-025/IMPLEMENTATION.md), [results](docs/spoc4-025/RESULTS.md) and [reproduction](docs/spoc4-025/REPRODUCE.md). Existing default search modes remain unchanged.
 
