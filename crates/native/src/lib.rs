@@ -682,7 +682,7 @@ impl LpIpSolver for NativeSolver {
                 )?;
             }
         }
-        let domain = propagate::Domain::new(model, settings.presolve);
+        let mut domain = propagate::Domain::new(model, settings.presolve);
         let root = model.variables();
         let mut node_box = NodeBox {
             bounds: root.clone(),

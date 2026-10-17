@@ -143,3 +143,25 @@ both the previous node's changed variables and the current path, including
 restored implied bounds, then queue only affected rows. The root queues every
 eligible row. Retain coefficient/bound eligibility limits; use a per-call work
 cap and cancellation checks. No change to conservative incumbent pruning.
+
+### Step 4 completed
+
+Long-row incremental propagation and root fixpoint processing implemented.
+80 signed-row instances x five sibling branches were checked against all 1024
+binary assignments; no feasible integer point was removed. A reverse 40-variable
+chain verifies implications beyond three sweeps and sibling restoration.
+Unconditional long-row scans caused a 43% nodecopy regression in the first run;
+a conservative root-width slack guard removed most unnecessary term scans.
+Follow-up nodecopy 1.45 -> 1.37 ms; integer-knapsack .721 -> .701 ms. Long-row
+and multi-knapsack cases still have 4%/15% overhead and unchanged nodes. This is
+a capability improvement with measured costs, not a general speedup claim.
+
+### Step 5 implementation decision
+
+Evaluate root strong branching on two candidate variables (at most four probes,
+32 pivots each), restricted to small/medium multi-constraint models with at least
+two long rows. This avoids setup on easy single-row and graph fixtures. Probes
+reuse and restore the parent basis; they only choose a branch and initialize
+pseudocosts, never prune from unchecked numerical estimates. Count every probe
+as a processed relaxation and charge all pivots/time to the global budget.
+Expose a switch for ablation. Keep only if paired hard-MIP results justify it.
