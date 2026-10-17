@@ -1,0 +1,4808 @@
+{
+  "sparse": true,
+  "seed": 91027,
+  "cases": 600,
+  "passed": 600,
+  "results": [
+    {
+      "domain": "lp",
+      "case": 0,
+      "objective": -22.600000000000026,
+      "oracle": -22.60000000000001,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 1,
+      "objective": -26.459641255605383,
+      "oracle": -26.459641255605383,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 2,
+      "objective": -14.147286821705421,
+      "oracle": -14.147286821705428,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 3,
+      "objective": -25.60505992010652,
+      "oracle": -25.605059920106527,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 4,
+      "objective": -4.973409306742645,
+      "oracle": -4.9734093067426395,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 5,
+      "objective": -12.124999999999991,
+      "oracle": -12.125,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 6,
+      "objective": -39.19999999999999,
+      "oracle": -39.2,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 7,
+      "objective": -5.841059602649011,
+      "oracle": -5.841059602649004,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 8,
+      "objective": -13.781249999999995,
+      "oracle": -13.78125,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 9,
+      "objective": 1.941176470588235,
+      "oracle": 1.9411764705882346,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 10,
+      "objective": -18.23391812865498,
+      "oracle": -18.23391812865497,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 11,
+      "objective": -27.915074309978777,
+      "oracle": -27.91507430997877,
+      "nodes": 0,
+      "pivots": 14
+    },
+    {
+      "domain": "lp",
+      "case": 12,
+      "objective": -36.55555555555554,
+      "oracle": -36.55555555555556,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 13,
+      "objective": 27.82954545454546,
+      "oracle": 27.829545454545453,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 14,
+      "objective": -29.69999999999997,
+      "oracle": -29.7,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 15,
+      "objective": -0.9393939393939483,
+      "oracle": -0.9393939393939306,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 16,
+      "objective": -0.8880407124681988,
+      "oracle": -0.8880407124681926,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 17,
+      "objective": -23.432835820895498,
+      "oracle": -23.432835820895516,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 18,
+      "objective": -45.40000000000003,
+      "oracle": -45.4,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 19,
+      "objective": -16.33333333333333,
+      "oracle": -16.333333333333336,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 20,
+      "objective": -11.31182795698925,
+      "oracle": -11.311827956989248,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 21,
+      "objective": 14.4519956850054,
+      "oracle": 14.45199568500539,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 22,
+      "objective": -3.2167832167832326,
+      "oracle": -3.216783216783215,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 23,
+      "objective": -7.661290322580671,
+      "oracle": -7.661290322580637,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 24,
+      "objective": -11.638297872340445,
+      "oracle": -11.638297872340427,
+      "nodes": 0,
+      "pivots": 14
+    },
+    {
+      "domain": "lp",
+      "case": 25,
+      "objective": -0.6388888888888886,
+      "oracle": -0.6388888888888888,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 26,
+      "objective": -17.199999999999992,
+      "oracle": -17.199999999999996,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 27,
+      "objective": -16.49456521739131,
+      "oracle": -16.49456521739131,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 28,
+      "objective": -3.5306122448979584,
+      "oracle": -3.530612244897961,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 29,
+      "objective": 5.687500000000001,
+      "oracle": 5.6875,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 30,
+      "objective": -34.007407407407385,
+      "oracle": -34.00740740740741,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 31,
+      "objective": -11.62285714285714,
+      "oracle": -11.62285714285715,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 32,
+      "objective": -18.223404255319156,
+      "oracle": -18.223404255319146,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 33,
+      "objective": -23.576923076923087,
+      "oracle": -23.576923076923073,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 34,
+      "objective": -7.004310344827585,
+      "oracle": -7.004310344827585,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 35,
+      "objective": -12.298507462686544,
+      "oracle": -12.298507462686565,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 36,
+      "objective": -9.752747252747245,
+      "oracle": -9.752747252747252,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 37,
+      "objective": 5.6875,
+      "oracle": 5.687500000000001,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 38,
+      "objective": 0.5949477351916315,
+      "oracle": 0.5949477351916386,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 39,
+      "objective": -39.423887587822,
+      "oracle": -39.423887587822016,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "domain": "lp",
+      "case": 40,
+      "objective": -18.666666666666668,
+      "oracle": -18.666666666666668,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 41,
+      "objective": -1.256345177664965,
+      "oracle": -1.2563451776649792,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 42,
+      "objective": 36.000000000000014,
+      "oracle": 36.0,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "domain": "lp",
+      "case": 43,
+      "objective": -29.9438202247191,
+      "oracle": -29.943820224719108,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 44,
+      "objective": -44.222222222222165,
+      "oracle": -44.22222222222222,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 45,
+      "objective": -20.466666666666672,
+      "oracle": -20.46666666666667,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 46,
+      "objective": -18.909090909090892,
+      "oracle": -18.909090909090907,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 47,
+      "objective": -19.443729903536976,
+      "oracle": -19.443729903536976,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 48,
+      "objective": -25.400000000000002,
+      "oracle": -25.4,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 49,
+      "objective": -17.835164835164832,
+      "oracle": -17.835164835164836,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 50,
+      "objective": -20.601562500000018,
+      "oracle": -20.6015625,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 51,
+      "objective": -6.473684210526372,
+      "oracle": -6.47368421052632,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 52,
+      "objective": 3.750000000000006,
+      "oracle": 3.75,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 53,
+      "objective": 8.170212765957434,
+      "oracle": 8.170212765957444,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 54,
+      "objective": -18.230769230769237,
+      "oracle": -18.230769230769234,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 55,
+      "objective": -7.2222222222222054,
+      "oracle": -7.222222222222221,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 56,
+      "objective": 18.999999999999993,
+      "oracle": 19.0,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 57,
+      "objective": -6.756302521008407,
+      "oracle": -6.756302521008405,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 58,
+      "objective": -14.111111111111118,
+      "oracle": -14.11111111111111,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 59,
+      "objective": 10.57692307692307,
+      "oracle": 10.576923076923077,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 60,
+      "objective": -5.599999999999998,
+      "oracle": -5.599999999999999,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 61,
+      "objective": 41.5,
+      "oracle": 41.5,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 62,
+      "objective": 11.531914893617023,
+      "oracle": 11.531914893617023,
+      "nodes": 0,
+      "pivots": 4
+    },
+    {
+      "domain": "lp",
+      "case": 63,
+      "objective": 9.144680851063832,
+      "oracle": 9.144680851063834,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 64,
+      "objective": 40.13953488372093,
+      "oracle": 40.13953488372093,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 65,
+      "objective": 5.333333333333322,
+      "oracle": 5.333333333333332,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 66,
+      "objective": -8.555555555555554,
+      "oracle": -8.555555555555557,
+      "nodes": 0,
+      "pivots": 13
+    },
+    {
+      "domain": "lp",
+      "case": 67,
+      "objective": -12.977228366948601,
+      "oracle": -12.9772283669486,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 68,
+      "objective": -14.916666666666664,
+      "oracle": -14.916666666666666,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 69,
+      "objective": 5.624242424242425,
+      "oracle": 5.624242424242424,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 70,
+      "objective": 1.6854917234664066,
+      "oracle": 1.685491723466407,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 71,
+      "objective": -13.5,
+      "oracle": -13.5,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 72,
+      "objective": -32.7857142857143,
+      "oracle": -32.78571428571429,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 73,
+      "objective": -48.27777777777781,
+      "oracle": -48.27777777777778,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 74,
+      "objective": 18.532846715328482,
+      "oracle": 18.532846715328475,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 75,
+      "objective": -24.000000000000007,
+      "oracle": -24.0,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 76,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 0,
+      "pivots": 4
+    },
+    {
+      "domain": "lp",
+      "case": 77,
+      "objective": -3.555555555555547,
+      "oracle": -3.555555555555555,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 78,
+      "objective": -5.843750000000012,
+      "oracle": -5.84375,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 79,
+      "objective": 4.045207956600359,
+      "oracle": 4.045207956600363,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 80,
+      "objective": -38.0,
+      "oracle": -38.0,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 81,
+      "objective": -37.609561752988036,
+      "oracle": -37.60956175298805,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 82,
+      "objective": -40.33333333333332,
+      "oracle": -40.333333333333336,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "domain": "lp",
+      "case": 83,
+      "objective": -16.23076923076923,
+      "oracle": -16.23076923076923,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 84,
+      "objective": -3.9177718832891233,
+      "oracle": -3.917771883289145,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 85,
+      "objective": 2.2727272727272823,
+      "oracle": 2.2727272727272734,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 86,
+      "objective": 2.333333333333332,
+      "oracle": 2.3333333333333357,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 87,
+      "objective": 19.81632653061224,
+      "oracle": 19.816326530612255,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 88,
+      "objective": 4.848648648648643,
+      "oracle": 4.848648648648648,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 89,
+      "objective": -6.427358068842206,
+      "oracle": -6.4273580688422,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 90,
+      "objective": 3.9999999999999982,
+      "oracle": 4.0,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 91,
+      "objective": -50.000000000000014,
+      "oracle": -50.0,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 92,
+      "objective": 16.72222222222231,
+      "oracle": 16.722222222222218,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 93,
+      "objective": 8.171758876961174,
+      "oracle": 8.171758876961206,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 94,
+      "objective": 5.333333333333332,
+      "oracle": 5.333333333333332,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 95,
+      "objective": -31.624242424242436,
+      "oracle": -31.624242424242425,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 96,
+      "objective": -5.999999999999988,
+      "oracle": -6.0,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 97,
+      "objective": -28.972350230414744,
+      "oracle": -28.972350230414747,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 98,
+      "objective": 12.021186440677981,
+      "oracle": 12.021186440677951,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 99,
+      "objective": -30.6086956521739,
+      "oracle": -30.608695652173914,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 100,
+      "objective": 29.926605504587165,
+      "oracle": 29.926605504587158,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 101,
+      "objective": -2.4901960784313832,
+      "oracle": -2.490196078431378,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 102,
+      "objective": -17.833333333333325,
+      "oracle": -17.833333333333336,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 103,
+      "objective": -43.17607526881721,
+      "oracle": -43.17607526881721,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 104,
+      "objective": -29.91549295774648,
+      "oracle": -29.915492957746476,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 105,
+      "objective": -20.311475409836067,
+      "oracle": -20.311475409836063,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 106,
+      "objective": -23.949999999999996,
+      "oracle": -23.95,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 107,
+      "objective": 32.359550561797754,
+      "oracle": 32.359550561797754,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 108,
+      "objective": -41.06060606060608,
+      "oracle": -41.06060606060606,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 109,
+      "objective": -12.000000000000004,
+      "oracle": -12.0,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 110,
+      "objective": -19.0,
+      "oracle": -19.0,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 111,
+      "objective": -10.43749999999998,
+      "oracle": -10.4375,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 112,
+      "objective": 9.430939226519342,
+      "oracle": 9.430939226519342,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 113,
+      "objective": 33.625,
+      "oracle": 33.625,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 114,
+      "objective": -3.571428571428564,
+      "oracle": -3.571428571428573,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 115,
+      "objective": -19.666666666666668,
+      "oracle": -19.666666666666668,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 116,
+      "objective": -5.375000000000001,
+      "oracle": -5.375,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 117,
+      "objective": -19.30240549828178,
+      "oracle": -19.302405498281782,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 118,
+      "objective": -36.42857142857143,
+      "oracle": -36.42857142857143,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 119,
+      "objective": 21.50000000000002,
+      "oracle": 21.5,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 120,
+      "objective": -37.68292682926828,
+      "oracle": -37.68292682926829,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 121,
+      "objective": -5.499999999999991,
+      "oracle": -5.5,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 122,
+      "objective": -9.638248847926278,
+      "oracle": -9.638248847926272,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 123,
+      "objective": -55.18750000000002,
+      "oracle": -55.1875,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 124,
+      "objective": -13.125000000000018,
+      "oracle": -13.125,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 125,
+      "objective": 16.913043478260875,
+      "oracle": 16.913043478260867,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 126,
+      "objective": -28.576119402985064,
+      "oracle": -28.576119402985075,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 127,
+      "objective": -3.818181818181815,
+      "oracle": -3.818181818181819,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 128,
+      "objective": -25.39007092198582,
+      "oracle": -25.39007092198581,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 129,
+      "objective": 9.300683371298412,
+      "oracle": 9.300683371298382,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 130,
+      "objective": 9.818181818181808,
+      "oracle": 9.81818181818182,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 131,
+      "objective": 14.8979591836735,
+      "oracle": 14.897959183673468,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 132,
+      "objective": -10.000000000000021,
+      "oracle": -10.0,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 133,
+      "objective": -32.793893129771,
+      "oracle": -32.79389312977099,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 134,
+      "objective": -24.40000000000001,
+      "oracle": -24.400000000000002,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 135,
+      "objective": -2.569844789356977,
+      "oracle": -2.5698447893569862,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 136,
+      "objective": -27.617647058823533,
+      "oracle": -27.61764705882353,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 137,
+      "objective": -14.152173913043478,
+      "oracle": -14.152173913043477,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 138,
+      "objective": -16.666666666666675,
+      "oracle": -16.666666666666664,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 139,
+      "objective": -32.50666666666667,
+      "oracle": -32.506666666666675,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 140,
+      "objective": -6.500000000000002,
+      "oracle": -6.5,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 141,
+      "objective": 23.126373626373628,
+      "oracle": 23.126373626373628,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 142,
+      "objective": 5.9148418491484165,
+      "oracle": 5.914841849148418,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 143,
+      "objective": -41.468913857677904,
+      "oracle": -41.468913857677904,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 144,
+      "objective": 22.32903225806452,
+      "oracle": 22.329032258064515,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 145,
+      "objective": -15.798206278026914,
+      "oracle": -15.798206278026905,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 146,
+      "objective": -62.94171220400726,
+      "oracle": -62.94171220400729,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "domain": "lp",
+      "case": 147,
+      "objective": -5.5893782383419595,
+      "oracle": -5.589378238341968,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 148,
+      "objective": -24.615384615384606,
+      "oracle": -24.615384615384617,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 149,
+      "objective": -1.907563025210087,
+      "oracle": -1.9075630252100861,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 150,
+      "objective": 15.839181286549707,
+      "oracle": 15.839181286549705,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 151,
+      "objective": 5.9878163074039366,
+      "oracle": 5.987816307403938,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 152,
+      "objective": -20.725581395348836,
+      "oracle": -20.725581395348833,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 153,
+      "objective": 3.284974093264249,
+      "oracle": 3.284974093264249,
+      "nodes": 0,
+      "pivots": 4
+    },
+    {
+      "domain": "lp",
+      "case": 154,
+      "objective": 45.92134831460676,
+      "oracle": 45.921348314606746,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 155,
+      "objective": -33.7304347826087,
+      "oracle": -33.7304347826087,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 156,
+      "objective": -3.5454545454545454,
+      "oracle": -3.545454545454545,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 157,
+      "objective": 3.487364620938628,
+      "oracle": 3.4873646209386315,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 158,
+      "objective": -27.03225806451613,
+      "oracle": -27.032258064516128,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 159,
+      "objective": -20.57575757575757,
+      "oracle": -20.575757575757578,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 160,
+      "objective": -18.5034965034965,
+      "oracle": -18.503496503496503,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 161,
+      "objective": -30.387878787878787,
+      "oracle": -30.387878787878794,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 162,
+      "objective": -37.06862745098038,
+      "oracle": -37.068627450980394,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "domain": "lp",
+      "case": 163,
+      "objective": 21.916666666666664,
+      "oracle": 21.916666666666664,
+      "nodes": 0,
+      "pivots": 12
+    },
+    {
+      "domain": "lp",
+      "case": 164,
+      "objective": -6.500000000000014,
+      "oracle": -6.5,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 165,
+      "objective": -5.53333333333332,
+      "oracle": -5.533333333333346,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 166,
+      "objective": 23.528530670470754,
+      "oracle": 23.52853067047076,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 167,
+      "objective": -24.202020202020208,
+      "oracle": -24.2020202020202,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 168,
+      "objective": 1.714285714285714,
+      "oracle": 1.7142857142857142,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 169,
+      "objective": -3.3716275021757927,
+      "oracle": -3.3716275021758086,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 170,
+      "objective": 25.500000000000007,
+      "oracle": 25.5,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 171,
+      "objective": -13.800000000000004,
+      "oracle": -13.8,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 172,
+      "objective": -31.2390243902439,
+      "oracle": -31.2390243902439,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 173,
+      "objective": 27.700000000000003,
+      "oracle": 27.7,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 174,
+      "objective": -34.50303030303031,
+      "oracle": -34.5030303030303,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 175,
+      "objective": 8.499999999999998,
+      "oracle": 8.5,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 176,
+      "objective": 7.547051442910916,
+      "oracle": 7.547051442910941,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 177,
+      "objective": -19.489795918367346,
+      "oracle": -19.48979591836735,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 178,
+      "objective": -37.99293286219079,
+      "oracle": -37.99293286219081,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 179,
+      "objective": 4.199999999999999,
+      "oracle": 4.2,
+      "nodes": 0,
+      "pivots": 5
+    },
+    {
+      "domain": "lp",
+      "case": 180,
+      "objective": 0.04918032786885318,
+      "oracle": 0.04918032786885229,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 181,
+      "objective": -5.000000000000013,
+      "oracle": -5.0,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 182,
+      "objective": -36.99999999999995,
+      "oracle": -37.0,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 183,
+      "objective": 6.000000000000039,
+      "oracle": 6.0,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 184,
+      "objective": -7.000000000000002,
+      "oracle": -7.0,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 185,
+      "objective": 27.000000000000004,
+      "oracle": 27.0,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 186,
+      "objective": -7.695652173913049,
+      "oracle": -7.695652173913047,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 187,
+      "objective": -9.921993911719927,
+      "oracle": -9.92199391171994,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 188,
+      "objective": -2.0645161290322585,
+      "oracle": -2.064516129032258,
+      "nodes": 0,
+      "pivots": 6
+    },
+    {
+      "domain": "lp",
+      "case": 189,
+      "objective": -13.167931456548349,
+      "oracle": -13.167931456548347,
+      "nodes": 0,
+      "pivots": 9
+    },
+    {
+      "domain": "lp",
+      "case": 190,
+      "objective": -7.1153846153846265,
+      "oracle": -7.115384615384615,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 191,
+      "objective": 9.000000000000012,
+      "oracle": 8.999999999999993,
+      "nodes": 0,
+      "pivots": 10
+    },
+    {
+      "domain": "lp",
+      "case": 192,
+      "objective": -24.692307692307697,
+      "oracle": -24.692307692307693,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 193,
+      "objective": -17.099999999999998,
+      "oracle": -17.1,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 194,
+      "objective": -44.43749999999999,
+      "oracle": -44.4375,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 195,
+      "objective": -24.31818181818182,
+      "oracle": -24.31818181818182,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 196,
+      "objective": -26.49999999999999,
+      "oracle": -26.5,
+      "nodes": 0,
+      "pivots": 8
+    },
+    {
+      "domain": "lp",
+      "case": 197,
+      "objective": -9.786026200873359,
+      "oracle": -9.786026200873366,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "lp",
+      "case": 198,
+      "objective": -22.82795698924731,
+      "oracle": -22.827956989247312,
+      "nodes": 0,
+      "pivots": 11
+    },
+    {
+      "domain": "lp",
+      "case": 199,
+      "objective": 2.210350584307148,
+      "oracle": 2.2103505843071787,
+      "nodes": 0,
+      "pivots": 7
+    },
+    {
+      "domain": "ip",
+      "case": 0,
+      "objective": 10.0,
+      "oracle": 10.0,
+      "nodes": 7,
+      "pivots": 21
+    },
+    {
+      "domain": "ip",
+      "case": 1,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 9,
+      "pivots": 46
+    },
+    {
+      "domain": "ip",
+      "case": 2,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 1,
+      "pivots": 6
+    },
+    {
+      "domain": "ip",
+      "case": 3,
+      "objective": -6.0,
+      "oracle": -6.0,
+      "nodes": 13,
+      "pivots": 52
+    },
+    {
+      "domain": "ip",
+      "case": 4,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 15,
+      "pivots": 53
+    },
+    {
+      "domain": "ip",
+      "case": 5,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 17,
+      "pivots": 73
+    },
+    {
+      "domain": "ip",
+      "case": 6,
+      "objective": 7.0,
+      "oracle": 7.0,
+      "nodes": 9,
+      "pivots": 27
+    },
+    {
+      "domain": "ip",
+      "case": 7,
+      "objective": 19.0,
+      "oracle": 19.0,
+      "nodes": 19,
+      "pivots": 64
+    },
+    {
+      "domain": "ip",
+      "case": 8,
+      "objective": -25.0,
+      "oracle": -25.0,
+      "nodes": 5,
+      "pivots": 23
+    },
+    {
+      "domain": "ip",
+      "case": 9,
+      "objective": 50.0,
+      "oracle": 50.0,
+      "nodes": 1,
+      "pivots": 11
+    },
+    {
+      "domain": "ip",
+      "case": 10,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 2,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 11,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 7,
+      "pivots": 34
+    },
+    {
+      "domain": "ip",
+      "case": 12,
+      "objective": 18.0,
+      "oracle": 18.0,
+      "nodes": 9,
+      "pivots": 39
+    },
+    {
+      "domain": "ip",
+      "case": 13,
+      "objective": 18.0,
+      "oracle": 18.0,
+      "nodes": 13,
+      "pivots": 51
+    },
+    {
+      "domain": "ip",
+      "case": 14,
+      "objective": 15.0,
+      "oracle": 15.0,
+      "nodes": 23,
+      "pivots": 95
+    },
+    {
+      "domain": "ip",
+      "case": 15,
+      "objective": -29.0,
+      "oracle": -29.0,
+      "nodes": 9,
+      "pivots": 34
+    },
+    {
+      "domain": "ip",
+      "case": 16,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 18,
+      "pivots": 77
+    },
+    {
+      "domain": "ip",
+      "case": 17,
+      "objective": 17.0,
+      "oracle": 17.0,
+      "nodes": 17,
+      "pivots": 51
+    },
+    {
+      "domain": "ip",
+      "case": 18,
+      "objective": 6.0,
+      "oracle": 6.0,
+      "nodes": 1,
+      "pivots": 11
+    },
+    {
+      "domain": "ip",
+      "case": 19,
+      "objective": -10.0,
+      "oracle": -10.0,
+      "nodes": 5,
+      "pivots": 20
+    },
+    {
+      "domain": "ip",
+      "case": 20,
+      "objective": -35.0,
+      "oracle": -35.0,
+      "nodes": 7,
+      "pivots": 31
+    },
+    {
+      "domain": "ip",
+      "case": 21,
+      "objective": -34.0,
+      "oracle": -34.0,
+      "nodes": 2,
+      "pivots": 14
+    },
+    {
+      "domain": "ip",
+      "case": 22,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 15,
+      "pivots": 63
+    },
+    {
+      "domain": "ip",
+      "case": 23,
+      "objective": -38.0,
+      "oracle": -38.0,
+      "nodes": 7,
+      "pivots": 37
+    },
+    {
+      "domain": "ip",
+      "case": 24,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 7,
+      "pivots": 29
+    },
+    {
+      "domain": "ip",
+      "case": 25,
+      "objective": 12.0,
+      "oracle": 12.0,
+      "nodes": 5,
+      "pivots": 26
+    },
+    {
+      "domain": "ip",
+      "case": 26,
+      "objective": 17.0,
+      "oracle": 17.0,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 27,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 13,
+      "pivots": 48
+    },
+    {
+      "domain": "ip",
+      "case": 28,
+      "objective": 16.0,
+      "oracle": 16.0,
+      "nodes": 5,
+      "pivots": 16
+    },
+    {
+      "domain": "ip",
+      "case": 29,
+      "objective": 11.0,
+      "oracle": 11.0,
+      "nodes": 26,
+      "pivots": 66
+    },
+    {
+      "domain": "ip",
+      "case": 30,
+      "objective": 19.0,
+      "oracle": 19.0,
+      "nodes": 11,
+      "pivots": 33
+    },
+    {
+      "domain": "ip",
+      "case": 31,
+      "objective": 9.0,
+      "oracle": 9.0,
+      "nodes": 3,
+      "pivots": 19
+    },
+    {
+      "domain": "ip",
+      "case": 32,
+      "objective": -9.0,
+      "oracle": -9.0,
+      "nodes": 26,
+      "pivots": 107
+    },
+    {
+      "domain": "ip",
+      "case": 33,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 3,
+      "pivots": 17
+    },
+    {
+      "domain": "ip",
+      "case": 34,
+      "objective": 18.0,
+      "oracle": 18.0,
+      "nodes": 13,
+      "pivots": 64
+    },
+    {
+      "domain": "ip",
+      "case": 35,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 3,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 36,
+      "objective": 8.0,
+      "oracle": 8.0,
+      "nodes": 21,
+      "pivots": 88
+    },
+    {
+      "domain": "ip",
+      "case": 37,
+      "objective": -32.0,
+      "oracle": -32.0,
+      "nodes": 3,
+      "pivots": 19
+    },
+    {
+      "domain": "ip",
+      "case": 38,
+      "objective": -35.0,
+      "oracle": -35.0,
+      "nodes": 9,
+      "pivots": 26
+    },
+    {
+      "domain": "ip",
+      "case": 39,
+      "objective": -33.0,
+      "oracle": -33.0,
+      "nodes": 7,
+      "pivots": 41
+    },
+    {
+      "domain": "ip",
+      "case": 40,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 1,
+      "pivots": 9
+    },
+    {
+      "domain": "ip",
+      "case": 41,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 3,
+      "pivots": 19
+    },
+    {
+      "domain": "ip",
+      "case": 42,
+      "objective": -24.0,
+      "oracle": -24.0,
+      "nodes": 5,
+      "pivots": 28
+    },
+    {
+      "domain": "ip",
+      "case": 43,
+      "objective": -45.0,
+      "oracle": -45.0,
+      "nodes": 15,
+      "pivots": 78
+    },
+    {
+      "domain": "ip",
+      "case": 44,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 7,
+      "pivots": 34
+    },
+    {
+      "domain": "ip",
+      "case": 45,
+      "objective": -22.0,
+      "oracle": -22.0,
+      "nodes": 1,
+      "pivots": 9
+    },
+    {
+      "domain": "ip",
+      "case": 46,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 9,
+      "pivots": 24
+    },
+    {
+      "domain": "ip",
+      "case": 47,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 3,
+      "pivots": 19
+    },
+    {
+      "domain": "ip",
+      "case": 48,
+      "objective": -30.0,
+      "oracle": -30.0,
+      "nodes": 5,
+      "pivots": 41
+    },
+    {
+      "domain": "ip",
+      "case": 49,
+      "objective": 31.0,
+      "oracle": 31.0,
+      "nodes": 27,
+      "pivots": 104
+    },
+    {
+      "domain": "ip",
+      "case": 50,
+      "objective": 9.0,
+      "oracle": 9.0,
+      "nodes": 7,
+      "pivots": 23
+    },
+    {
+      "domain": "ip",
+      "case": 51,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 19,
+      "pivots": 78
+    },
+    {
+      "domain": "ip",
+      "case": 52,
+      "objective": -34.0,
+      "oracle": -34.0,
+      "nodes": 3,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 53,
+      "objective": -2.0,
+      "oracle": -2.0,
+      "nodes": 1,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 54,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 15,
+      "pivots": 63
+    },
+    {
+      "domain": "ip",
+      "case": 55,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 3,
+      "pivots": 14
+    },
+    {
+      "domain": "ip",
+      "case": 56,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 3,
+      "pivots": 16
+    },
+    {
+      "domain": "ip",
+      "case": 57,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 9,
+      "pivots": 44
+    },
+    {
+      "domain": "ip",
+      "case": 58,
+      "objective": 5.0,
+      "oracle": 5.0,
+      "nodes": 7,
+      "pivots": 26
+    },
+    {
+      "domain": "ip",
+      "case": 59,
+      "objective": 15.0,
+      "oracle": 15.0,
+      "nodes": 1,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 60,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 5,
+      "pivots": 31
+    },
+    {
+      "domain": "ip",
+      "case": 61,
+      "objective": -22.0,
+      "oracle": -22.0,
+      "nodes": 35,
+      "pivots": 135
+    },
+    {
+      "domain": "ip",
+      "case": 62,
+      "objective": -24.0,
+      "oracle": -24.0,
+      "nodes": 7,
+      "pivots": 31
+    },
+    {
+      "domain": "ip",
+      "case": 63,
+      "objective": 24.0,
+      "oracle": 24.0,
+      "nodes": 5,
+      "pivots": 27
+    },
+    {
+      "domain": "ip",
+      "case": 64,
+      "objective": 26.0,
+      "oracle": 26.0,
+      "nodes": 9,
+      "pivots": 32
+    },
+    {
+      "domain": "ip",
+      "case": 65,
+      "objective": -12.0,
+      "oracle": -12.0,
+      "nodes": 7,
+      "pivots": 34
+    },
+    {
+      "domain": "ip",
+      "case": 66,
+      "objective": -29.0,
+      "oracle": -29.0,
+      "nodes": 3,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 67,
+      "objective": -37.0,
+      "oracle": -37.0,
+      "nodes": 3,
+      "pivots": 13
+    },
+    {
+      "domain": "ip",
+      "case": 68,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 5,
+      "pivots": 23
+    },
+    {
+      "domain": "ip",
+      "case": 69,
+      "objective": 26.0,
+      "oracle": 26.0,
+      "nodes": 1,
+      "pivots": 11
+    },
+    {
+      "domain": "ip",
+      "case": 70,
+      "objective": -12.0,
+      "oracle": -12.0,
+      "nodes": 13,
+      "pivots": 35
+    },
+    {
+      "domain": "ip",
+      "case": 71,
+      "objective": 3.0,
+      "oracle": 3.0,
+      "nodes": 3,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 72,
+      "objective": 30.0,
+      "oracle": 30.0,
+      "nodes": 13,
+      "pivots": 46
+    },
+    {
+      "domain": "ip",
+      "case": 73,
+      "objective": -25.0,
+      "oracle": -25.0,
+      "nodes": 5,
+      "pivots": 19
+    },
+    {
+      "domain": "ip",
+      "case": 74,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 9,
+      "pivots": 38
+    },
+    {
+      "domain": "ip",
+      "case": 75,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 1,
+      "pivots": 4
+    },
+    {
+      "domain": "ip",
+      "case": 76,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 21,
+      "pivots": 95
+    },
+    {
+      "domain": "ip",
+      "case": 77,
+      "objective": 20.0,
+      "oracle": 20.0,
+      "nodes": 19,
+      "pivots": 82
+    },
+    {
+      "domain": "ip",
+      "case": 78,
+      "objective": 16.0,
+      "oracle": 16.0,
+      "nodes": 9,
+      "pivots": 36
+    },
+    {
+      "domain": "ip",
+      "case": 79,
+      "objective": -23.0,
+      "oracle": -23.0,
+      "nodes": 1,
+      "pivots": 11
+    },
+    {
+      "domain": "ip",
+      "case": 80,
+      "objective": 4.0,
+      "oracle": 4.0,
+      "nodes": 3,
+      "pivots": 22
+    },
+    {
+      "domain": "ip",
+      "case": 81,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 9,
+      "pivots": 29
+    },
+    {
+      "domain": "ip",
+      "case": 82,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 9,
+      "pivots": 53
+    },
+    {
+      "domain": "ip",
+      "case": 83,
+      "objective": -25.0,
+      "oracle": -25.0,
+      "nodes": 21,
+      "pivots": 114
+    },
+    {
+      "domain": "ip",
+      "case": 84,
+      "objective": 8.0,
+      "oracle": 8.0,
+      "nodes": 6,
+      "pivots": 25
+    },
+    {
+      "domain": "ip",
+      "case": 85,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 9,
+      "pivots": 50
+    },
+    {
+      "domain": "ip",
+      "case": 86,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 9,
+      "pivots": 45
+    },
+    {
+      "domain": "ip",
+      "case": 87,
+      "objective": -57.0,
+      "oracle": -57.0,
+      "nodes": 1,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 88,
+      "objective": 22.0,
+      "oracle": 22.0,
+      "nodes": 9,
+      "pivots": 41
+    },
+    {
+      "domain": "ip",
+      "case": 89,
+      "objective": 4.0,
+      "oracle": 4.0,
+      "nodes": 5,
+      "pivots": 12
+    },
+    {
+      "domain": "ip",
+      "case": 90,
+      "objective": -10.0,
+      "oracle": -10.0,
+      "nodes": 3,
+      "pivots": 12
+    },
+    {
+      "domain": "ip",
+      "case": 91,
+      "objective": -20.0,
+      "oracle": -20.0,
+      "nodes": 9,
+      "pivots": 42
+    },
+    {
+      "domain": "ip",
+      "case": 92,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 7,
+      "pivots": 30
+    },
+    {
+      "domain": "ip",
+      "case": 93,
+      "objective": 10.0,
+      "oracle": 10.0,
+      "nodes": 21,
+      "pivots": 91
+    },
+    {
+      "domain": "ip",
+      "case": 94,
+      "objective": 24.0,
+      "oracle": 24.0,
+      "nodes": 5,
+      "pivots": 26
+    },
+    {
+      "domain": "ip",
+      "case": 95,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 13,
+      "pivots": 63
+    },
+    {
+      "domain": "ip",
+      "case": 96,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 97,
+      "objective": 21.0,
+      "oracle": 21.0,
+      "nodes": 9,
+      "pivots": 37
+    },
+    {
+      "domain": "ip",
+      "case": 98,
+      "objective": -29.0,
+      "oracle": -29.0,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 99,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 9,
+      "pivots": 39
+    },
+    {
+      "domain": "ip",
+      "case": 100,
+      "objective": 26.0,
+      "oracle": 26.0,
+      "nodes": 9,
+      "pivots": 43
+    },
+    {
+      "domain": "ip",
+      "case": 101,
+      "objective": -4.0,
+      "oracle": -4.0,
+      "nodes": 1,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 102,
+      "objective": 10.0,
+      "oracle": 10.0,
+      "nodes": 15,
+      "pivots": 75
+    },
+    {
+      "domain": "ip",
+      "case": 103,
+      "objective": -24.0,
+      "oracle": -24.0,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 104,
+      "objective": 22.0,
+      "oracle": 22.0,
+      "nodes": 17,
+      "pivots": 63
+    },
+    {
+      "domain": "ip",
+      "case": 105,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 1,
+      "pivots": 5
+    },
+    {
+      "domain": "ip",
+      "case": 106,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 4,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 107,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 15,
+      "pivots": 45
+    },
+    {
+      "domain": "ip",
+      "case": 108,
+      "objective": 14.0,
+      "oracle": 14.0,
+      "nodes": 9,
+      "pivots": 30
+    },
+    {
+      "domain": "ip",
+      "case": 109,
+      "objective": -34.0,
+      "oracle": -34.0,
+      "nodes": 1,
+      "pivots": 7
+    },
+    {
+      "domain": "ip",
+      "case": 110,
+      "objective": -22.0,
+      "oracle": -22.0,
+      "nodes": 9,
+      "pivots": 25
+    },
+    {
+      "domain": "ip",
+      "case": 111,
+      "objective": -19.0,
+      "oracle": -19.0,
+      "nodes": 1,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 112,
+      "objective": -4.0,
+      "oracle": -4.0,
+      "nodes": 7,
+      "pivots": 46
+    },
+    {
+      "domain": "ip",
+      "case": 113,
+      "objective": 16.0,
+      "oracle": 16.0,
+      "nodes": 3,
+      "pivots": 15
+    },
+    {
+      "domain": "ip",
+      "case": 114,
+      "objective": -17.0,
+      "oracle": -17.0,
+      "nodes": 11,
+      "pivots": 37
+    },
+    {
+      "domain": "ip",
+      "case": 115,
+      "objective": 31.0,
+      "oracle": 31.0,
+      "nodes": 1,
+      "pivots": 9
+    },
+    {
+      "domain": "ip",
+      "case": 116,
+      "objective": -23.0,
+      "oracle": -23.0,
+      "nodes": 9,
+      "pivots": 36
+    },
+    {
+      "domain": "ip",
+      "case": 117,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 9,
+      "pivots": 36
+    },
+    {
+      "domain": "ip",
+      "case": 118,
+      "objective": -12.0,
+      "oracle": -12.0,
+      "nodes": 9,
+      "pivots": 32
+    },
+    {
+      "domain": "ip",
+      "case": 119,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 11,
+      "pivots": 48
+    },
+    {
+      "domain": "ip",
+      "case": 120,
+      "objective": 8.0,
+      "oracle": 8.0,
+      "nodes": 5,
+      "pivots": 28
+    },
+    {
+      "domain": "ip",
+      "case": 121,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 15,
+      "pivots": 83
+    },
+    {
+      "domain": "ip",
+      "case": 122,
+      "objective": 37.0,
+      "oracle": 37.0,
+      "nodes": 7,
+      "pivots": 28
+    },
+    {
+      "domain": "ip",
+      "case": 123,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 7,
+      "pivots": 24
+    },
+    {
+      "domain": "ip",
+      "case": 124,
+      "objective": -20.0,
+      "oracle": -20.0,
+      "nodes": 7,
+      "pivots": 30
+    },
+    {
+      "domain": "ip",
+      "case": 125,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 19,
+      "pivots": 85
+    },
+    {
+      "domain": "ip",
+      "case": 126,
+      "objective": -34.0,
+      "oracle": -34.0,
+      "nodes": 17,
+      "pivots": 85
+    },
+    {
+      "domain": "ip",
+      "case": 127,
+      "objective": 3.0,
+      "oracle": 3.0,
+      "nodes": 13,
+      "pivots": 56
+    },
+    {
+      "domain": "ip",
+      "case": 128,
+      "objective": -16.0,
+      "oracle": -16.0,
+      "nodes": 1,
+      "pivots": 9
+    },
+    {
+      "domain": "ip",
+      "case": 129,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 11,
+      "pivots": 58
+    },
+    {
+      "domain": "ip",
+      "case": 130,
+      "objective": -48.0,
+      "oracle": -48.0,
+      "nodes": 5,
+      "pivots": 30
+    },
+    {
+      "domain": "ip",
+      "case": 131,
+      "objective": 18.0,
+      "oracle": 18.0,
+      "nodes": 3,
+      "pivots": 19
+    },
+    {
+      "domain": "ip",
+      "case": 132,
+      "objective": -11.0,
+      "oracle": -11.0,
+      "nodes": 7,
+      "pivots": 31
+    },
+    {
+      "domain": "ip",
+      "case": 133,
+      "objective": 15.0,
+      "oracle": 15.0,
+      "nodes": 25,
+      "pivots": 91
+    },
+    {
+      "domain": "ip",
+      "case": 134,
+      "objective": 39.0,
+      "oracle": 39.0,
+      "nodes": 9,
+      "pivots": 31
+    },
+    {
+      "domain": "ip",
+      "case": 135,
+      "objective": -11.0,
+      "oracle": -11.0,
+      "nodes": 27,
+      "pivots": 93
+    },
+    {
+      "domain": "ip",
+      "case": 136,
+      "objective": -34.0,
+      "oracle": -34.0,
+      "nodes": 7,
+      "pivots": 37
+    },
+    {
+      "domain": "ip",
+      "case": 137,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 3,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 138,
+      "objective": 40.0,
+      "oracle": 40.0,
+      "nodes": 9,
+      "pivots": 41
+    },
+    {
+      "domain": "ip",
+      "case": 139,
+      "objective": 3.0,
+      "oracle": 3.0,
+      "nodes": 9,
+      "pivots": 33
+    },
+    {
+      "domain": "ip",
+      "case": 140,
+      "objective": 6.0,
+      "oracle": 6.0,
+      "nodes": 7,
+      "pivots": 30
+    },
+    {
+      "domain": "ip",
+      "case": 141,
+      "objective": 12.0,
+      "oracle": 12.0,
+      "nodes": 11,
+      "pivots": 51
+    },
+    {
+      "domain": "ip",
+      "case": 142,
+      "objective": 30.0,
+      "oracle": 30.0,
+      "nodes": 5,
+      "pivots": 20
+    },
+    {
+      "domain": "ip",
+      "case": 143,
+      "objective": -35.0,
+      "oracle": -35.0,
+      "nodes": 1,
+      "pivots": 9
+    },
+    {
+      "domain": "ip",
+      "case": 144,
+      "objective": 8.0,
+      "oracle": 8.0,
+      "nodes": 9,
+      "pivots": 42
+    },
+    {
+      "domain": "ip",
+      "case": 145,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 3,
+      "pivots": 13
+    },
+    {
+      "domain": "ip",
+      "case": 146,
+      "objective": -4.0,
+      "oracle": -4.0,
+      "nodes": 23,
+      "pivots": 92
+    },
+    {
+      "domain": "ip",
+      "case": 147,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 25,
+      "pivots": 84
+    },
+    {
+      "domain": "ip",
+      "case": 148,
+      "objective": 21.0,
+      "oracle": 21.0,
+      "nodes": 5,
+      "pivots": 16
+    },
+    {
+      "domain": "ip",
+      "case": 149,
+      "objective": 30.0,
+      "oracle": 30.0,
+      "nodes": 11,
+      "pivots": 56
+    },
+    {
+      "domain": "ip",
+      "case": 150,
+      "objective": 8.0,
+      "oracle": 8.0,
+      "nodes": 1,
+      "pivots": 6
+    },
+    {
+      "domain": "ip",
+      "case": 151,
+      "objective": -18.0,
+      "oracle": -18.0,
+      "nodes": 23,
+      "pivots": 95
+    },
+    {
+      "domain": "ip",
+      "case": 152,
+      "objective": 1.0,
+      "oracle": 1.0,
+      "nodes": 9,
+      "pivots": 41
+    },
+    {
+      "domain": "ip",
+      "case": 153,
+      "objective": 5.0,
+      "oracle": 5.0,
+      "nodes": 9,
+      "pivots": 28
+    },
+    {
+      "domain": "ip",
+      "case": 154,
+      "objective": -18.0,
+      "oracle": -18.0,
+      "nodes": 3,
+      "pivots": 19
+    },
+    {
+      "domain": "ip",
+      "case": 155,
+      "objective": 3.0,
+      "oracle": 3.0,
+      "nodes": 1,
+      "pivots": 10
+    },
+    {
+      "domain": "ip",
+      "case": 156,
+      "objective": -20.0,
+      "oracle": -20.0,
+      "nodes": 9,
+      "pivots": 37
+    },
+    {
+      "domain": "ip",
+      "case": 157,
+      "objective": 12.0,
+      "oracle": 12.0,
+      "nodes": 7,
+      "pivots": 42
+    },
+    {
+      "domain": "ip",
+      "case": 158,
+      "objective": -27.0,
+      "oracle": -27.0,
+      "nodes": 15,
+      "pivots": 70
+    },
+    {
+      "domain": "ip",
+      "case": 159,
+      "objective": 17.0,
+      "oracle": 17.0,
+      "nodes": 9,
+      "pivots": 47
+    },
+    {
+      "domain": "ip",
+      "case": 160,
+      "objective": -41.0,
+      "oracle": -41.0,
+      "nodes": 3,
+      "pivots": 19
+    },
+    {
+      "domain": "ip",
+      "case": 161,
+      "objective": 24.0,
+      "oracle": 24.0,
+      "nodes": 1,
+      "pivots": 10
+    },
+    {
+      "domain": "ip",
+      "case": 162,
+      "objective": -16.0,
+      "oracle": -16.0,
+      "nodes": 11,
+      "pivots": 58
+    },
+    {
+      "domain": "ip",
+      "case": 163,
+      "objective": 4.0,
+      "oracle": 4.0,
+      "nodes": 11,
+      "pivots": 42
+    },
+    {
+      "domain": "ip",
+      "case": 164,
+      "objective": -23.0,
+      "oracle": -23.0,
+      "nodes": 3,
+      "pivots": 12
+    },
+    {
+      "domain": "ip",
+      "case": 165,
+      "objective": 32.0,
+      "oracle": 32.0,
+      "nodes": 1,
+      "pivots": 10
+    },
+    {
+      "domain": "ip",
+      "case": 166,
+      "objective": -13.0,
+      "oracle": -13.0,
+      "nodes": 11,
+      "pivots": 44
+    },
+    {
+      "domain": "ip",
+      "case": 167,
+      "objective": 17.0,
+      "oracle": 17.0,
+      "nodes": 4,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 168,
+      "objective": -19.0,
+      "oracle": -19.0,
+      "nodes": 3,
+      "pivots": 16
+    },
+    {
+      "domain": "ip",
+      "case": 169,
+      "objective": 29.0,
+      "oracle": 29.0,
+      "nodes": 7,
+      "pivots": 38
+    },
+    {
+      "domain": "ip",
+      "case": 170,
+      "objective": -46.0,
+      "oracle": -46.0,
+      "nodes": 9,
+      "pivots": 39
+    },
+    {
+      "domain": "ip",
+      "case": 171,
+      "objective": -69.0,
+      "oracle": -69.0,
+      "nodes": 1,
+      "pivots": 10
+    },
+    {
+      "domain": "ip",
+      "case": 172,
+      "objective": -22.0,
+      "oracle": -22.0,
+      "nodes": 7,
+      "pivots": 26
+    },
+    {
+      "domain": "ip",
+      "case": 173,
+      "objective": 9.0,
+      "oracle": 9.0,
+      "nodes": 1,
+      "pivots": 7
+    },
+    {
+      "domain": "ip",
+      "case": 174,
+      "objective": 19.0,
+      "oracle": 19.0,
+      "nodes": 11,
+      "pivots": 56
+    },
+    {
+      "domain": "ip",
+      "case": 175,
+      "objective": -14.0,
+      "oracle": -14.0,
+      "nodes": 8,
+      "pivots": 22
+    },
+    {
+      "domain": "ip",
+      "case": 176,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 11,
+      "pivots": 48
+    },
+    {
+      "domain": "ip",
+      "case": 177,
+      "objective": 41.0,
+      "oracle": 41.0,
+      "nodes": 17,
+      "pivots": 67
+    },
+    {
+      "domain": "ip",
+      "case": 178,
+      "objective": 4.0,
+      "oracle": 4.0,
+      "nodes": 9,
+      "pivots": 27
+    },
+    {
+      "domain": "ip",
+      "case": 179,
+      "objective": -27.0,
+      "oracle": -27.0,
+      "nodes": 3,
+      "pivots": 17
+    },
+    {
+      "domain": "ip",
+      "case": 180,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 3,
+      "pivots": 10
+    },
+    {
+      "domain": "ip",
+      "case": 181,
+      "objective": -23.0,
+      "oracle": -23.0,
+      "nodes": 15,
+      "pivots": 74
+    },
+    {
+      "domain": "ip",
+      "case": 182,
+      "objective": -3.0,
+      "oracle": -3.0,
+      "nodes": 7,
+      "pivots": 33
+    },
+    {
+      "domain": "ip",
+      "case": 183,
+      "objective": -19.0,
+      "oracle": -19.0,
+      "nodes": 7,
+      "pivots": 26
+    },
+    {
+      "domain": "ip",
+      "case": 184,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 5,
+      "pivots": 26
+    },
+    {
+      "domain": "ip",
+      "case": 185,
+      "objective": 7.0,
+      "oracle": 7.0,
+      "nodes": 3,
+      "pivots": 18
+    },
+    {
+      "domain": "ip",
+      "case": 186,
+      "objective": 8.0,
+      "oracle": 8.0,
+      "nodes": 7,
+      "pivots": 35
+    },
+    {
+      "domain": "ip",
+      "case": 187,
+      "objective": -10.0,
+      "oracle": -10.0,
+      "nodes": 2,
+      "pivots": 8
+    },
+    {
+      "domain": "ip",
+      "case": 188,
+      "objective": -22.0,
+      "oracle": -22.0,
+      "nodes": 9,
+      "pivots": 37
+    },
+    {
+      "domain": "ip",
+      "case": 189,
+      "objective": -23.0,
+      "oracle": -23.0,
+      "nodes": 3,
+      "pivots": 15
+    },
+    {
+      "domain": "ip",
+      "case": 190,
+      "objective": 6.0,
+      "oracle": 6.0,
+      "nodes": 13,
+      "pivots": 51
+    },
+    {
+      "domain": "ip",
+      "case": 191,
+      "objective": -8.0,
+      "oracle": -8.0,
+      "nodes": 11,
+      "pivots": 58
+    },
+    {
+      "domain": "ip",
+      "case": 192,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 17,
+      "pivots": 71
+    },
+    {
+      "domain": "ip",
+      "case": 193,
+      "objective": -25.0,
+      "oracle": -25.0,
+      "nodes": 23,
+      "pivots": 83
+    },
+    {
+      "domain": "ip",
+      "case": 194,
+      "objective": -24.0,
+      "oracle": -24.0,
+      "nodes": 7,
+      "pivots": 34
+    },
+    {
+      "domain": "ip",
+      "case": 195,
+      "objective": -15.0,
+      "oracle": -15.0,
+      "nodes": 7,
+      "pivots": 40
+    },
+    {
+      "domain": "ip",
+      "case": 196,
+      "objective": -1.0,
+      "oracle": -1.0,
+      "nodes": 7,
+      "pivots": 28
+    },
+    {
+      "domain": "ip",
+      "case": 197,
+      "objective": -4.0,
+      "oracle": -4.0,
+      "nodes": 1,
+      "pivots": 6
+    },
+    {
+      "domain": "ip",
+      "case": 198,
+      "objective": 17.0,
+      "oracle": 17.0,
+      "nodes": 7,
+      "pivots": 42
+    },
+    {
+      "domain": "ip",
+      "case": 199,
+      "objective": 25.0,
+      "oracle": 25.0,
+      "nodes": 7,
+      "pivots": 35
+    },
+    {
+      "domain": "mip",
+      "case": 0,
+      "objective": -44.99999999999999,
+      "oracle": -45.0,
+      "nodes": 3,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 1,
+      "objective": 5.999999999999998,
+      "oracle": 6.0,
+      "nodes": 3,
+      "pivots": 19
+    },
+    {
+      "domain": "mip",
+      "case": 2,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 13,
+      "pivots": 73
+    },
+    {
+      "domain": "mip",
+      "case": 3,
+      "objective": -14.291666666666671,
+      "oracle": -14.291666666666666,
+      "nodes": 1,
+      "pivots": 8
+    },
+    {
+      "domain": "mip",
+      "case": 4,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 3,
+      "pivots": 8
+    },
+    {
+      "domain": "mip",
+      "case": 5,
+      "objective": -1.142857142857145,
+      "oracle": -1.1428571428571428,
+      "nodes": 3,
+      "pivots": 15
+    },
+    {
+      "domain": "mip",
+      "case": 6,
+      "objective": 10.285714285714295,
+      "oracle": 10.285714285714286,
+      "nodes": 9,
+      "pivots": 39
+    },
+    {
+      "domain": "mip",
+      "case": 7,
+      "objective": -0.18604651162790464,
+      "oracle": -0.18604651162790697,
+      "nodes": 7,
+      "pivots": 17
+    },
+    {
+      "domain": "mip",
+      "case": 8,
+      "objective": 1.9999999999999982,
+      "oracle": 2.0,
+      "nodes": 17,
+      "pivots": 77
+    },
+    {
+      "domain": "mip",
+      "case": 9,
+      "objective": 20.0,
+      "oracle": 20.0,
+      "nodes": 17,
+      "pivots": 56
+    },
+    {
+      "domain": "mip",
+      "case": 10,
+      "objective": 12.000000000000004,
+      "oracle": 12.0,
+      "nodes": 15,
+      "pivots": 61
+    },
+    {
+      "domain": "mip",
+      "case": 11,
+      "objective": -23.0,
+      "oracle": -23.0,
+      "nodes": 7,
+      "pivots": 26
+    },
+    {
+      "domain": "mip",
+      "case": 12,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 5,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 13,
+      "objective": 24.125,
+      "oracle": 24.125,
+      "nodes": 9,
+      "pivots": 33
+    },
+    {
+      "domain": "mip",
+      "case": 14,
+      "objective": 12.999999999999996,
+      "oracle": 13.0,
+      "nodes": 17,
+      "pivots": 42
+    },
+    {
+      "domain": "mip",
+      "case": 15,
+      "objective": 12.600000000000005,
+      "oracle": 12.6,
+      "nodes": 7,
+      "pivots": 27
+    },
+    {
+      "domain": "mip",
+      "case": 16,
+      "objective": -25.0,
+      "oracle": -25.0,
+      "nodes": 17,
+      "pivots": 63
+    },
+    {
+      "domain": "mip",
+      "case": 17,
+      "objective": -35.0,
+      "oracle": -35.0,
+      "nodes": 9,
+      "pivots": 27
+    },
+    {
+      "domain": "mip",
+      "case": 18,
+      "objective": -13.999999999999993,
+      "oracle": -14.0,
+      "nodes": 7,
+      "pivots": 41
+    },
+    {
+      "domain": "mip",
+      "case": 19,
+      "objective": -11.99999999999999,
+      "oracle": -12.0,
+      "nodes": 13,
+      "pivots": 53
+    },
+    {
+      "domain": "mip",
+      "case": 20,
+      "objective": 47.071428571428555,
+      "oracle": 47.07142857142857,
+      "nodes": 9,
+      "pivots": 52
+    },
+    {
+      "domain": "mip",
+      "case": 21,
+      "objective": -58.9047619047619,
+      "oracle": -58.904761904761905,
+      "nodes": 3,
+      "pivots": 11
+    },
+    {
+      "domain": "mip",
+      "case": 22,
+      "objective": -9.75,
+      "oracle": -9.75,
+      "nodes": 7,
+      "pivots": 39
+    },
+    {
+      "domain": "mip",
+      "case": 23,
+      "objective": 10.52380952380952,
+      "oracle": 10.523809523809524,
+      "nodes": 5,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 24,
+      "objective": -18.000000000000007,
+      "oracle": -18.0,
+      "nodes": 7,
+      "pivots": 25
+    },
+    {
+      "domain": "mip",
+      "case": 25,
+      "objective": -53.0,
+      "oracle": -53.0,
+      "nodes": 7,
+      "pivots": 31
+    },
+    {
+      "domain": "mip",
+      "case": 26,
+      "objective": -26.000000000000018,
+      "oracle": -26.0,
+      "nodes": 9,
+      "pivots": 39
+    },
+    {
+      "domain": "mip",
+      "case": 27,
+      "objective": -26.399999999999995,
+      "oracle": -26.4,
+      "nodes": 15,
+      "pivots": 50
+    },
+    {
+      "domain": "mip",
+      "case": 28,
+      "objective": -3.200000000000008,
+      "oracle": -3.2,
+      "nodes": 5,
+      "pivots": 32
+    },
+    {
+      "domain": "mip",
+      "case": 29,
+      "objective": -21.0,
+      "oracle": -21.0,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "mip",
+      "case": 30,
+      "objective": 9.166666666666663,
+      "oracle": 9.166666666666666,
+      "nodes": 7,
+      "pivots": 38
+    },
+    {
+      "domain": "mip",
+      "case": 31,
+      "objective": 5.000000000000001,
+      "oracle": 5.0,
+      "nodes": 7,
+      "pivots": 33
+    },
+    {
+      "domain": "mip",
+      "case": 32,
+      "objective": 41.33333333333333,
+      "oracle": 41.333333333333336,
+      "nodes": 7,
+      "pivots": 28
+    },
+    {
+      "domain": "mip",
+      "case": 33,
+      "objective": 18.0,
+      "oracle": 18.0,
+      "nodes": 7,
+      "pivots": 40
+    },
+    {
+      "domain": "mip",
+      "case": 34,
+      "objective": -15.999999999999996,
+      "oracle": -16.0,
+      "nodes": 13,
+      "pivots": 45
+    },
+    {
+      "domain": "mip",
+      "case": 35,
+      "objective": 0.0,
+      "oracle": 0.0,
+      "nodes": 5,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 36,
+      "objective": -22.000000000000007,
+      "oracle": -22.0,
+      "nodes": 15,
+      "pivots": 57
+    },
+    {
+      "domain": "mip",
+      "case": 37,
+      "objective": -26.0,
+      "oracle": -26.0,
+      "nodes": 3,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 38,
+      "objective": -39.53846153846155,
+      "oracle": -39.53846153846154,
+      "nodes": 5,
+      "pivots": 20
+    },
+    {
+      "domain": "mip",
+      "case": 39,
+      "objective": 22.0,
+      "oracle": 22.0,
+      "nodes": 5,
+      "pivots": 16
+    },
+    {
+      "domain": "mip",
+      "case": 40,
+      "objective": 10.133333333333331,
+      "oracle": 10.133333333333333,
+      "nodes": 7,
+      "pivots": 33
+    },
+    {
+      "domain": "mip",
+      "case": 41,
+      "objective": 13.666666666666668,
+      "oracle": 13.666666666666666,
+      "nodes": 3,
+      "pivots": 7
+    },
+    {
+      "domain": "mip",
+      "case": 42,
+      "objective": -4.000000000000002,
+      "oracle": -4.0,
+      "nodes": 11,
+      "pivots": 41
+    },
+    {
+      "domain": "mip",
+      "case": 43,
+      "objective": -39.235294117647044,
+      "oracle": -39.23529411764706,
+      "nodes": 13,
+      "pivots": 56
+    },
+    {
+      "domain": "mip",
+      "case": 44,
+      "objective": -2.4999999999999964,
+      "oracle": -2.5,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "mip",
+      "case": 45,
+      "objective": -2.0000000000000027,
+      "oracle": -2.0,
+      "nodes": 7,
+      "pivots": 37
+    },
+    {
+      "domain": "mip",
+      "case": 46,
+      "objective": -5.349999999999994,
+      "oracle": -5.35,
+      "nodes": 13,
+      "pivots": 52
+    },
+    {
+      "domain": "mip",
+      "case": 47,
+      "objective": -23.0,
+      "oracle": -23.0,
+      "nodes": 7,
+      "pivots": 29
+    },
+    {
+      "domain": "mip",
+      "case": 48,
+      "objective": -31.833333333333343,
+      "oracle": -31.833333333333332,
+      "nodes": 11,
+      "pivots": 41
+    },
+    {
+      "domain": "mip",
+      "case": 49,
+      "objective": -21.666666666666654,
+      "oracle": -21.666666666666668,
+      "nodes": 15,
+      "pivots": 71
+    },
+    {
+      "domain": "mip",
+      "case": 50,
+      "objective": 18.23076923076923,
+      "oracle": 18.23076923076923,
+      "nodes": 5,
+      "pivots": 32
+    },
+    {
+      "domain": "mip",
+      "case": 51,
+      "objective": -39.90476190476191,
+      "oracle": -39.904761904761905,
+      "nodes": 5,
+      "pivots": 27
+    },
+    {
+      "domain": "mip",
+      "case": 52,
+      "objective": -6.000000000000011,
+      "oracle": -6.0,
+      "nodes": 5,
+      "pivots": 29
+    },
+    {
+      "domain": "mip",
+      "case": 53,
+      "objective": 5.1666666666666785,
+      "oracle": 5.166666666666667,
+      "nodes": 9,
+      "pivots": 54
+    },
+    {
+      "domain": "mip",
+      "case": 54,
+      "objective": -5.999999999999989,
+      "oracle": -6.0,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "mip",
+      "case": 55,
+      "objective": -5.0,
+      "oracle": -5.0,
+      "nodes": 1,
+      "pivots": 4
+    },
+    {
+      "domain": "mip",
+      "case": 56,
+      "objective": -16.66666666666667,
+      "oracle": -16.666666666666668,
+      "nodes": 19,
+      "pivots": 100
+    },
+    {
+      "domain": "mip",
+      "case": 57,
+      "objective": -24.0,
+      "oracle": -24.0,
+      "nodes": 13,
+      "pivots": 53
+    },
+    {
+      "domain": "mip",
+      "case": 58,
+      "objective": -0.7500000000000036,
+      "oracle": -0.75,
+      "nodes": 7,
+      "pivots": 34
+    },
+    {
+      "domain": "mip",
+      "case": 59,
+      "objective": -1.8333333333333401,
+      "oracle": -1.8333333333333333,
+      "nodes": 15,
+      "pivots": 63
+    },
+    {
+      "domain": "mip",
+      "case": 60,
+      "objective": -35.0,
+      "oracle": -35.0,
+      "nodes": 11,
+      "pivots": 61
+    },
+    {
+      "domain": "mip",
+      "case": 61,
+      "objective": 22.399999999999984,
+      "oracle": 22.4,
+      "nodes": 7,
+      "pivots": 41
+    },
+    {
+      "domain": "mip",
+      "case": 62,
+      "objective": -20.999999999999982,
+      "oracle": -21.0,
+      "nodes": 25,
+      "pivots": 78
+    },
+    {
+      "domain": "mip",
+      "case": 63,
+      "objective": -57.00000000000001,
+      "oracle": -57.0,
+      "nodes": 3,
+      "pivots": 16
+    },
+    {
+      "domain": "mip",
+      "case": 64,
+      "objective": -10.000000000000004,
+      "oracle": -10.0,
+      "nodes": 7,
+      "pivots": 17
+    },
+    {
+      "domain": "mip",
+      "case": 65,
+      "objective": -10.937500000000005,
+      "oracle": -10.9375,
+      "nodes": 7,
+      "pivots": 31
+    },
+    {
+      "domain": "mip",
+      "case": 66,
+      "objective": -37.0,
+      "oracle": -37.0,
+      "nodes": 5,
+      "pivots": 29
+    },
+    {
+      "domain": "mip",
+      "case": 67,
+      "objective": 16.0,
+      "oracle": 16.0,
+      "nodes": 5,
+      "pivots": 27
+    },
+    {
+      "domain": "mip",
+      "case": 68,
+      "objective": 47.00000000000001,
+      "oracle": 47.0,
+      "nodes": 7,
+      "pivots": 26
+    },
+    {
+      "domain": "mip",
+      "case": 69,
+      "objective": -13.500000000000002,
+      "oracle": -13.5,
+      "nodes": 7,
+      "pivots": 28
+    },
+    {
+      "domain": "mip",
+      "case": 70,
+      "objective": -14.999999999999996,
+      "oracle": -15.0,
+      "nodes": 5,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 71,
+      "objective": 15.500000000000007,
+      "oracle": 15.5,
+      "nodes": 11,
+      "pivots": 33
+    },
+    {
+      "domain": "mip",
+      "case": 72,
+      "objective": 2.0,
+      "oracle": 2.0,
+      "nodes": 11,
+      "pivots": 39
+    },
+    {
+      "domain": "mip",
+      "case": 73,
+      "objective": 14.72727272727272,
+      "oracle": 14.727272727272727,
+      "nodes": 5,
+      "pivots": 21
+    },
+    {
+      "domain": "mip",
+      "case": 74,
+      "objective": -5.25,
+      "oracle": -5.25,
+      "nodes": 3,
+      "pivots": 11
+    },
+    {
+      "domain": "mip",
+      "case": 75,
+      "objective": -28.000000000000004,
+      "oracle": -28.0,
+      "nodes": 23,
+      "pivots": 87
+    },
+    {
+      "domain": "mip",
+      "case": 76,
+      "objective": 11.999999999999998,
+      "oracle": 12.0,
+      "nodes": 17,
+      "pivots": 51
+    },
+    {
+      "domain": "mip",
+      "case": 77,
+      "objective": -42.25000000000001,
+      "oracle": -42.25,
+      "nodes": 9,
+      "pivots": 29
+    },
+    {
+      "domain": "mip",
+      "case": 78,
+      "objective": 0.7999999999999998,
+      "oracle": 0.8,
+      "nodes": 5,
+      "pivots": 20
+    },
+    {
+      "domain": "mip",
+      "case": 79,
+      "objective": -18.826086956521742,
+      "oracle": -18.82608695652174,
+      "nodes": 17,
+      "pivots": 62
+    },
+    {
+      "domain": "mip",
+      "case": 80,
+      "objective": -22.250000000000004,
+      "oracle": -22.25,
+      "nodes": 3,
+      "pivots": 20
+    },
+    {
+      "domain": "mip",
+      "case": 81,
+      "objective": -17.0,
+      "oracle": -17.0,
+      "nodes": 5,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 82,
+      "objective": -27.999999999999996,
+      "oracle": -28.0,
+      "nodes": 7,
+      "pivots": 34
+    },
+    {
+      "domain": "mip",
+      "case": 83,
+      "objective": 8.933333333333334,
+      "oracle": 8.933333333333334,
+      "nodes": 3,
+      "pivots": 10
+    },
+    {
+      "domain": "mip",
+      "case": 84,
+      "objective": -8.5,
+      "oracle": -8.5,
+      "nodes": 7,
+      "pivots": 39
+    },
+    {
+      "domain": "mip",
+      "case": 85,
+      "objective": -8.058823529411764,
+      "oracle": -8.058823529411764,
+      "nodes": 15,
+      "pivots": 46
+    },
+    {
+      "domain": "mip",
+      "case": 86,
+      "objective": -40.66666666666667,
+      "oracle": -40.666666666666664,
+      "nodes": 17,
+      "pivots": 70
+    },
+    {
+      "domain": "mip",
+      "case": 87,
+      "objective": 23.0,
+      "oracle": 23.0,
+      "nodes": 5,
+      "pivots": 16
+    },
+    {
+      "domain": "mip",
+      "case": 88,
+      "objective": 2.960000000000002,
+      "oracle": 2.96,
+      "nodes": 7,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 89,
+      "objective": 16.0,
+      "oracle": 16.0,
+      "nodes": 7,
+      "pivots": 37
+    },
+    {
+      "domain": "mip",
+      "case": 90,
+      "objective": 10.5,
+      "oracle": 10.5,
+      "nodes": 7,
+      "pivots": 36
+    },
+    {
+      "domain": "mip",
+      "case": 91,
+      "objective": -17.000000000000004,
+      "oracle": -17.0,
+      "nodes": 3,
+      "pivots": 21
+    },
+    {
+      "domain": "mip",
+      "case": 92,
+      "objective": 0.9999999999999982,
+      "oracle": 1.0,
+      "nodes": 7,
+      "pivots": 42
+    },
+    {
+      "domain": "mip",
+      "case": 93,
+      "objective": 17.499999999999996,
+      "oracle": 17.5,
+      "nodes": 7,
+      "pivots": 29
+    },
+    {
+      "domain": "mip",
+      "case": 94,
+      "objective": -29.0,
+      "oracle": -29.0,
+      "nodes": 1,
+      "pivots": 9
+    },
+    {
+      "domain": "mip",
+      "case": 95,
+      "objective": 12.777777777777786,
+      "oracle": 12.777777777777779,
+      "nodes": 11,
+      "pivots": 35
+    },
+    {
+      "domain": "mip",
+      "case": 96,
+      "objective": -11.333333333333329,
+      "oracle": -11.333333333333334,
+      "nodes": 7,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 97,
+      "objective": 13.666666666666671,
+      "oracle": 13.666666666666666,
+      "nodes": 5,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 98,
+      "objective": 9.0,
+      "oracle": 9.0,
+      "nodes": 9,
+      "pivots": 41
+    },
+    {
+      "domain": "mip",
+      "case": 99,
+      "objective": -25.0,
+      "oracle": -25.0,
+      "nodes": 5,
+      "pivots": 10
+    },
+    {
+      "domain": "mip",
+      "case": 100,
+      "objective": -21.5,
+      "oracle": -21.5,
+      "nodes": 15,
+      "pivots": 62
+    },
+    {
+      "domain": "mip",
+      "case": 101,
+      "objective": 19.0,
+      "oracle": 19.0,
+      "nodes": 13,
+      "pivots": 36
+    },
+    {
+      "domain": "mip",
+      "case": 102,
+      "objective": -6.969696969696971,
+      "oracle": -6.96969696969697,
+      "nodes": 15,
+      "pivots": 51
+    },
+    {
+      "domain": "mip",
+      "case": 103,
+      "objective": 5.999999999999998,
+      "oracle": 6.0,
+      "nodes": 7,
+      "pivots": 23
+    },
+    {
+      "domain": "mip",
+      "case": 104,
+      "objective": -5.000000000000007,
+      "oracle": -5.0,
+      "nodes": 9,
+      "pivots": 46
+    },
+    {
+      "domain": "mip",
+      "case": 105,
+      "objective": -27.0,
+      "oracle": -27.0,
+      "nodes": 5,
+      "pivots": 16
+    },
+    {
+      "domain": "mip",
+      "case": 106,
+      "objective": -51.0,
+      "oracle": -51.0,
+      "nodes": 5,
+      "pivots": 28
+    },
+    {
+      "domain": "mip",
+      "case": 107,
+      "objective": 9.0,
+      "oracle": 9.0,
+      "nodes": 7,
+      "pivots": 31
+    },
+    {
+      "domain": "mip",
+      "case": 108,
+      "objective": -40.230769230769226,
+      "oracle": -40.23076923076923,
+      "nodes": 5,
+      "pivots": 15
+    },
+    {
+      "domain": "mip",
+      "case": 109,
+      "objective": 12.0,
+      "oracle": 12.0,
+      "nodes": 1,
+      "pivots": 10
+    },
+    {
+      "domain": "mip",
+      "case": 110,
+      "objective": -13.230769230769239,
+      "oracle": -13.23076923076923,
+      "nodes": 5,
+      "pivots": 29
+    },
+    {
+      "domain": "mip",
+      "case": 111,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 5,
+      "pivots": 25
+    },
+    {
+      "domain": "mip",
+      "case": 112,
+      "objective": 10.000000000000002,
+      "oracle": 10.0,
+      "nodes": 3,
+      "pivots": 17
+    },
+    {
+      "domain": "mip",
+      "case": 113,
+      "objective": 17.28571428571428,
+      "oracle": 17.285714285714285,
+      "nodes": 3,
+      "pivots": 11
+    },
+    {
+      "domain": "mip",
+      "case": 114,
+      "objective": -14.400000000000002,
+      "oracle": -14.4,
+      "nodes": 9,
+      "pivots": 52
+    },
+    {
+      "domain": "mip",
+      "case": 115,
+      "objective": 6.000000000000002,
+      "oracle": 6.0,
+      "nodes": 9,
+      "pivots": 21
+    },
+    {
+      "domain": "mip",
+      "case": 116,
+      "objective": -36.0,
+      "oracle": -36.0,
+      "nodes": 5,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 117,
+      "objective": 14.59999999999999,
+      "oracle": 14.6,
+      "nodes": 5,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 118,
+      "objective": 2.9999999999999627,
+      "oracle": 3.0,
+      "nodes": 9,
+      "pivots": 58
+    },
+    {
+      "domain": "mip",
+      "case": 119,
+      "objective": 21.685714285714287,
+      "oracle": 21.685714285714287,
+      "nodes": 5,
+      "pivots": 25
+    },
+    {
+      "domain": "mip",
+      "case": 120,
+      "objective": -26.25,
+      "oracle": -26.25,
+      "nodes": 5,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 121,
+      "objective": 14.000000000000004,
+      "oracle": 14.0,
+      "nodes": 13,
+      "pivots": 37
+    },
+    {
+      "domain": "mip",
+      "case": 122,
+      "objective": 18.99999999999998,
+      "oracle": 19.0,
+      "nodes": 9,
+      "pivots": 46
+    },
+    {
+      "domain": "mip",
+      "case": 123,
+      "objective": -28.63636363636364,
+      "oracle": -28.636363636363637,
+      "nodes": 11,
+      "pivots": 51
+    },
+    {
+      "domain": "mip",
+      "case": 124,
+      "objective": -25.000000000000007,
+      "oracle": -25.0,
+      "nodes": 5,
+      "pivots": 16
+    },
+    {
+      "domain": "mip",
+      "case": 125,
+      "objective": -31.55555555555558,
+      "oracle": -31.555555555555557,
+      "nodes": 7,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 126,
+      "objective": -5.000000000000002,
+      "oracle": -5.0,
+      "nodes": 7,
+      "pivots": 30
+    },
+    {
+      "domain": "mip",
+      "case": 127,
+      "objective": -33.44444444444444,
+      "oracle": -33.44444444444444,
+      "nodes": 5,
+      "pivots": 29
+    },
+    {
+      "domain": "mip",
+      "case": 128,
+      "objective": -2.499999999999993,
+      "oracle": -2.5,
+      "nodes": 17,
+      "pivots": 62
+    },
+    {
+      "domain": "mip",
+      "case": 129,
+      "objective": 23.0,
+      "oracle": 23.0,
+      "nodes": 11,
+      "pivots": 40
+    },
+    {
+      "domain": "mip",
+      "case": 130,
+      "objective": -14.809523809523812,
+      "oracle": -14.80952380952381,
+      "nodes": 5,
+      "pivots": 35
+    },
+    {
+      "domain": "mip",
+      "case": 131,
+      "objective": 37.368421052631575,
+      "oracle": 37.36842105263158,
+      "nodes": 7,
+      "pivots": 41
+    },
+    {
+      "domain": "mip",
+      "case": 132,
+      "objective": 10.33333333333334,
+      "oracle": 10.333333333333334,
+      "nodes": 23,
+      "pivots": 81
+    },
+    {
+      "domain": "mip",
+      "case": 133,
+      "objective": 1.6666666666666696,
+      "oracle": 1.6666666666666667,
+      "nodes": 15,
+      "pivots": 42
+    },
+    {
+      "domain": "mip",
+      "case": 134,
+      "objective": -10.91666666666666,
+      "oracle": -10.916666666666666,
+      "nodes": 7,
+      "pivots": 28
+    },
+    {
+      "domain": "mip",
+      "case": 135,
+      "objective": -2.8666666666666654,
+      "oracle": -2.8666666666666667,
+      "nodes": 7,
+      "pivots": 26
+    },
+    {
+      "domain": "mip",
+      "case": 136,
+      "objective": 4.333333333333333,
+      "oracle": 4.333333333333333,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "mip",
+      "case": 137,
+      "objective": 7.0000000000000036,
+      "oracle": 7.0,
+      "nodes": 13,
+      "pivots": 47
+    },
+    {
+      "domain": "mip",
+      "case": 138,
+      "objective": 1.9999999999999982,
+      "oracle": 2.0,
+      "nodes": 17,
+      "pivots": 77
+    },
+    {
+      "domain": "mip",
+      "case": 139,
+      "objective": -5.999999999999998,
+      "oracle": -6.0,
+      "nodes": 3,
+      "pivots": 16
+    },
+    {
+      "domain": "mip",
+      "case": 140,
+      "objective": 10.333333333333336,
+      "oracle": 10.333333333333334,
+      "nodes": 5,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 141,
+      "objective": 2.0000000000000213,
+      "oracle": 2.0,
+      "nodes": 15,
+      "pivots": 60
+    },
+    {
+      "domain": "mip",
+      "case": 142,
+      "objective": -39.45454545454545,
+      "oracle": -39.45454545454545,
+      "nodes": 5,
+      "pivots": 18
+    },
+    {
+      "domain": "mip",
+      "case": 143,
+      "objective": -9.0,
+      "oracle": -9.0,
+      "nodes": 7,
+      "pivots": 37
+    },
+    {
+      "domain": "mip",
+      "case": 144,
+      "objective": -3.000000000000014,
+      "oracle": -3.0,
+      "nodes": 11,
+      "pivots": 42
+    },
+    {
+      "domain": "mip",
+      "case": 145,
+      "objective": -8.861111111111104,
+      "oracle": -8.86111111111111,
+      "nodes": 17,
+      "pivots": 62
+    },
+    {
+      "domain": "mip",
+      "case": 146,
+      "objective": -44.19047619047618,
+      "oracle": -44.19047619047619,
+      "nodes": 7,
+      "pivots": 36
+    },
+    {
+      "domain": "mip",
+      "case": 147,
+      "objective": 1.599999999999996,
+      "oracle": 1.6,
+      "nodes": 15,
+      "pivots": 48
+    },
+    {
+      "domain": "mip",
+      "case": 148,
+      "objective": -12.999999999999996,
+      "oracle": -13.0,
+      "nodes": 15,
+      "pivots": 54
+    },
+    {
+      "domain": "mip",
+      "case": 149,
+      "objective": -24.0,
+      "oracle": -24.0,
+      "nodes": 7,
+      "pivots": 21
+    },
+    {
+      "domain": "mip",
+      "case": 150,
+      "objective": 23.666666666666664,
+      "oracle": 23.666666666666668,
+      "nodes": 3,
+      "pivots": 12
+    },
+    {
+      "domain": "mip",
+      "case": 151,
+      "objective": 8.5,
+      "oracle": 8.5,
+      "nodes": 15,
+      "pivots": 58
+    },
+    {
+      "domain": "mip",
+      "case": 152,
+      "objective": -44.249999999999986,
+      "oracle": -44.25,
+      "nodes": 3,
+      "pivots": 18
+    },
+    {
+      "domain": "mip",
+      "case": 153,
+      "objective": -11.99999999999999,
+      "oracle": -12.0,
+      "nodes": 19,
+      "pivots": 73
+    },
+    {
+      "domain": "mip",
+      "case": 154,
+      "objective": -24.000000000000004,
+      "oracle": -24.0,
+      "nodes": 5,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 155,
+      "objective": 19.000000000000004,
+      "oracle": 19.0,
+      "nodes": 15,
+      "pivots": 50
+    },
+    {
+      "domain": "mip",
+      "case": 156,
+      "objective": 2.833333333333333,
+      "oracle": 2.8333333333333335,
+      "nodes": 5,
+      "pivots": 31
+    },
+    {
+      "domain": "mip",
+      "case": 157,
+      "objective": -10.000000000000014,
+      "oracle": -10.0,
+      "nodes": 5,
+      "pivots": 27
+    },
+    {
+      "domain": "mip",
+      "case": 158,
+      "objective": 41.69230769230769,
+      "oracle": 41.69230769230769,
+      "nodes": 7,
+      "pivots": 36
+    },
+    {
+      "domain": "mip",
+      "case": 159,
+      "objective": -1.6470588235293988,
+      "oracle": -1.6470588235294117,
+      "nodes": 7,
+      "pivots": 29
+    },
+    {
+      "domain": "mip",
+      "case": 160,
+      "objective": -31.000000000000007,
+      "oracle": -31.0,
+      "nodes": 5,
+      "pivots": 33
+    },
+    {
+      "domain": "mip",
+      "case": 161,
+      "objective": -17.44444444444444,
+      "oracle": -17.444444444444443,
+      "nodes": 7,
+      "pivots": 41
+    },
+    {
+      "domain": "mip",
+      "case": 162,
+      "objective": 27.999999999999993,
+      "oracle": 28.0,
+      "nodes": 5,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 163,
+      "objective": 9.666666666666671,
+      "oracle": 9.666666666666666,
+      "nodes": 1,
+      "pivots": 7
+    },
+    {
+      "domain": "mip",
+      "case": 164,
+      "objective": -16.666666666666668,
+      "oracle": -16.666666666666668,
+      "nodes": 7,
+      "pivots": 42
+    },
+    {
+      "domain": "mip",
+      "case": 165,
+      "objective": -47.0,
+      "oracle": -47.0,
+      "nodes": 5,
+      "pivots": 33
+    },
+    {
+      "domain": "mip",
+      "case": 166,
+      "objective": 13.18181818181818,
+      "oracle": 13.181818181818182,
+      "nodes": 9,
+      "pivots": 28
+    },
+    {
+      "domain": "mip",
+      "case": 167,
+      "objective": 36.0,
+      "oracle": 36.0,
+      "nodes": 11,
+      "pivots": 46
+    },
+    {
+      "domain": "mip",
+      "case": 168,
+      "objective": -4.444444444444443,
+      "oracle": -4.444444444444445,
+      "nodes": 9,
+      "pivots": 27
+    },
+    {
+      "domain": "mip",
+      "case": 169,
+      "objective": 62.0,
+      "oracle": 62.0,
+      "nodes": 13,
+      "pivots": 64
+    },
+    {
+      "domain": "mip",
+      "case": 170,
+      "objective": 5.0,
+      "oracle": 5.0,
+      "nodes": 5,
+      "pivots": 19
+    },
+    {
+      "domain": "mip",
+      "case": 171,
+      "objective": -15.999999999999998,
+      "oracle": -16.0,
+      "nodes": 5,
+      "pivots": 31
+    },
+    {
+      "domain": "mip",
+      "case": 172,
+      "objective": -6.999999999999989,
+      "oracle": -7.0,
+      "nodes": 15,
+      "pivots": 65
+    },
+    {
+      "domain": "mip",
+      "case": 173,
+      "objective": -1.8000000000000007,
+      "oracle": -1.8,
+      "nodes": 5,
+      "pivots": 17
+    },
+    {
+      "domain": "mip",
+      "case": 174,
+      "objective": 39.26666666666665,
+      "oracle": 39.266666666666666,
+      "nodes": 13,
+      "pivots": 54
+    },
+    {
+      "domain": "mip",
+      "case": 175,
+      "objective": 5.866666666666667,
+      "oracle": 5.866666666666666,
+      "nodes": 5,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 176,
+      "objective": 30.0,
+      "oracle": 30.0,
+      "nodes": 13,
+      "pivots": 57
+    },
+    {
+      "domain": "mip",
+      "case": 177,
+      "objective": -10.333333333333334,
+      "oracle": -10.333333333333334,
+      "nodes": 7,
+      "pivots": 32
+    },
+    {
+      "domain": "mip",
+      "case": 178,
+      "objective": 7.333333333333336,
+      "oracle": 7.333333333333333,
+      "nodes": 13,
+      "pivots": 38
+    },
+    {
+      "domain": "mip",
+      "case": 179,
+      "objective": 12.999999999999998,
+      "oracle": 13.0,
+      "nodes": 7,
+      "pivots": 32
+    },
+    {
+      "domain": "mip",
+      "case": 180,
+      "objective": 21.0,
+      "oracle": 21.0,
+      "nodes": 13,
+      "pivots": 56
+    },
+    {
+      "domain": "mip",
+      "case": 181,
+      "objective": 5.058823529411764,
+      "oracle": 5.0588235294117645,
+      "nodes": 3,
+      "pivots": 14
+    },
+    {
+      "domain": "mip",
+      "case": 182,
+      "objective": -22.500000000000004,
+      "oracle": -22.5,
+      "nodes": 5,
+      "pivots": 28
+    },
+    {
+      "domain": "mip",
+      "case": 183,
+      "objective": -6.3999999999999995,
+      "oracle": -6.4,
+      "nodes": 9,
+      "pivots": 49
+    },
+    {
+      "domain": "mip",
+      "case": 184,
+      "objective": 28.172413793103445,
+      "oracle": 28.17241379310345,
+      "nodes": 5,
+      "pivots": 19
+    },
+    {
+      "domain": "mip",
+      "case": 185,
+      "objective": 2.666666666666682,
+      "oracle": 2.6666666666666665,
+      "nodes": 9,
+      "pivots": 38
+    },
+    {
+      "domain": "mip",
+      "case": 186,
+      "objective": -24.294117647058822,
+      "oracle": -24.294117647058822,
+      "nodes": 5,
+      "pivots": 23
+    },
+    {
+      "domain": "mip",
+      "case": 187,
+      "objective": -19.571428571428573,
+      "oracle": -19.571428571428573,
+      "nodes": 17,
+      "pivots": 61
+    },
+    {
+      "domain": "mip",
+      "case": 188,
+      "objective": -43.0,
+      "oracle": -43.0,
+      "nodes": 5,
+      "pivots": 24
+    },
+    {
+      "domain": "mip",
+      "case": 189,
+      "objective": 4.750000000000003,
+      "oracle": 4.75,
+      "nodes": 5,
+      "pivots": 25
+    },
+    {
+      "domain": "mip",
+      "case": 190,
+      "objective": -7.999999999999986,
+      "oracle": -8.0,
+      "nodes": 7,
+      "pivots": 30
+    },
+    {
+      "domain": "mip",
+      "case": 191,
+      "objective": 9.0,
+      "oracle": 9.0,
+      "nodes": 5,
+      "pivots": 21
+    },
+    {
+      "domain": "mip",
+      "case": 192,
+      "objective": -13.999999999999993,
+      "oracle": -14.0,
+      "nodes": 11,
+      "pivots": 56
+    },
+    {
+      "domain": "mip",
+      "case": 193,
+      "objective": 0.8333333333333357,
+      "oracle": 0.8333333333333334,
+      "nodes": 7,
+      "pivots": 40
+    },
+    {
+      "domain": "mip",
+      "case": 194,
+      "objective": -14.028571428571432,
+      "oracle": -14.028571428571428,
+      "nodes": 15,
+      "pivots": 56
+    },
+    {
+      "domain": "mip",
+      "case": 195,
+      "objective": 21.0,
+      "oracle": 21.0,
+      "nodes": 3,
+      "pivots": 22
+    },
+    {
+      "domain": "mip",
+      "case": 196,
+      "objective": -18.0,
+      "oracle": -18.0,
+      "nodes": 1,
+      "pivots": 6
+    },
+    {
+      "domain": "mip",
+      "case": 197,
+      "objective": 32.99999999999999,
+      "oracle": 33.0,
+      "nodes": 9,
+      "pivots": 52
+    },
+    {
+      "domain": "mip",
+      "case": 198,
+      "objective": 1.0658141036401503e-14,
+      "oracle": 0.0,
+      "nodes": 9,
+      "pivots": 59
+    },
+    {
+      "domain": "mip",
+      "case": 199,
+      "objective": -7.0,
+      "oracle": -7.0,
+      "nodes": 15,
+      "pivots": 60
+    }
+  ]
+}

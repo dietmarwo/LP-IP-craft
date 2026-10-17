@@ -1,6 +1,6 @@
 """Python interface to lp-ip-craft: LP and mixed-integer LP in Rust.
 
-``solve(model, backend="highs")`` optimizes with the HiGHS adapter. The
+``solve(model, backend="native")`` optimizes with the native Rust engine. The
 default ``backend="dummy"`` is kept for compatibility with v0.1: it evaluates
 one candidate and returns ``status == "stub"``. ``evaluate`` and
 ``lp_residuals`` are solver-independent checks that also work on solutions
@@ -29,7 +29,7 @@ from ._native import lp_residuals as _lp_residuals
 from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 
-__version__ = "0.3.0"
+__version__ = "0.14.0"
 
 __all__ = [
     "BACKENDS",
@@ -40,7 +40,7 @@ __all__ = [
     "Evaluation",
     "EvaluationError",
     "Gap",
-    "HighsOptions",
+    "NativeOptions",
     "LpResiduals",
     "Model",
     "Options",
@@ -55,7 +55,7 @@ __all__ = [
 ]
 
 BACKENDS: tuple[str, ...] = tuple(_backends())
-"""Backends compiled into this build, for example ``("dummy", "highs")``."""
+"""Backends compiled into this build, for example ``("dummy", "native")``."""
 
 DEFAULT_FEASIBILITY_TOLERANCE = 1e-7
 DEFAULT_INTEGRALITY_TOLERANCE = 1e-7
@@ -88,30 +88,32 @@ class Options:
     integrality_tolerance: float = DEFAULT_INTEGRALITY_TOLERANCE
     """Largest accepted distance of an integer variable to an integer, in (0, 0.5)."""
     threads: int = 1
-    """Only 1 is supported; run independent solves for parallelism."""
+    """Threads per numerical kernel; use NativeOptions.component_threads for blocks."""
 
 
 @dataclass(frozen=True, kw_only=True)
-class HighsOptions:
-    """Settings of the HiGHS backend; every field is applied or rejected.
-
-    The defaults form a deterministic single-thread reference configuration.
-    """
-
+class NativeOptions:
+    """Controls for the native Rust engine: a bounded-variable dual revised
+    simplex on a sparse LU factorization inside best-bound branch and bound.
+    Field meanings and units are documented in ``docs/api.md``."""
     time_limit_seconds: Optional[float] = None
-    """Cooperative budget for the whole call (conversion, run, checks)."""
-    node_limit: Optional[int] = None
-    """Branch-and-bound node limit; MIP models only."""
-    iteration_limit: Optional[int] = None
-    """Simplex and interior-point iteration limit; LP models only."""
-    seed: int = 0
-    """HiGHS ``random_seed``."""
-    mip_relative_gap: float = 0.0
-    """HiGHS stopping rule ``mip_rel_gap``; does not change ``SolveResult.gap``."""
-    mip_absolute_gap: float = 0.0
-    """HiGHS stopping rule ``mip_abs_gap``."""
+    node_limit: Optional[int] = 100_000
+    iteration_limit: Optional[int] = 1_000_000
+    pivot_tolerance: float = 1e-9
     dual_tolerance: float = 1e-7
-    """HiGHS dual feasibility tolerance and threshold of the LP optimality checks."""
+    max_factor_entries: int = 4_000_000
+    refactor_interval: int = 64
+    steepest_edge: bool = True
+    presolve: bool = True
+    redundant_rows: bool = True
+    redundant_row_min_ratio: float = 1.0
+    node_reoptimization: bool = True
+    incumbent_heuristic: bool = True
+    objective_lattice: bool = True
+    decompose: bool = True
+    decomposition_min_variables: int = 32
+    component_threads: int = 16
+    component_parallel_min_entries: int = 2048
 
 
 @dataclass(frozen=True)
@@ -185,7 +187,7 @@ class BackendReport:
 
     name: str
     version: Optional[str]
-    """Native engine version, for example HiGHS ``"1.15.0"``."""
+    """Native engine package version."""
     raw_status: Optional[str]
     """The engine's own status name; ``None`` if the engine never ran."""
     start_status: Literal["not_provided", "submitted", "rejected", "evaluated"]
@@ -224,15 +226,15 @@ class SolveResult:
 def solve(
     model: Model,
     *,
-    backend: Literal["dummy", "highs"] = "dummy",
+    backend: Literal["dummy", "native"] = "dummy",
     start: Optional[Iterable[float]] = None,
     options: Optional[Options] = None,
-    backend_options: Optional[HighsOptions] = None,
+    backend_options: Optional[NativeOptions] = None,
     cancellation: Optional[Cancellation] = None,
 ) -> SolveResult:
     """Solve ``model`` with ``backend``, optionally from a complete ``start``.
 
-    Use ``backend="highs"`` to optimize; the default ``"dummy"`` only evaluates
+    Use ``backend="native"`` to optimize; the default ``"dummy"`` only evaluates
     one candidate. The start is used as given: it need not be feasible or
     integral and is never rounded or repaired. The interpreter is released
     during the solve, so solves from several threads run in parallel.

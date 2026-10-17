@@ -79,6 +79,18 @@ pub struct SafeDualBound {
 /// length/nonfinite entries return [`crate::Error::InvalidInput`]. Arithmetic
 /// failure instead returns a typed result without a bound.
 pub fn safe_dual_bound(model: &Model, row_duals: &[f64]) -> Result<SafeDualBound> {
+    safe_dual_bound_with_bounds(model, model.variables(), row_duals)
+}
+
+/// Conservative dual bound using replacement variable bounds. The matrix,
+/// objective and rows are borrowed unchanged; bounds are validated first.
+pub fn safe_dual_bound_with_bounds(
+    model: &Model,
+    bounds: &crate::Bounds,
+    row_duals: &[f64],
+) -> Result<SafeDualBound> {
+    bounds.validate(model.n(), "replacement variable bounds")?;
+
     ensure(row_duals.len() == model.m(), || {
         format!(
             "row duals: expected {} entries, got {}",
@@ -90,7 +102,7 @@ pub fn safe_dual_bound(model: &Model, row_duals: &[f64]) -> Result<SafeDualBound
     if !gradual_underflow() {
         return Ok(unavailable(SafeBoundStatus::UnsupportedArithmetic, None));
     }
-    Ok(match compute(model, row_duals) {
+    Ok(match compute(model, bounds, row_duals) {
         Ok(bound) => SafeDualBound {
             bound: Some(bound),
             status: SafeBoundStatus::Finite,
@@ -111,7 +123,7 @@ fn unavailable(status: SafeBoundStatus, index: Option<usize>) -> SafeDualBound {
 type Failure = (SafeBoundStatus, Option<usize>);
 const OVERFLOW: Failure = (SafeBoundStatus::ArithmeticOverflow, None);
 
-fn compute(model: &Model, y: &[f64]) -> std::result::Result<f64, Failure> {
+fn compute(model: &Model, bounds: &crate::Bounds, y: &[f64]) -> std::result::Result<f64, Failure> {
     let orient = |v: f64| match model.sense() {
         Sense::Minimize => v,
         Sense::Maximize => -v,
@@ -146,7 +158,7 @@ fn compute(model: &Model, y: &[f64]) -> std::result::Result<f64, Failure> {
         }
     }
     for (j, r) in residual.into_iter().enumerate() {
-        let (l, u) = (model.variables().lower[j], model.variables().upper[j]);
+        let (l, u) = (bounds.lower[j], bounds.upper[j]);
         if (l == f64::NEG_INFINITY && r.hi > 0.0) || (u == f64::INFINITY && r.lo < 0.0) {
             return Err((SafeBoundStatus::UnboundedVariable, Some(j)));
         }

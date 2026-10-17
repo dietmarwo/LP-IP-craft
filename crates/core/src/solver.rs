@@ -136,8 +136,8 @@ impl Tolerances {
 pub struct Options {
     /// Tolerances of the candidate check.
     pub tolerances: Tolerances,
-    /// Threads used inside one solve. Only `1` is supported; run independent
-    /// solves for parallelism.
+    /// Threads per numerical kernel. Only `1` is supported here; a backend
+    /// may expose separate independent-component controls.
     pub threads: usize,
 }
 
@@ -158,8 +158,8 @@ impl Options {
         ensure(self.threads > 0, || "threads must be at least 1".into())?;
         if self.threads != 1 {
             return Err(Error::Unsupported(format!(
-                "threads = {}: only single-threaded solves are implemented; \
-                 run independent solves for parallelism",
+                "threads = {}: only single-threaded numerical kernels are implemented; \
+                 use backend component controls or independent solves",
                 self.threads
             )));
         }
@@ -418,7 +418,7 @@ impl StartStatus {
 /// depends on them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BackendReport {
-    /// Backend name (`dummy`, `highs`).
+    /// Backend name (`dummy`, `native`).
     pub name: String,
     /// Version of the native engine, if there is one.
     pub version: Option<String>,

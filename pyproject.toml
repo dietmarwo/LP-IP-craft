@@ -4,11 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "lp-ip-craft"
-version = "0.3.0"
-description = "LP and mixed-integer LP in Rust with a HiGHS backend and Python bindings"
+version = "0.16.0"
+description = "LP and mixed-integer LP in Rust with a native Rust solver and Python bindings"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE", "docs/licenses/*.txt"]
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
