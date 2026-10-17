@@ -186,3 +186,18 @@ MIPs with infinite variable bounds remain visible unsupported cases. Rebuild
 baseline and HiGHS harnesses with identical generators/checks, omitting only
 new solver controls absent in baseline. Run standard, holdout, public, large-
 irregular and kernel-profile comparisons in separate sequential batches.
+
+### Step 5b plan, prompted by holdout evidence
+
+The first complete holdout comparison shows mixed branch-score results and
+setup overhead, so it is insufficient evidence of MIP speed gains. Add exact
+reduced-cost domain fixing: for an integral variable currently at a node bound,
+form the opposite integer subdomain and recompute its conservative dual bound
+with the existing outward-rounded core. Fix the variable only when this proves
+that the opposite region cannot beat a certified incumbent. Numerical reduced
+costs only shortlist candidates. Limit work to 16 checks at depths <=8, and
+initially require the verified integral objective lattice. Inherit every fixing
+in child bound chains; include the excluded regions' certified lower bound in
+the aggregate global bound. Expose a disable switch. Gate with independent
+exhaustive optima, frozen safe-bound checks, sibling restoration, and all held-
+out MIPs. Preserve pre-fixing raw results for comparison.

@@ -105,9 +105,10 @@ pub fn knapsack(n: usize, integer: bool) -> (Model, f64) {
         expected,
     )
 }
-pub fn binary(n: usize, graph: bool) -> Model {
+pub fn binary(tag: usize, graph: bool) -> Model {
+    let n = tag % 1000;
     assert!(n <= 20);
-    let mut seed = 91283 + n as u64;
+    let mut seed = 91283 + tag as u64;
     let c = (0..n).map(|_| (1 + random(&mut seed, 29)) as f64).collect();
     let mut rows = vec![];
     let mut upper = vec![];

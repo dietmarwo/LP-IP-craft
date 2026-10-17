@@ -10,7 +10,7 @@ from scipy.optimize import linprog,milp,Bounds,LinearConstraint
 from scipy.sparse import csr_matrix
 
 def parse(path):
-    section=None;row_types={};obj=None;cols={};cost={};rhs={};ranges={};bounds={};integer=set();marked=False
+    section=None;row_types={};obj=None;cols={};cost={};rhs={};ranges={};bounds={};integer=set();marker_integer=set();marked=False
     def number(v):return float(v.replace('D','E'))
     for line in path.read_text().splitlines():
         if not line.strip() or line.startswith('*'):continue
@@ -28,7 +28,7 @@ def parse(path):
             if "'MARKER'" in t:
                 marked="'INTORG'" in t;continue
             name=t[0];cols.setdefault(name,{})
-            if marked:integer.add(name)
+            if marked:integer.add(name);marker_integer.add(name)
             assert len(t) in [3,5],t
             for i in range(1,len(t),2):
                 r,v=t[i],number(t[i+1])
@@ -51,6 +51,8 @@ def parse(path):
             else:raise ValueError((path,'unsupported bound',kind))
             if kind in ['LI','UI','BV']:integer.add(name)
             bounds[name]=(lo,hi)
+    for name in marker_integer:
+        bounds.setdefault(name,(0.,1.))
     names=list(cols);rn=list(row_types);rmap={r:i for i,r in enumerate(rn)}
     rows=[{} for _ in rn]
     for j,n in enumerate(names):

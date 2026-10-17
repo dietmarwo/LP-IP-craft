@@ -113,6 +113,7 @@ fn main() {
             | "integer-knapsack"
             | "multi-knapsack"
             | "graph-mip"
+            | "mixed-overload"
     );
     let began = Instant::now();
     let (model, expected) = match name {
