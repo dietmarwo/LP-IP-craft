@@ -40,8 +40,8 @@ for file in ['public-policies.json','public-repeat.json']:
    assert r['nodes']<=100000 and r['iterations']<=1000000
    if (r.get('checks') or {}).get('objective')is not None:assert r['checks']['feasible'],(file,row['case'],row['policy'])
    expected=row['result']['expected'];meta=dict(r['effective_options']);trace=json.loads(meta['diagnostics.mip_search'])
-   assert r['iterations']==trace['terminal']['pivots']+int(meta.get('root_separation_pivots',0))
-   assert r['nodes']==trace['terminal']['nodes']+int(meta.get('root_separation_nodes',0))
+   assert r['iterations']==trace['terminal']['pivots']+int(meta.get('diagnostics.root_separation_pivots',meta.get('root_separation_pivots',0)))
+   assert r['nodes']==trace['terminal']['nodes']+int(meta.get('diagnostics.root_separation_nodes',meta.get('root_separation_nodes',0)))
    if expected is not None:
     assert r['best_bound']is None or r['best_bound']<=expected+1e-6*(1+abs(expected)),(row['case'],row['policy'],'unsafe bound')
     proof=trace['terminal']['certified_incumbent_bound']

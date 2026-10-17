@@ -312,22 +312,23 @@ pub(crate) fn solve(
     )?;
     result.nodes += separation_nodes;
     result.iterations += separation_pivots;
+    let number = |v: Option<f64>| v.map_or_else(|| "none".to_string(), |v| v.to_string());
     for (key, value) in [
         ("directed_root_cuts", directed_cuts.to_string()),
         ("lifted_root_cuts", lifted_cuts.to_string()),
         ("root_cut_work", cut_work.to_string()),
         ("root_separation_nodes", separation_nodes.to_string()),
         ("root_separation_pivots", separation_pivots.to_string()),
-        (
-            "root_separation_initial_bound",
-            format!("{initial_bound:?}"),
-        ),
+        ("root_separation_initial_bound", number(initial_bound)),
         (
             "root_separation_initial_objective",
-            format!("{initial_objective:?}"),
+            number(initial_objective),
         ),
     ] {
-        result.backend.effective_options.push((key.into(), value));
+        result
+            .backend
+            .effective_options
+            .push((format!("diagnostics.{key}"), value));
     }
     if solver.settings.mip_diagnostics && model.is_mip() {
         result.backend.effective_options.push((

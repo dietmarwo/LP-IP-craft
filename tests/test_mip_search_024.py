@@ -52,12 +52,12 @@ def test_directed_lifting_strengthens_root_and_accounts_for_prepasses():
     assert a.status == b.status == 'optimal'
     assert b.evaluation.objective == a.evaluation.objective == 1.
     meta = b.backend.effective_options
-    assert int(meta['directed_root_cuts']) > 0
-    assert int(meta['lifted_root_cuts']) > 0
+    assert int(meta['diagnostics.directed_root_cuts']) > 0
+    assert int(meta['diagnostics.lifted_root_cuts']) > 0
     d = json.loads(meta['diagnostics.mip_search'])
     assert d['root']['conservative_bound'] <= 1. + 1e-10
-    assert b.iterations == d['terminal']['pivots'] + int(meta['root_separation_pivots'])
-    assert b.nodes == d['terminal']['nodes'] + int(meta['root_separation_nodes'])
+    assert b.iterations == d['terminal']['pivots'] + int(meta['diagnostics.root_separation_pivots'])
+    assert b.nodes == d['terminal']['nodes'] + int(meta['diagnostics.root_separation_nodes'])
 
 
 @pytest.mark.parametrize('caps', [dict(node_limit=1), dict(iteration_limit=1),
