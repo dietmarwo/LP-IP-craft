@@ -21,3 +21,7 @@ Outcome: workspace tests pass, including new direct/general box equivalence, obj
 
 ## 4. Reachability-based BTRAN — plan
 Maintain reusable sparse reach sets and inverse pivot permutations. For sparse right-hand sides on sufficiently large bases, traverse the U-transpose and L-transpose dependency graphs and solve only the reachable entries in pivot order. Abort discovery at one eighth of the basis and use the existing sweep. Keep all nonzeros (no new numerical dropping). Test residuals on large sparse bases, including eta updates, plus the workspace; benchmark packing, network and irregular LPs.
+Outcome: all workspace tests pass, including sparse unit right-hand sides on permuted 512-row bases before and after eta updates. Packing-4096 560.25 -> 511.84 ms (1.09x), packing-1024 42.29 -> 39.74 ms. Network was 3.6% slower in this small sample; retain this limitation for the final paired run. No pivot-count changes.
+
+## 5. Reachability-based FTRAN — plan
+Reuse bounded reach discovery for L and U forward solves, with a row-to-position map for U. This targets the entering-column and steepest-edge solves that run every pivot. Preserve elimination order and eta application. Verify sparse and dense residuals, all workspace tests, and the same paired development fixtures.

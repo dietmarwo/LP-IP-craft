@@ -134,6 +134,50 @@ impl Lists {
     }
 }
 
+/// Reusable symbolic reach, bounded to avoid overhead on dense solves.
+struct Reach {
+    seen: Vec<bool>,
+    nodes: Vec<usize>,
+}
+impl Reach {
+    fn find(&mut self, v: &[f64], graph: &Lists, keys: Option<&[usize]>, rank: &[usize]) -> bool {
+        if v.len() < 128 {
+            return false;
+        }
+        for &i in &self.nodes {
+            self.seen[i] = false;
+        }
+        self.nodes.clear();
+        let limit = v.len() / 8;
+        for (i, &x) in v.iter().enumerate() {
+            if x != 0. {
+                self.seen[i] = true;
+                self.nodes.push(i);
+                if self.nodes.len() > limit {
+                    return false;
+                }
+            }
+        }
+        let mut at = 0;
+        while at < self.nodes.len() {
+            let i = self.nodes[at];
+            let key = keys.map_or(i, |k| k[i]);
+            for &j in graph.get(key).0 {
+                if !self.seen[j] {
+                    self.seen[j] = true;
+                    self.nodes.push(j);
+                    if self.nodes.len() > limit {
+                        return false;
+                    }
+                }
+            }
+            at += 1;
+        }
+        self.nodes.sort_unstable_by_key(|&i| rank[i]);
+        true
+    }
+}
+
 /// An LU factorization of a basis with an eta file of column replacements.
 pub(crate) struct Lu {
     m: usize,
@@ -152,6 +196,9 @@ pub(crate) struct Lu {
     eta_index: Vec<usize>,
     eta_value: Vec<f64>,
     work: Vec<f64>,
+    row_step: Vec<usize>,
+    col_step: Vec<usize>,
+    reach: Reach,
 }
 
 impl Lu {
@@ -205,6 +252,12 @@ impl Lu {
             eta_index: Vec::new(),
             eta_value: Vec::new(),
             work: vec![0.0; m],
+            row_step: vec![0; m],
+            col_step: vec![0; m],
+            reach: Reach {
+                seen: vec![false; m],
+                nodes: Vec::new(),
+            },
         };
         let mut pivot_row: Vec<(usize, f64)> = Vec::new();
         let mut pivot_col: Vec<(usize, f64)> = Vec::new();
@@ -296,6 +349,10 @@ impl Lu {
         lu.l_rows = lu.l.transpose(m, &lu.prow);
         // U by position: entries name the pivot row of their step.
         lu.u_cols = lu.u.transpose(m, &lu.prow);
+        for k in 0..m {
+            lu.row_step[lu.prow[k]] = k;
+            lu.col_step[lu.pcol[k]] = k;
+        }
         Ok(lu)
     }
 
@@ -475,23 +532,53 @@ impl Lu {
             v[eta.position] = s / eta.pivot;
         }
         let w = &mut self.work;
-        for k in 0..self.m {
-            let t = v[self.pcol[k]] / self.diag[k];
-            w[self.prow[k]] = t;
-            if t != 0.0 {
-                let (index, value) = self.u.get(k);
-                for (&q, &u) in index.iter().zip(value) {
-                    v[q] -= u * t;
+        if self
+            .reach
+            .find(v, &self.u, Some(&self.col_step), &self.col_step)
+        {
+            w.fill(0.);
+            for &p in &self.reach.nodes {
+                let k = self.col_step[p];
+                let t = v[p] / self.diag[k];
+                w[self.prow[k]] = t;
+                if t != 0. {
+                    let (index, value) = self.u.get(k);
+                    for (&q, &u) in index.iter().zip(value) {
+                        v[q] -= u * t;
+                    }
+                }
+            }
+        } else {
+            for k in 0..self.m {
+                let t = v[self.pcol[k]] / self.diag[k];
+                w[self.prow[k]] = t;
+                if t != 0.0 {
+                    let (index, value) = self.u.get(k);
+                    for (&q, &u) in index.iter().zip(value) {
+                        v[q] -= u * t;
+                    }
                 }
             }
         }
-        for k in (0..self.m).rev() {
-            let i = self.prow[k];
-            let t = w[i];
-            if t != 0.0 {
-                let (index, value) = self.l_rows.get(i);
-                for (&r, &l) in index.iter().zip(value) {
-                    w[r] -= l * t;
+        if self.reach.find(w, &self.l_rows, None, &self.row_step) {
+            for &i in self.reach.nodes.iter().rev() {
+                let t = w[i];
+                if t != 0. {
+                    let (index, value) = self.l_rows.get(i);
+                    for (&r, &l) in index.iter().zip(value) {
+                        w[r] -= l * t;
+                    }
+                }
+            }
+        } else {
+            for k in (0..self.m).rev() {
+                let i = self.prow[k];
+                let t = w[i];
+                if t != 0.0 {
+                    let (index, value) = self.l_rows.get(i);
+                    for (&r, &l) in index.iter().zip(value) {
+                        w[r] -= l * t;
+                    }
                 }
             }
         }
@@ -651,6 +738,54 @@ mod tests {
                 col
             })
             .collect()
+    }
+
+    #[test]
+    fn sparse_unit_solves_with_permutations_and_updates() {
+        let m = 512;
+        let mut cols: Vec<Vec<(usize, f64)>> = (0..m)
+            .map(|p| {
+                vec![
+                    ((p * 7) % m, 4.),
+                    (((p / 4 * 4 + (p + 1) % 4) * 7) % m, 0.25),
+                ]
+            })
+            .collect();
+        let mut lu = factor(&cols, usize::MAX).unwrap();
+        for step in 0..3 {
+            for transpose in [false, true] {
+                for r in [0, 1, 7, 255, 511] {
+                    let mut x = vec![0.; m];
+                    x[r] = 1.;
+                    if transpose {
+                        lu.btran(&mut x);
+                    } else {
+                        lu.ftran(&mut x);
+                    }
+                    let mut back = vec![0.; m];
+                    for (p, col) in cols.iter().enumerate() {
+                        for &(i, a) in col {
+                            if transpose {
+                                back[p] += a * x[i];
+                            } else {
+                                back[i] += a * x[p];
+                            }
+                        }
+                    }
+                    for (i, &v) in back.iter().enumerate() {
+                        assert!((v - if i == r { 1. } else { 0. }).abs() < 1e-12);
+                    }
+                }
+            }
+            let p = step * 7;
+            cols[p][0].1 += 1.;
+            let mut alpha = vec![0.; m];
+            for &(i, v) in &cols[p] {
+                alpha[i] = v;
+            }
+            lu.ftran(&mut alpha);
+            lu.update(p, &alpha);
+        }
     }
 
     #[test]
