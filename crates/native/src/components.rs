@@ -20,6 +20,7 @@ fn split(
     model: &Model,
     start: Option<&WarmStart>,
     cancel: &CancellationToken,
+    avoid_dominant: bool,
 ) -> Result<Option<Vec<Part>>> {
     let mut parent: Vec<_> = (0..model.n()).collect();
     let mut ranks = vec![0; model.n()];
@@ -79,6 +80,14 @@ fn split(
         columns[p].push(j);
     }
     if columns.len() < 2 || columns.iter().all(|c| c.len() == 1) {
+        return Ok(None);
+    }
+    if avoid_dominant
+        && model.n() >= 512
+        && columns
+            .iter()
+            .any(|c| c.len().saturating_mul(10) >= model.n().saturating_mul(9))
+    {
         return Ok(None);
     }
     let mut rows = vec![Vec::new(); columns.len()];
@@ -147,6 +156,9 @@ fn quota(limit: Option<u64>, index: usize, count: usize) -> Option<u64> {
 }
 fn controls(settings: &NativeOptions, started: Instant) -> NativeOptions {
     let mut c = settings.clone();
+    // A child trace is not a global tree trace. The aggregate reports its
+    // explicit scope instead of computing and silently discarding events.
+    c.mip_diagnostics = false;
     c.decompose = false;
     c.time_limit_seconds = settings
         .time_limit_seconds
@@ -259,7 +271,7 @@ pub(crate) fn solve_if_separable(
     cancel: &CancellationToken,
     started: Instant,
 ) -> Result<Option<SolveResult>> {
-    let Some(parts) = split(model, start, cancel)? else {
+    let Some(parts) = split(model, start, cancel, settings.avoid_dominant_components)? else {
         return Ok(None);
     };
     let conversion = started.elapsed().as_secs_f64();
@@ -364,6 +376,15 @@ pub(crate) fn solve_if_separable(
             (settings.objective_lattice && incumbent::integer_lattice(model)).to_string(),
         ),
     ]);
+    if settings.mip_diagnostics && model.is_mip() {
+        for (key, value) in &mut report.effective_options {
+            if key == "mip_diagnostics" {
+                *value = "true".into();
+            }
+        }
+        report.effective_options.push(("diagnostics.mip_search".into(),
+            format!("{{\"schema_version\":1,\"scope\":\"component_aggregate\",\"components\":{},\"workers\":{},\"events\":[],\"note\":\"no global serial search trace; use decompose=false for diagnosis\"}}", parts.len(), workers)));
+    }
     let mut out = SolveResult::empty(status, "", report);
     out.nodes = nodes;
     out.iterations = pivots;

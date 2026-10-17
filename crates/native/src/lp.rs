@@ -31,6 +31,7 @@ const NIL: usize = usize::MAX;
 const DEGENERATE_STREAK: usize = 25;
 /// Smallest steepest-edge weight kept after an update.
 const MIN_WEIGHT: f64 = 1e-6;
+const PRICE_BLOCK: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum State {
@@ -46,7 +47,14 @@ pub(crate) enum State {
 pub(crate) struct Controls {
     pub pivot_tolerance: f64,
     pub refactor_interval: usize,
+    pub adaptive_refactor: bool,
+    pub basis_update: crate::BasisUpdate,
+    pub factor_pivot_search: usize,
+    pub factor_ordering: crate::FactorOrdering,
     pub max_factor_entries: usize,
+    pub factor_replay: bool,
+    pub adaptive_pricing: bool,
+    pub devex: bool,
     pub steepest_edge: bool,
     /// Primal tolerance target in original units.
     pub feasibility: f64,
@@ -59,7 +67,14 @@ pub(crate) struct Controls {
 pub(crate) struct Stats {
     pub peak_entries: usize,
     pub refactors: u64,
+    pub phase_one_pivots: u64,
+    pub degenerate_pivots: u64,
+    pub weight_resets: u64,
+    pub row_pricings: u64,
+    pub column_pricings: u64,
+    pub replayed_pivots: u64,
     pub updates: u64,
+    pub ft_updates: u64,
     pub bound_flips: u64,
     pub repairs: u64,
     pub restores: u64,
@@ -122,9 +137,15 @@ pub(crate) struct Lp {
     d: Vec<f64>,
     pi: Vec<f64>,
     weight: Vec<f64>,
+    price_dirty: Vec<bool>,
+    price_score: Vec<f64>,
+    price_row: Vec<Option<usize>>,
     lu: Option<Lu>,
+    factor_workspace: crate::active::FactorWorkspace,
     rho: Vec<f64>,
+    rho_index: Vec<usize>,
     column: Vec<f64>,
+    column_index: Vec<usize>,
     tau: Vec<f64>,
     work: Vec<f64>,
     alpha: Vec<f64>,
@@ -296,9 +317,15 @@ impl Lp {
             d: vec![0.0; n + m],
             pi: vec![0.0; m],
             weight: vec![1.0; m],
+            price_dirty: vec![true; m.div_ceil(PRICE_BLOCK)],
+            price_score: vec![0.; m.div_ceil(PRICE_BLOCK)],
+            price_row: vec![None; m.div_ceil(PRICE_BLOCK)],
             lu: None,
+            factor_workspace: Default::default(),
             rho: vec![0.0; m],
+            rho_index: Vec::new(),
             column: vec![0.0; m],
+            column_index: Vec::new(),
             tau: vec![0.0; m],
             work: vec![0.0; m],
             alpha: vec![0.0; n + m],
@@ -323,12 +350,20 @@ impl Lp {
         Ok(lp)
     }
 
-    /// Shrinks every finite row bound inward by a margin well above the
-    /// primal tolerance (for an incumbent-certification LP). A row whose
+    /// Shrinks bounds on rows containing continuous columns inward by a margin
+    /// above primal tolerance (for incumbent certification). A row whose
     /// interval is too narrow keeps its bounds.
-    pub fn shrink_rows(&mut self) {
+    pub fn shrink_rows(&mut self, model: &Model) {
+        let a = model.matrix();
         for k in self.n..self.n + self.m {
-            self.shrink(k);
+            let i = self.rows[k - self.n];
+            // Certification fixes integer columns. Shrinking a tight
+            // all-integer row would make that fixed point infeasible.
+            if (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
+                .any(|e| a.values[e] != 0. && !model.kinds()[a.pattern.indices[e]].is_integral())
+            {
+                self.shrink(k);
+            }
         }
         self.primal_stale = true;
     }
@@ -414,6 +449,7 @@ impl Lp {
         let l = scaled(lower, 1.0 / self.col_scale[j])?;
         let u = scaled(upper, 1.0 / self.col_scale[j])?;
         if l != self.lower[j] || u != self.upper[j] {
+            self.price_dirty.fill(true);
             self.lower[j] = l;
             self.upper[j] = u;
             if self.state[j] != State::Basic {
@@ -440,6 +476,7 @@ impl Lp {
             self.state[j] = self.valid_state(j, preferred);
         }
         self.weight.fill(1.0);
+        self.price_dirty.fill(true);
         self.lu = None;
         self.primal_stale = true;
         self.basis_id = None;
@@ -480,6 +517,7 @@ impl Lp {
         self.basic.clone_from(&basis.basic);
         self.state.clone_from(&basis.state);
         self.weight.clone_from(&basis.weight);
+        self.price_dirty.fill(true);
         for j in 0..self.n + self.m {
             if self.state[j] != State::Basic {
                 self.state[j] = self.valid_state(j, self.state[j]);
@@ -519,7 +557,10 @@ impl Lp {
                 return false;
             }
             let lu = self.lu.as_mut().expect("factorized basis");
-            lu.update(p, &self.column);
+            if !lu.update_sparse(p, &self.column, self.column_index.iter().copied()) {
+                return false;
+            }
+            self.stats.ft_updates += u64::from(lu.uses_ft());
             self.stats.updates += 1;
             self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
             let leaving = self.basic[p];
@@ -529,6 +570,7 @@ impl Lp {
         }
         self.state.clone_from(&basis.state);
         self.weight.clone_from(&basis.weight);
+        self.price_dirty.fill(true);
         for j in 0..self.n + self.m {
             if self.state[j] != State::Basic {
                 self.state[j] = self.valid_state(j, self.state[j]);
@@ -685,6 +727,7 @@ impl Lp {
     /// Factorizes the basis, replacing dependent columns by logicals.
     /// Returns whether the basis had to be repaired.
     fn refactor(&mut self) -> Result<bool> {
+        let _profile = crate::profile::enter("refactor_other");
         let mut repaired = false;
         for attempt in 0..4 {
             if attempt == 3 {
@@ -705,8 +748,57 @@ impl Lp {
                     out.push((j - self.n, -1.0));
                 }
             };
-            match Lu::factor(self.m, column, self.controls.max_factor_entries) {
-                Ok(lu) => {
+            #[cfg(feature = "basis-replay")]
+            crate::replay::capture(self.m, column, &[&self.rho, &self.pi]);
+            let ordered = match self.controls.factor_ordering {
+                crate::FactorOrdering::Natural => false,
+                crate::FactorOrdering::MinDegree => true,
+                crate::FactorOrdering::Auto => {
+                    self.m >= 2048
+                        && self
+                            .lu
+                            .as_ref()
+                            .is_some_and(|old| old.dense_dimension() > self.m / 8)
+                }
+            };
+            match Lu::factor_with_workspace(
+                self.m,
+                column,
+                self.controls.max_factor_entries,
+                &mut self.factor_workspace,
+                crate::lu::FactorOptions {
+                    replay: self.controls.factor_replay,
+                    search: self.controls.factor_pivot_search,
+                    ordered,
+                },
+            ) {
+                Ok(mut lu) => {
+                    #[cfg(feature = "kernel-profile")]
+                    if std::env::var_os("LPIP_TRACE_FACTORS").is_some() {
+                        eprintln!(
+                            "factor {:?}",
+                            (
+                                self.m,
+                                lu.factor_sizes(),
+                                self.lu.as_ref().map_or(0, |old| old.average_update_nnz())
+                            )
+                        );
+                    }
+                    // FT avoids dense eta files on sparse factors. Keep the
+                    // compact product form when previous updates stayed sparse
+                    // or the new factors themselves have substantial fill.
+                    if self.controls.basis_update == crate::BasisUpdate::ForrestTomlin
+                        || (self.controls.basis_update == crate::BasisUpdate::Auto
+                            && lu.ft_suitable()
+                            && self.lu.as_ref().is_some_and(|old| {
+                                old.average_update_nnz()
+                                    .saturating_mul(self.controls.refactor_interval)
+                                    > 4 * lu.entries()
+                            }))
+                    {
+                        lu.enable_ft();
+                    }
+                    self.stats.replayed_pivots += lu.replayed_pivots() as u64;
                     self.stats.refactors += 1;
                     self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
                     self.lu = Some(lu);
@@ -744,6 +836,7 @@ impl Lp {
 
     /// Basic values from the nonbasic values: `x_B = −B⁻¹ N x_N`.
     fn compute_primal(&mut self) {
+        let _profile = crate::profile::enter("recompute_primal");
         let (n, m) = (self.n, self.m);
         self.work.fill(0.0);
         for j in 0..n + m {
@@ -769,10 +862,12 @@ impl Lp {
             self.x[self.basic[p]] = -self.work[p];
         }
         self.primal_stale = false;
+        self.price_dirty.fill(true);
     }
 
     /// Row prices `π = B⁻ᵀ c_B` and reduced costs `d = c − [Ã −I]ᵀ π`.
     fn compute_dual(&mut self) {
+        let _profile = crate::profile::enter("recompute_dual");
         self.dual_stale = false;
         let n = self.n;
         for p in 0..self.m {
@@ -844,22 +939,51 @@ impl Lp {
     }
 
     /// Dual steepest-edge pricing over the primal infeasible basic variables.
-    fn choose_row(&self) -> Option<usize> {
+    fn row_score(&self, p: usize) -> f64 {
+        let j = self.basic[p];
+        let v = self.x[j];
+        let infeasibility = if v < self.lower[j] - self.ptol[j] {
+            self.lower[j] - v
+        } else if v > self.upper[j] + self.ptol[j] {
+            v - self.upper[j]
+        } else {
+            return 0.;
+        };
+        infeasibility * infeasibility / self.weight[p]
+    }
+
+    fn choose_row(&mut self) -> Option<usize> {
+        let _profile = crate::profile::enter("pricing_choose");
         let mut best = None;
-        let mut score = 0.0;
-        for (p, &j) in self.basic.iter().enumerate() {
-            let v = self.x[j];
-            let infeasibility = if v < self.lower[j] - self.ptol[j] {
-                self.lower[j] - v
-            } else if v > self.upper[j] + self.ptol[j] {
-                v - self.upper[j]
-            } else {
-                continue;
-            };
-            let s = infeasibility * infeasibility / self.weight[p];
-            if s > score {
-                score = s;
-                best = Some(p);
+        let mut score = 0.;
+        if self.m < 512 {
+            for p in 0..self.m {
+                let s = self.row_score(p);
+                if s > score {
+                    score = s;
+                    best = Some(p);
+                }
+            }
+            return best;
+        }
+        for block in 0..self.price_dirty.len() {
+            if self.price_dirty[block] {
+                let mut winner = None;
+                let mut value = 0.;
+                for p in block * PRICE_BLOCK..((block + 1) * PRICE_BLOCK).min(self.m) {
+                    let s = self.row_score(p);
+                    if s > value {
+                        value = s;
+                        winner = Some(p);
+                    }
+                }
+                self.price_score[block] = value;
+                self.price_row[block] = winner;
+                self.price_dirty[block] = false;
+            }
+            if self.price_score[block] > score {
+                score = self.price_score[block];
+                best = self.price_row[block];
             }
         }
         best
@@ -867,20 +991,69 @@ impl Lp {
 
     /// `ρ = B⁻ᵀ e_r` and its pivot row over the nonbasic variables.
     fn compute_row(&mut self, r: usize) {
+        let _profile = crate::profile::enter("pricing_row");
         for &j in &self.touched {
             self.alpha[j] = 0.0;
             self.marked[j] = false;
         }
         self.touched.clear();
-        self.rho.fill(0.0);
+        for &i in &self.rho_index {
+            self.rho[i] = 0.;
+        }
         self.rho[r] = 1.0;
         let lu = self.lu.as_mut().expect("factorized basis");
-        lu.btran(&mut self.rho);
-        if self.controls.steepest_edge {
-            self.weight[r] = self.rho.iter().map(|v| v * v).sum::<f64>().max(MIN_WEIGHT);
+        lu.btran_unit_indexed(r, &mut self.rho, &mut self.rho_index);
+        if self.controls.steepest_edge && !self.controls.devex {
+            self.price_dirty[r / PRICE_BLOCK] = true;
+            self.weight[r] = self
+                .rho_index
+                .iter()
+                .map(|&i| self.rho[i] * self.rho[i])
+                .sum::<f64>()
+                .max(MIN_WEIGHT);
         }
         let n = self.n;
-        for k in 0..self.m {
+        if self.controls.adaptive_pricing
+            && n >= 128
+            && self.rho_index.len() > self.m / 8
+            && self
+                .rho_index
+                .iter()
+                .filter(|&&k| self.rho[k].abs() > DROP)
+                .map(|&k| self.row_start[k + 1] - self.row_start[k])
+                .sum::<usize>()
+                > self.col_value.len() / 2
+        {
+            let _column = crate::profile::enter("pricing_column");
+            self.stats.column_pricings += 1;
+            for j in 0..n {
+                if self.state[j] == State::Basic {
+                    continue;
+                }
+                let mut value = 0.;
+                for e in self.col_start[j]..self.col_start[j + 1] {
+                    let rho = self.rho[self.col_index[e]];
+                    if rho.abs() > DROP {
+                        value += rho * self.col_value[e];
+                    }
+                }
+                if value != 0. {
+                    self.alpha[j] = value;
+                    self.marked[j] = true;
+                    self.touched.push(j);
+                }
+            }
+            for &k in &self.rho_index {
+                if self.rho[k].abs() > DROP && self.state[n + k] != State::Basic {
+                    self.alpha[n + k] = -self.rho[k];
+                    self.marked[n + k] = true;
+                    self.touched.push(n + k);
+                }
+            }
+            return;
+        }
+        self.stats.row_pricings += 1;
+        for &k in &self.rho_index {
             let v = self.rho[k];
             if v.abs() <= DROP {
                 continue;
@@ -913,6 +1086,7 @@ impl Lp {
     /// entering variable and the dual step length `θ ≥ 0`; `self.flips`
     /// holds the variables passed on the way.
     fn ratio_test(&mut self, s: f64, infeasibility: f64, slack: f64) -> Option<(usize, f64)> {
+        let _profile = crate::profile::enter("ratio_test");
         self.candidates.clear();
         self.flips.clear();
         let tol = self.controls.pivot_tolerance;
@@ -1000,7 +1174,14 @@ impl Lp {
 
     /// `B⁻¹ a_q` into `self.column`.
     fn compute_column(&mut self, q: usize) {
-        self.column.fill(0.0);
+        let _profile = crate::profile::enter("column_setup");
+        if self.column_index.len() < self.m / 8 {
+            for &i in &self.column_index {
+                self.column[i] = 0.;
+            }
+        } else {
+            self.column.fill(0.);
+        }
         Self::add_column(
             &self.col_start,
             &self.col_index,
@@ -1011,10 +1192,11 @@ impl Lp {
             &mut self.column,
         );
         let lu = self.lu.as_mut().expect("factorized basis");
-        lu.ftran(&mut self.column);
+        lu.ftran_entering_indexed(&mut self.column, &mut self.column_index);
     }
 
     fn pivot(&mut self, r: usize, q: usize, theta: f64, s: f64, to_upper: bool) {
+        let _profile = crate::profile::enter("pivot_other");
         let (n, m) = (self.n, self.m);
         let p = self.basic[r];
         if !self.flips.is_empty() {
@@ -1053,7 +1235,7 @@ impl Lp {
         };
         let step = (self.x[p] - target) / self.column[r];
         if step != 0.0 {
-            for i in 0..m {
+            for &i in &self.column_index {
                 let v = self.column[i];
                 if v != 0.0 {
                     self.x[self.basic[i]] -= step * v;
@@ -1071,24 +1253,57 @@ impl Lp {
         self.d[p] = -t;
         self.d[q] = 0.0;
         if self.controls.steepest_edge {
-            self.tau.copy_from_slice(&self.rho);
-            let lu = self.lu.as_mut().expect("factorized basis");
-            lu.ftran(&mut self.tau);
-            let (wr, ar) = (self.weight[r], self.column[r]);
-            for i in 0..m {
-                let v = self.column[i];
-                if i != r && v != 0.0 {
-                    let ratio = v / ar;
-                    self.weight[i] =
-                        (self.weight[i] + ratio * (ratio * wr - 2.0 * self.tau[i])).max(MIN_WEIGHT);
+            let _weights = crate::profile::enter("edge_weights");
+            if self.controls.devex {
+                let ar = self.column[r];
+                let wr = self.weight[r].max(1.);
+                let next = (wr / (ar * ar)).max(1.);
+                for &i in &self.column_index {
+                    if i != r {
+                        self.weight[i] = self.weight[i].max(self.column[i] * self.column[i] * next);
+                    }
                 }
+                self.weight[r] = next;
+                if self.stats.updates % ((2 * m).max(256) as u64) == 0
+                    || self
+                        .column_index
+                        .iter()
+                        .any(|&i| !self.weight[i].is_finite())
+                {
+                    self.weight.fill(1.);
+                    self.price_dirty.fill(true);
+                    self.stats.weight_resets += 1;
+                }
+            } else {
+                self.tau.copy_from_slice(&self.rho);
+                let lu = self.lu.as_mut().expect("factorized basis");
+                lu.ftran(&mut self.tau);
+                let (wr, ar) = (self.weight[r], self.column[r]);
+                for &i in &self.column_index {
+                    let v = self.column[i];
+                    if i != r && v != 0.0 {
+                        let ratio = v / ar;
+                        self.weight[i] = (self.weight[i]
+                            + ratio * (ratio * wr - 2.0 * self.tau[i]))
+                            .max(MIN_WEIGHT);
+                    }
+                }
+                self.weight[r] = (wr / (ar * ar)).max(MIN_WEIGHT);
             }
-            self.weight[r] = (wr / (ar * ar)).max(MIN_WEIGHT);
         }
         let lu = self.lu.as_mut().expect("factorized basis");
-        lu.update(r, &self.column);
+        lu.update_sparse(r, &self.column, self.column_index.iter().copied());
+        self.stats.ft_updates += u64::from(lu.uses_ft());
         self.stats.updates += 1;
         self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
+        if self.m >= 512 && self.flips.is_empty() {
+            for &i in &self.column_index {
+                self.price_dirty[i / PRICE_BLOCK] = true;
+            }
+            self.price_dirty[r / PRICE_BLOCK] = true;
+        } else if self.m >= 512 {
+            self.price_dirty.fill(true);
+        }
         self.basic[r] = q;
         self.state[q] = State::Basic;
         self.state[p] = if to_upper { State::Upper } else { State::Lower };
@@ -1144,6 +1359,37 @@ impl Lp {
         Ok(repaired || self.nonboxed_dual_infeasible())
     }
 
+    /// Diagnostic state only in instrumented builds and when explicitly enabled.
+    fn trace(&self, event: &str, iterations: u64) {
+        #[cfg(feature = "kernel-profile")]
+        if std::env::var_os("LPIP_TRACE_SIMPLEX").is_some() {
+            let primal = (0..self.n + self.m)
+                .map(|j| {
+                    (self.lower[j] - self.x[j])
+                        .max(self.x[j] - self.upper[j])
+                        .max(0.)
+                })
+                .fold(0., f64::max);
+            let bad = (0..self.n + self.m)
+                .filter(|&j| {
+                    self.state[j] != State::Basic
+                        && !self.boxed(j)
+                        && match self.state[j] {
+                            State::Lower => self.d[j] < -self.dtol[j],
+                            State::Upper => self.d[j] > self.dtol[j],
+                            _ => self.d[j].abs() > self.dtol[j],
+                        }
+                })
+                .count();
+            eprintln!(
+                "simplex {event} m={} n={} pivots={iterations} primal={primal:e} bad_dual={bad} refactors={} repairs={} perturbed={}",
+                self.m, self.n, self.stats.refactors, self.stats.repairs, self.perturbed
+            );
+        }
+        #[cfg(not(feature = "kernel-profile"))]
+        let _ = (event, iterations);
+    }
+
     fn phase_two(&mut self, budget: &mut Budget<'_>, iterations: &mut u64) -> Result<Outcome> {
         let mut streak = 0;
         loop {
@@ -1151,14 +1397,16 @@ impl Lp {
                 return Ok(Outcome::Stopped(s));
             }
             if *iterations > self.iteration_guard {
+                self.trace("iteration_guard", *iterations);
                 return Ok(Outcome::Failure);
             }
+            let adaptive = self.controls.adaptive_refactor;
             let (interval, cap) = (
                 self.controls.refactor_interval,
                 self.controls.max_factor_entries,
             );
             let lu = self.lu();
-            if (lu.updates() >= interval || lu.entries() > cap) && self.refresh()? {
+            if lu.needs_refactor(interval, cap, adaptive) && self.refresh()? {
                 return Ok(Outcome::Restart);
             }
             let Some(r) = self.choose_row() else {
@@ -1194,9 +1442,11 @@ impl Lp {
                     continue;
                 }
                 if from_column.abs() < 1e-12 {
+                    self.trace("unsafe_pivot", *iterations);
                     return Ok(Outcome::Failure);
                 }
             }
+            self.stats.degenerate_pivots += u64::from(theta == 0.);
             streak = if theta == 0.0 { streak + 1 } else { 0 };
             self.pivot(r, q, theta, s, to_upper);
             budget.pivots += 1;
@@ -1215,6 +1465,7 @@ impl Lp {
         budget: &mut Budget<'_>,
         iterations: &mut u64,
     ) -> Result<Option<Status>> {
+        self.trace("phase1_enter", *iterations);
         let true_lower = self.lower.clone();
         let true_upper = self.upper.clone();
         for j in 0..self.n + self.m {
@@ -1232,12 +1483,20 @@ impl Lp {
             }
         }
         self.compute_primal();
-        let outcome = self.phase_two(budget, iterations)?;
-        self.lower = true_lower;
-        self.upper = true_upper;
+        let before = *iterations;
+        let mut outcome = self.phase_two(budget, iterations)?;
+        self.stats.phase_one_pivots += *iterations - before;
+        self.trace("phase1_auxiliary_finished", *iterations);
+        // Optimality for perturbed costs cannot establish dual infeasibility
+        // of the original objective. Retry it before classifying the LP.
         if self.unperturb() {
             self.compute_dual();
+            if matches!(outcome, Outcome::Optimal) {
+                outcome = Outcome::Restart;
+            }
         }
+        self.lower = true_lower;
+        self.upper = true_upper;
         for j in 0..self.n + self.m {
             if self.state[j] != State::Basic {
                 self.state[j] = self.state_from_dual(j);
@@ -1260,7 +1519,9 @@ impl Lp {
         self.cost.fill(0.0);
         self.perturbed = false;
         self.compute_dual();
+        self.trace("classify_enter", *iterations);
         let status = self.optimize(budget, iterations, false)?;
+        self.trace("classify_finished", *iterations);
         self.cost0 = costs;
         self.cost.clone_from(&self.cost0);
         self.perturbed = false;
@@ -1305,19 +1566,44 @@ impl Lp {
         classify: bool,
     ) -> Result<Status> {
         let mut fresh = self.fresh_optimum;
-        for _ in 0..12 {
+        // Useful pivots may require many cost cleanups/refactorizations. Bound
+        // consecutive no-progress restarts, not the number of successful ones.
+        // The pivot guard and shared user budget still bound the whole solve.
+        let mut previous_iterations = *iterations;
+        let mut stalled_restarts = 0;
+        loop {
+            if let Some(status) = budget.stop() {
+                return Ok(status);
+            }
+            if *iterations > previous_iterations {
+                stalled_restarts = 0;
+            } else {
+                stalled_restarts += 1;
+                if stalled_restarts > 12 {
+                    self.trace("stalled_restart_limit", *iterations);
+                    return Ok(Status::NumericalFailure);
+                }
+            }
+            previous_iterations = *iterations;
+            self.trace("restart", *iterations);
             if self.flip_to_dual_feasible() > 0 {
                 self.compute_primal();
             }
             if self.nonboxed_dual_infeasible() {
+                if self.unperturb() {
+                    self.compute_dual();
+                    continue;
+                }
                 if !classify {
-                    self.unperturb();
                     self.compute_dual();
                     continue;
                 }
                 match self.phase_one(budget, iterations)? {
                     None => continue,
-                    Some(Status::Unbounded) => return self.classify(budget, iterations),
+                    Some(Status::Unbounded) => {
+                        self.trace("dual_unbounded", *iterations);
+                        return self.classify(budget, iterations);
+                    }
                     Some(s) => return Ok(s),
                 }
             }
@@ -1337,6 +1623,7 @@ impl Lp {
                         fresh = true; // recheck on a fresh factorization
                         continue;
                     }
+                    self.trace("optimal", *iterations);
                     return Ok(Status::Optimal);
                 }
                 Outcome::Restart => continue,
@@ -1352,10 +1639,12 @@ impl Lp {
                     }
                     return Ok(s);
                 }
-                Outcome::Failure => return Ok(Status::NumericalFailure),
+                Outcome::Failure => {
+                    self.trace("phase2_failure", *iterations);
+                    return Ok(Status::NumericalFailure);
+                }
             }
         }
-        Ok(Status::NumericalFailure)
     }
 }
 
@@ -1445,7 +1734,14 @@ mod tests {
         Controls {
             pivot_tolerance: 1e-9,
             refactor_interval: 16,
+            adaptive_refactor: true,
+            basis_update: crate::BasisUpdate::ForrestTomlin,
+            factor_pivot_search: 4,
+            factor_ordering: crate::FactorOrdering::Auto,
             max_factor_entries: usize::MAX,
+            factor_replay: false,
+            adaptive_pricing: true,
+            devex: false,
             steepest_edge: true,
             feasibility: 1e-7,
             dual: 1e-7,
@@ -1470,6 +1766,91 @@ mod tests {
         .unwrap();
         let status = lp.solve(&mut budget, true).unwrap();
         (status, lp)
+    }
+
+    #[test]
+    fn column_and_row_prices_match_on_dense_btran_with_logical_columns() {
+        let m = 128;
+        let n = 2 * m;
+        let a: Vec<f64> = (0..m * n)
+            .map(|e| if e / n == e % n { 4. } else { 0.125 })
+            .collect();
+        let model = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![1.; n],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; n], vec![2.; n]),
+            kinds: vec![VariableKind::Continuous; n],
+            matrix: CsrMatrix::from_dense(m, n, &a).unwrap(),
+            rows: Bounds::new(vec![f64::NEG_INFINITY; m], vec![10.; m]),
+        })
+        .unwrap();
+        let mut settings = controls();
+        settings.basis_update = crate::BasisUpdate::Eta;
+        let mut lps: Vec<Lp> = [false, true]
+            .into_iter()
+            .map(|column| {
+                let mut c = settings;
+                c.adaptive_pricing = column;
+                let mut lp = Lp::new(&model, &vec![true; m], &vec![true; n], c).unwrap();
+                for i in 0..m {
+                    lp.basic[i] = i;
+                    lp.state[i] = State::Basic;
+                    lp.state[n + i] = State::Upper;
+                }
+                lp.refactor().unwrap();
+                lp
+            })
+            .collect();
+        for r in [0, 17, 127] {
+            for lp in &mut lps {
+                lp.compute_row(r);
+            }
+            for (a, b) in lps[0].alpha.iter().zip(&lps[1].alpha) {
+                assert!((a - b).abs() < 1e-12);
+            }
+        }
+        assert!(lps[0].stats.row_pricings > 0);
+        assert!(lps[1].stats.column_pricings > 0);
+    }
+
+    #[test]
+    fn cached_pricing_matches_full_scan_after_sparse_changes_and_reset() {
+        let m = 1025;
+        let model = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![0.; m],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; m], vec![2.; m]),
+            kinds: vec![VariableKind::Continuous; m],
+            matrix: CsrMatrix::new(m, m, (0..=m).collect(), (0..m).collect(), vec![1.; m]),
+            rows: Bounds::new(vec![0.; m], vec![1.; m]),
+        })
+        .unwrap();
+        let mut lp = Lp::new(&model, &vec![true; m], &vec![true; m], controls()).unwrap();
+        for step in 0..300 {
+            let p = (step * 67) % m;
+            lp.x[lp.basic[p]] = (step % 7) as f64 - 3.;
+            lp.weight[p] = 1. + (step % 3) as f64;
+            lp.price_dirty[p / PRICE_BLOCK] = true;
+            let mut expected = None;
+            let mut score = 0.;
+            for r in 0..m {
+                let s = lp.row_score(r);
+                if s > score {
+                    score = s;
+                    expected = Some(r);
+                }
+            }
+            assert_eq!(lp.choose_row(), expected);
+            assert_eq!(lp.choose_row(), expected);
+            if step % 17 == 0 {
+                lp.reset_to_slack();
+            }
+            if step % 23 == 0 {
+                lp.set_bound(p, 0., 1.).unwrap();
+            }
+        }
     }
 
     #[test]

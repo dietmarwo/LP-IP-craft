@@ -1,0 +1,12 @@
+{
+  "native_commit": "76ca1c9a3c22f0076f282826bb1c1c6a3d5692a5",
+  "highs_adapter": "0.4.0 bulk CSR loader",
+  "highs_engine": "1.15.0",
+  "highs_archive_sha256": "8fc95f5cbf3c71026e1c9fddac6128467b22bccaa303d6c3448d7315a6870328",
+  "binary_sha256": {
+    "native": "18b45fb430cf7f3ed32f83d32662978b20520a2d979dbe540f3f1c83ca29dd98",
+    "highs": "34d9d4dac4a2d0a1903e7e7d6d0d3d43fc652cf7cfd4dcbdda70145eea1f2d73"
+  },
+  "highs_base_commit": "a7a04074747a99048810204efe0421b4093c9fb4",
+  "highs_patch_sha256": "a61de2e732a6d4acf13a36d5d3190bfd872e4cca716e9970e1d15109dc5a21db"
+}

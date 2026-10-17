@@ -526,7 +526,10 @@ fn certification_lp_enables_pruning_on_mixed_models() {
         .solve(&m, &Options::default(), None, &CancellationToken::default())
         .unwrap();
     assert_eq!(r.status, Status::Optimal, "{r:?}");
-    assert!(diagnostic(&r, "certified_incumbents") > 0, "{r:?}");
+    assert!(
+        diagnostic(&r, "certified_incumbents") + diagnostic(&r, "rational_witness_successes") > 0,
+        "{r:?}"
+    );
     assert!(diagnostic(&r, "pruned_nodes") > 0, "{r:?}");
     let b = r.best_bound.unwrap();
     assert!(b >= r.evaluation.unwrap().objective - 1e-9);

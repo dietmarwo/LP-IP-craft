@@ -1,7 +1,21 @@
+> Native 0.24: bounded exact rational incumbent witnesses, reliability branching, serial Feasibility Jump, LP-directed lifted covers, and reversible mixed-row node propagation. See [the implementation plan](docs/mip-search-024/PLAN.md), [results](docs/mip-search-024/RESULTS.md), [reproduction instructions](docs/mip-search-024/REPRODUCE.md), and [review changes](docs/mip-search-024/REVIEW.md). Raw benchmark data ships in the delivery archive ([evidence manifest](docs/EVIDENCE.md)).
+
+> Native 0.23: reuse FT output support and captured spike seeds to remove redundant scans; add opt-in bounded MIP search diagnostics and six additional public MIPs. See [the plan](docs/packing-ftran-mip-diagnostics/PLAN.md), [diagnostic contract](docs/packing-ftran-mip-diagnostics/DIAGNOSTICS.md) and [results](docs/packing-ftran-mip-diagnostics/RESULTS.md).
+
+> Native 0.22: sparse-support propagation, broader guarded FT updates, selectable replay/Devex/column pricing, reversible singleton presolve, sound MIP root bounds, exact root cover cuts and ordered Rust/Python batch solving. See [the implementation plan](docs/highs-lessons-implementation/PLAN.md) and [results](docs/highs-lessons-implementation/RESULTS.md).
+
+> Native 0.20: faster packing basis arithmetic and exact block pricing, incremental integer propagation, certified reduced-cost fixing, and broader public/seeded coverage. See [the staged plan](docs/packing-mip/PLAN.md) and [full results](docs/packing-mip/RESULTS.md), including remaining failures and regressions.
+
+> Native 0.19: captured-basis replay, compact indexed elimination, retained blocked dense LU tails, bounded minimum-degree ordering and work-based rebuilds. See [the five plans](docs/irregular-lu/STEPS.md) and [results and validation](docs/irregular-lu/RESULTS.md). The production solver remains pure Rust with no HiGHS or BLAS dependency.
+
+> Native 0.18: measured kernel profiling, Forrest–Tomlin basis updates with checked fallback, and indexed sparse pricing. See [the plan and implementation](docs/basis-updates/PLAN.md) and [benchmarks and validation](docs/basis-updates/RESULTS.md). Choose `basis_update="auto"` (default), `"eta"`, or `"forrest_tomlin"` in Python; Rust uses `BasisUpdate`. The production solver remains pure Rust without HiGHS.
+
+> Native 0.17 performance update: ten measured iterations add integral row strengthening, short-row integer propagation, a direct box-LP path, reachability-based sparse triangular solves, sparse eta work and adaptive refactorization. See [the iteration plans](docs/performance-ten/ITERATIONS.md) and [the complete results](docs/performance-ten/RESULTS.md). The core and native solver remain dependency-free Rust.
+
 # LP-IP-craft — native Rust LP/MIP solver
 
-Version **0.16.0** replaces both 0.15 linear kernels (dense tableau and the
-sparse revised-simplex pilot) with one **bounded-variable dual revised
+Version **0.24.0** extends the 0.16 architecture, which replaced both 0.15
+linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine
 is owned by this project: both numerical crates have **no third-party
@@ -14,7 +28,7 @@ What changed, and why it is faster (details in [docs/simplex](docs/simplex/READM
   branching no longer appends rows: a branch changes a bound in place, and the
   child reoptimizes from the factorized parent basis with the dual simplex.
 - **Factorization.** Markowitz LU with threshold pivoting and a dense tail,
-  eta updates, and triangular solves that skip zeros in both directions.
+  adaptive Forrest–Tomlin / eta updates, and sparse triangular solves in both directions.
 - **Dual simplex.** Dual steepest edge, bound-flipping ratio test with Harris
   tolerances, power-of-two scaling, auxiliary dual phase 1 and cost
   perturbation against degeneracy.
@@ -35,7 +49,8 @@ cases, where 0.15 failed on up to 2 of 550 per seed, and its MIP search needs
 20–29× fewer nodes and 13–27× less time than dense 0.15.
 
 MIPs still require finite bounds on **all** variables, including continuous
-variables, of magnitude at most 2^53-1. Each connected solve uses one thread;
+variables, of magnitude at most 2^53-1 after justified root inference; unresolved
+infinities remain unsupported. Each connected solve uses one thread;
 independent components can use up to 16 workers. No real GTOC formulation has
 been supplied; application readiness remains unverified.
 
@@ -139,3 +154,46 @@ target card](docs/target-card.md). Earlier native iterations are under
 | `docs/native`, `docs/sparse` | Earlier plans, results and raw measurements |
 
 Project code is MIT. See [dependencies](docs/dependencies.md) and `Cargo.lock`.
+
+### Packing and MIP work (0.20)
+
+The [staged plan](docs/packing-mip/PLAN.md) and
+[complete results](docs/packing-mip/RESULTS.md) cover basis-solve arithmetic,
+exact block pricing, incremental integer propagation and certified reduced-cost
+fixing, with public and seeded coverage cases. Production remains owned Rust.
+`NativeOptions.reduced_cost_fixing` defaults to true and can be disabled for
+comparison. It fixes only integer bound values whose opposite domain is proved
+unable to improve a certified incumbent by the conservative core dual-bound
+calculation. `strong_branching` defaults to false: optional bounded root probes
+can guide branching, and all probe nodes/pivots consume the global limits.
+Public finite-bound restrictions and known numerical failures are documented
+alongside the measured gains and regressions.
+
+## Independent-job batches (0.22)
+
+```python
+from lp_ip_craft import NativeOptions, solve_batch
+results = solve_batch(models, workers=4,
+                      backend_options=NativeOptions(time_limit_seconds=30.0))
+for result in results:
+    if isinstance(result, Exception):
+        print(result)  # one failed job does not discard the others
+    else:
+        print(result.status, result.evaluation)
+```
+
+`models` is an iterable of immutable `Model` objects. Results keep input order;
+limits apply per job. `workers` is 1–16; each worker owns its numerical state,
+and component threading is disabled inside the batch. The interpreter is
+released. A shared `Cancellation` stops running and queued jobs at cooperative
+checkpoints. There are no warm starts in this batch API. Rust callers use
+`NativeSolver::solve_batch(&[&Model], &Options, workers, &CancellationToken)`.
+
+New native controls are `singleton_presolve`, `root_propagation`, `root_cuts`,
+`factor_replay`, `adaptive_pricing`, `devex`, and `avoid_dominant_components`.
+Replay, approximate Devex weights and root cover cuts default to false. Root
+inference can make an initially unbounded MIP box admissible when constraints
+prove finite bounds; unresolved infinities and magnitudes beyond 2^53-1 still
+return `Unsupported`. Presolve reconstructs singleton LP duals and checks them
+against the original model. Root cuts are restricted to verified positive
+integer binary covers, inserted before factorization; no dynamic local cuts.

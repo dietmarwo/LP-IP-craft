@@ -46,7 +46,9 @@ mod model;
 mod solver;
 mod sparse;
 
-pub use bound::{SafeBoundStatus, SafeDualBound, safe_dual_bound, safe_dual_bound_with_bounds};
+pub use bound::{
+    PreparedDualBound, SafeBoundStatus, SafeDualBound, safe_dual_bound, safe_dual_bound_with_bounds,
+};
 pub use check::evaluate;
 pub use dummy::DummySolver;
 pub use error::{Error, Result};

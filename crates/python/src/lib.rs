@@ -382,8 +382,31 @@ fn native_settings(
             "dual_tolerance" => settings.dual_tolerance = field(&value, &key)?,
             "pivot_tolerance" => settings.pivot_tolerance = field(&value, &key)?,
             "incumbent_heuristic" => settings.incumbent_heuristic = field(&value, &key)?,
+            "rational_certification" => settings.rational_certification = field(&value, &key)?,
+            "feasibility_jump" => settings.feasibility_jump = field(&value, &key)?,
+            "feasibility_jump_steps" => settings.feasibility_jump_steps = field(&value, &key)?,
             "objective_lattice" => settings.objective_lattice = field(&value, &key)?,
             "node_reoptimization" => settings.node_reoptimization = field(&value, &key)?,
+            "strong_branching" => settings.strong_branching = field(&value, &key)?,
+            "reliability_branching" => settings.reliability_branching = field(&value, &key)?,
+            "reliability_threshold" => settings.reliability_threshold = field(&value, &key)?,
+            "reliability_max_probes" => settings.reliability_max_probes = field(&value, &key)?,
+            "reduced_cost_fixing" => settings.reduced_cost_fixing = field(&value, &key)?,
+            "factor_replay" => settings.factor_replay = field(&value, &key)?,
+            "mip_diagnostics" => settings.mip_diagnostics = field(&value, &key)?,
+            "mip_trace_limit" => settings.mip_trace_limit = field(&value, &key)?,
+            "adaptive_pricing" => settings.adaptive_pricing = field(&value, &key)?,
+            "devex" => settings.devex = field(&value, &key)?,
+            "avoid_dominant_components" => {
+                settings.avoid_dominant_components = field(&value, &key)?
+            }
+            "singleton_presolve" => settings.singleton_presolve = field(&value, &key)?,
+            "root_propagation" => settings.root_propagation = field(&value, &key)?,
+            "mixed_propagation" => settings.mixed_propagation = field(&value, &key)?,
+            "root_cuts" => settings.root_cuts = field(&value, &key)?,
+            "root_separation" => settings.root_separation = field(&value, &key)?,
+            "root_cut_rounds" => settings.root_cut_rounds = field(&value, &key)?,
+            "cover_lifting" => settings.cover_lifting = field(&value, &key)?,
             "steepest_edge" => settings.steepest_edge = field(&value, &key)?,
             "redundant_row_min_ratio" => settings.redundant_row_min_ratio = field(&value, &key)?,
             "redundant_rows" => settings.redundant_rows = field(&value, &key)?,
@@ -397,7 +420,33 @@ fn native_settings(
             }
             "presolve" => settings.presolve = field(&value, &key)?,
             "max_factor_entries" => settings.max_factor_entries = field(&value, &key)?,
+            "adaptive_refactor" => settings.adaptive_refactor = field(&value, &key)?,
             "refactor_interval" => settings.refactor_interval = field(&value, &key)?,
+            "factor_pivot_search" => settings.factor_pivot_search = field(&value, &key)?,
+            "factor_ordering" => {
+                settings.factor_ordering = match field::<String>(&value, &key)?.as_str() {
+                    "auto" => lp_ip_craft_native::FactorOrdering::Auto,
+                    "natural" => lp_ip_craft_native::FactorOrdering::Natural,
+                    "min_degree" => lp_ip_craft_native::FactorOrdering::MinDegree,
+                    _ => {
+                        return Err(PyValueError::new_err(
+                            "factor_ordering must be auto, natural, or min_degree",
+                        ));
+                    }
+                }
+            }
+            "basis_update" => {
+                settings.basis_update = match field::<String>(&value, &key)?.as_str() {
+                    "auto" => lp_ip_craft_native::BasisUpdate::Auto,
+                    "eta" => lp_ip_craft_native::BasisUpdate::Eta,
+                    "forrest_tomlin" => lp_ip_craft_native::BasisUpdate::ForrestTomlin,
+                    _ => {
+                        return Err(PyValueError::new_err(
+                            "basis_update must be auto, eta, or forrest_tomlin",
+                        ));
+                    }
+                }
+            }
             _ => {
                 return Err(PyValueError::new_err(format!(
                     "backend_options: unknown native option {key:?}"
@@ -480,6 +529,14 @@ fn solve_native<'py>(
         }
     };
 
+    result_dict(py, inner.sense(), r)
+}
+
+fn result_dict(
+    py: Python<'_>,
+    sense: Sense,
+    r: lp_ip_craft::SolveResult,
+) -> PyResult<Bound<'_, PyDict>> {
     let out = PyDict::new(py);
     out.set_item("status", r.status.as_str())?;
     out.set_item("message", &r.message)?;
@@ -488,7 +545,7 @@ fn solve_native<'py>(
     out.set_item("nodes", r.nodes)?;
     out.set_item("iterations", r.iterations)?;
     out.set_item("backend", report_dict(py, &r.backend)?)?;
-    match r.gap(inner.sense()).map_err(to_py_err)? {
+    match r.gap(sense).map_err(to_py_err)? {
         Some(gap) => {
             let d = PyDict::new(py);
             d.set_item("absolute", gap.absolute)?;
@@ -511,6 +568,36 @@ fn solve_native<'py>(
         None => out.set_item("evaluation", py.None())?,
     }
     Ok(out)
+}
+
+/// Ordered independent solves; no Python callbacks or model copies in workers.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn solve_batch_native<'py>(
+    py: Python<'py>,
+    models: Vec<Py<PyModel>>,
+    workers: usize,
+    feasibility_tolerance: f64,
+    integrality_tolerance: f64,
+    cancellation: &Bound<'py, Cancellation>,
+    backend_options: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Vec<Py<PyAny>>> {
+    let options = options(feasibility_tolerance, integrality_tolerance, 1)?;
+    let solver = lp_ip_craft_native::NativeSolver::new(native_settings(backend_options)?);
+    let refs: Vec<&Model> = models.iter().map(|m| &m.bind(py).get().inner).collect();
+    let token = cancellation.get().inner.clone();
+    let results = py
+        .detach(|| solver.solve_batch(&refs, &options, workers, &token))
+        .map_err(to_py_err)?;
+    // A per-job error is an exception value, so successful jobs remain usable.
+    results
+        .into_iter()
+        .zip(&refs)
+        .map(|(r, m)| match r {
+            Ok(r) => Ok(result_dict(py, m.sense(), r)?.into_any().unbind()),
+            Err(e) => Ok(to_py_err(e).into_value(py).into_any()),
+        })
+        .collect()
 }
 
 /// Independent evaluation of a point. Use `lp_ip_craft.evaluate` instead.
@@ -590,6 +677,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("BackendError", py.get_type::<BackendError>())?;
     m.add_function(wrap_pyfunction!(backends, m)?)?;
     m.add_function(wrap_pyfunction!(solve_native, m)?)?;
+    m.add_function(wrap_pyfunction!(solve_batch_native, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
     m.add_function(wrap_pyfunction!(lp_residuals, m)?)?;
     m.add_function(wrap_pyfunction!(safe_dual_bound, m)?)?;

@@ -1,0 +1,3339 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index d057332..324862a 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -70,6 +70,9 @@ jobs:
+       - run: python examples/demo.py
+       - run: python examples/solve_highs.py
+       - run: python examples/safe_bound.py
++      - name: Adapter benchmark acceptance smoke check (no timing threshold)
++        if: runner.os == 'Linux' && matrix.python == '3.10'
++        run: python examples/benchmark_efficiency.py --repeats 1 > efficiency-results.json
+       - name: Bound availability with HiGHS and margin duals (fails on an unsafe bound)
+         shell: bash
+         run: python examples/bound_availability.py --table >> "$GITHUB_STEP_SUMMARY"
+diff --git a/Cargo.lock b/Cargo.lock
+index 434d1e4..49b4008 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -159,11 +159,11 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+ 
+ [[package]]
+ name = "lp-ip-craft"
+-version = "0.3.0"
++version = "0.4.0"
+ 
+ [[package]]
+ name = "lp-ip-craft-highs"
+-version = "0.3.0"
++version = "0.4.0"
+ dependencies = [
+  "highs",
+  "highs-sys",
+@@ -172,7 +172,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "lp-ip-craft-python"
+-version = "0.3.0"
++version = "0.4.0"
+ dependencies = [
+  "lp-ip-craft",
+  "lp-ip-craft-highs",
+diff --git a/Cargo.toml b/Cargo.toml
+index 1617999..b93db10 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -3,7 +3,7 @@ members = ["crates/core", "crates/python", "crates/highs"]
+ resolver = "3"
+ 
+ [workspace.package]
+-version = "0.3.0"
++version = "0.4.0"
+ edition = "2024"
+ rust-version = "1.85"
+ license = "MIT"
+diff --git a/README.md b/README.md
+index 032c390..cddea8b 100644
+--- a/README.md
++++ b/README.md
+@@ -3,13 +3,19 @@
+ Linear and mixed-integer linear programming (LP / MIP) in Rust, with Python
+ bindings.
+ 
+-> **Status: iteration 2 (v0.3.0).** Real LP/MIP solves go through an adapter
++> **Status: iteration 3 (v0.4.0).** Real LP/MIP solves go through an adapter
+ > to the open-source [HiGHS](https://highs.dev/) solver. This is a validated
+ > Rust interface to an existing engine, not yet a native Rust simplex or
+ > branch-and-bound. The dependency-free core contracts and the original dummy
+ > backend remain.
+ 
+-Iteration 2 adds a native Rust `safe_dual_bound` calculation with outward
++Iteration 3 reduces model-loading allocations and copying by passing CSR data
++directly to HiGHS. It also applies the matrix threshold before import, fixing
++the loss of supported small coefficients. Rust and Python call signatures are
++unchanged. See the [efficiency plan](docs/iteration-3-plan.md) and
++[measured results](docs/iteration-3-results.md).
++
++Iteration 2 added a native Rust `safe_dual_bound` calculation with outward
+ rounding and a matching Python API. It converts approximate row multipliers
+ into a conservative objective bound for the stored binary64 model, or explains
+ why no finite bound could be computed. It works without HiGHS and also bounds
+@@ -26,6 +32,8 @@ the continuous relaxation of a MIP. See the [plan](docs/iteration-2-plan.md),
+ | [`docs/api.md`](docs/api.md) | The contract: data conventions, statuses, bounds and gaps, duals, HiGHS settings and limits, errors |
+ | [`docs/iteration-1-results.md`](docs/iteration-1-results.md) | What iteration 1 delivered, the review record, open decisions, next steps |
+ | [`docs/safe-dual-bounds.md`](docs/safe-dual-bounds.md) | Native bound calculation, proof, arithmetic assumptions, exact-oracle tests and limits |
++| [`docs/iteration-3-results.md`](docs/iteration-3-results.md) | Bulk-import implementation, benchmark results and validation |
++| [`examples/benchmark_efficiency.py`](examples/benchmark_efficiency.py) | Reproducible setup/solve/check benchmarks and alternating baseline comparison |
+ | [`docs/target-card.md`](docs/target-card.md) | Application inputs still to be supplied (left TBD on purpose) |
+ 
+ ## Python example
+@@ -109,6 +117,19 @@ In a dummy-only build `lp_ip_craft.BACKENDS == ("dummy",)` and
+ test executable (it would need to link libpython); it is tested through pytest
+ against the compiled module. CI covers Linux, macOS and Windows.
+ 
++To measure the adapter on the included fixed fixtures:
++
++```bash
++python examples/benchmark_efficiency.py --repeats 5 > efficiency.json
++# Optional: compare with a separately installed baseline wheel.
++python examples/benchmark_efficiency.py --repeats 7 \
++    --baseline-python /path/to/baseline-venv/bin/python > comparison.json
++```
++
++The comparison alternates baseline/new process order, warms each case, checks
++objectives and LP residuals, and records every phase and iteration count.
++These are adapter fixtures, not a substitute for the GTOC target data.
++
+ ## Related
+ 
+ [SQP-craft](https://github.com/dietmarwo/SQP-craft) is the sibling repository
+diff --git a/crates/highs/src/ffi.rs b/crates/highs/src/ffi.rs
+index fe3bced..7d3b688 100644
+--- a/crates/highs/src/ffi.rs
++++ b/crates/highs/src/ffi.rs
+@@ -1,7 +1,7 @@
+-//! The only raw C API boundary: offsets, int64 information and interruption.
++//! The only raw C API boundary: bulk CSR import, int64 information and interruption.
+ //! All pointers refer to live HiGHS handles owned by the safe `highs` crate.
+ use highs_sys::*;
+-use lp_ip_craft::{CancellationToken, Error, Result};
++use lp_ip_craft::{CancellationToken, Error, Model, Result, Sense};
+ use std::ffi::{CStr, c_char, c_void};
+ use std::time::Instant;
+ 
+@@ -21,13 +21,105 @@ fn ok(code: HighsInt, op: &str) -> Result<()> {
+         Err(Error::Backend(format!("{op}: status {code}")))
+     }
+ }
+-/// Sets the constant objective term, which the safe wrapper does not expose.
+-pub fn offset(model: &mut highs::Model, offset: f64) -> Result<()> {
+-    // SAFETY: live uniquely borrowed handle; no buffers retained.
+-    ok(
+-        unsafe { Highs_changeObjectiveOffset(model.as_mut_ptr(), offset) },
+-        "objective offset",
+-    )
++/// Imports immutable model slices directly, avoiding the RowProblem builder's
++/// per-column allocations and extra floating-point copies. The caller applies
++/// `small_matrix_value` before import and checks backend numeric limits.
++pub fn load(native: &mut highs::Model, model: &Model) -> Result<()> {
++    let index = |value: usize| {
++        HighsInt::try_from(value)
++            .map_err(|_| Error::Unsupported("model exceeds HiGHS's index range".into()))
++    };
++    let (n, m, nnz) = (index(model.n())?, index(model.m())?, index(model.nnz())?);
++    let a = model.matrix();
++    let starts = a
++        .pattern
++        .indptr
++        .iter()
++        .map(|&i| index(i))
++        .collect::<Result<Vec<_>>>()?;
++    let indices = a
++        .pattern
++        .indices
++        .iter()
++        .map(|&i| index(i))
++        .collect::<Result<Vec<_>>>()?;
++    let sense = match model.sense() {
++        Sense::Minimize => kHighsObjSenseMinimize,
++        Sense::Maximize => kHighsObjSenseMaximize,
++    };
++    let integrality = model.is_mip().then(|| {
++        model
++            .kinds()
++            .iter()
++            .map(|kind| {
++                if kind.is_integral() {
++                    kHighsVarTypeInteger
++                } else {
++                    kHighsVarTypeContinuous
++                }
++            })
++            .collect::<Vec<_>>()
++    });
++    // SAFETY: the uniquely borrowed handle is owned by highs::Model. Model's
++    // constructor guarantees CSR shape, sorted valid indices, and all vector
++    // lengths. Every usize -> HighsInt conversion is checked above. All buffers
++    // remain live for this synchronous call. HiGHS 1.15.0 passModel copies costs,
++    // bounds, indices, values and integrality; it retains none of these pointers.
++    // Empty slices are not dereferenced when their corresponding count is zero.
++    let code = unsafe {
++        if let Some(kinds) = &integrality {
++            Highs_passMip(
++                native.as_mut_ptr(),
++                n,
++                m,
++                nnz,
++                kHighsMatrixFormatRowwise,
++                sense,
++                model.objective_offset(),
++                model.objective().as_ptr(),
++                model.variables().lower.as_ptr(),
++                model.variables().upper.as_ptr(),
++                model.rows().lower.as_ptr(),
++                model.rows().upper.as_ptr(),
++                starts.as_ptr(),
++                indices.as_ptr(),
++                a.values.as_ptr(),
++                kinds.as_ptr(),
++            )
++        } else {
++            Highs_passLp(
++                native.as_mut_ptr(),
++                n,
++                m,
++                nnz,
++                kHighsMatrixFormatRowwise,
++                sense,
++                model.objective_offset(),
++                model.objective().as_ptr(),
++                model.variables().lower.as_ptr(),
++                model.variables().upper.as_ptr(),
++                model.rows().lower.as_ptr(),
++                model.rows().upper.as_ptr(),
++                starts.as_ptr(),
++                indices.as_ptr(),
++                a.values.as_ptr(),
++            )
++        }
++    };
++    // As in highs::Model::try_new, legal imports may warn (e.g. explicit zeros).
++    if code != kHighsStatusWarning {
++        ok(code, "bulk CSR import")?;
++    }
++    // A future option/backend change must not silently remove supported data.
++    let expected = a.values.iter().filter(|&&v| v != 0.0).count();
++    // SAFETY: read-only query of the same live handle; no buffers are retained.
++    let imported = unsafe { Highs_getNumNz(native.as_ptr()) };
++    if usize::try_from(imported).ok() != Some(expected) {
++        return Err(Error::Backend(format!(
++            "bulk CSR import retained {imported} nonzeros, expected {expected}"
++        )));
++    }
++    Ok(())
+ }
+ /// Reads a 64-bit integer info value, such as `mip_node_count`.
+ pub fn int64(model: &highs::SolvedModel, name: &CStr) -> Result<i64> {
+@@ -110,6 +202,27 @@ unsafe extern "C" fn callback(
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    #[test]
++    fn unexpected_nonzero_removal_is_an_error() {
++        use lp_ip_craft::{Bounds, CsrMatrix, ModelData, VariableKind};
++        let model = Model::new(ModelData {
++            sense: Sense::Minimize,
++            objective: vec![1.0],
++            objective_offset: 0.0,
++            variables: Bounds::new(vec![0.0], vec![1.0]),
++            kinds: vec![VariableKind::Continuous],
++            matrix: CsrMatrix::new(1, 1, vec![0, 1], vec![0], vec![2_f64.powi(-32)]),
++            rows: Bounds::new(vec![0.0], vec![1.0]),
++        })
++        .unwrap();
++        let mut native = highs::Model::try_new(highs::ColProblem::new()).unwrap();
++        // Deliberately omit the adapter's threshold setting. The guard must
++        // reject HiGHS's actual removal instead of solving a modified model.
++        let err = load(&mut native, &model).unwrap_err();
++        assert!(matches!(err, Error::Backend(_)));
++        assert!(err.message().contains("retained 0 nonzeros, expected 1"));
++    }
++
+     #[test]
+     fn callback_requests_cancellation_and_deadline_without_python() {
+         let token = CancellationToken::default();
+diff --git a/crates/highs/src/lib.rs b/crates/highs/src/lib.rs
+index c99cc4c..b0c62f8 100644
+--- a/crates/highs/src/lib.rs
++++ b/crates/highs/src/lib.rs
+@@ -9,8 +9,8 @@
+ //! Per solve, the adapter
+ //!
+ //! 1. validates settings, backend limits and the start (before any work);
+-//! 2. builds a fresh HiGHS model from the validated [`Model`], with sense,
+-//!    offset and integrality, and applies only the typed settings below;
++//! 2. configures a fresh HiGHS handle, then imports the validated [`Model`]
++//!    directly as CSR, with sense, offset and integrality;
+ //! 3. submits the start, installs the interrupt callback and runs HiGHS;
+ //! 4. maps the native status explicitly (see [`Status`]), evaluates any
+ //!    declared primal solution with [`check::evaluate`], checks LP duals with
+@@ -25,10 +25,10 @@ mod status;
+ 
+ use std::time::Instant;
+ 
+-use highs::{HighsOptionValue, HighsSolutionStatus, RowProblem};
++use highs::{HighsOptionValue, HighsSolutionStatus};
+ use lp_ip_craft::check::{self, LpResiduals};
+ use lp_ip_craft::{
+-    BackendReport, CancellationToken, Duals, Error, LpIpSolver, Model, Options, Result, Sense,
++    BackendReport, CancellationToken, Duals, Error, LpIpSolver, Model, Options, Result,
+     SolveResult, StartStatus, Status, WarmStart,
+ };
+ use status::Mapped;
+@@ -296,34 +296,6 @@ fn set<V: HighsOptionValue + std::fmt::Display + Copy>(
+     Ok(())
+ }
+ 
+-/// Builds the native model: columns with bounds and integrality, rows from
+-/// the CSR matrix, sense. The objective offset is set separately (C API).
+-fn convert(model: &Model) -> Result<highs::Model> {
+-    let mut problem = RowProblem::new();
+-    let bounds = model.variables();
+-    let columns: Vec<_> = (0..model.n())
+-        .map(|j| {
+-            problem.add_column_with_integrality(
+-                model.objective()[j],
+-                bounds.lower[j]..=bounds.upper[j],
+-                model.kinds()[j].is_integral(),
+-            )
+-        })
+-        .collect();
+-    let a = model.matrix();
+-    let rows = model.rows();
+-    for i in 0..model.m() {
+-        let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
+-        let entries = range.map(|k| (columns[a.pattern.indices[k]], a.values[k]));
+-        problem.add_row(rows.lower[i]..=rows.upper[i], entries);
+-    }
+-    let sense = match model.sense() {
+-        Sense::Minimize => highs::Sense::Minimise,
+-        Sense::Maximize => highs::Sense::Maximise,
+-    };
+-    engine(problem.try_optimise(sense), "model load")
+-}
+-
+ /// Why LP duals do not confirm a reported optimum, if they do not.
+ fn reject_duals(model: &Model, r: &LpResiduals, dual_tolerance: f64) -> Option<String> {
+     let c_scale = 1.0
+@@ -377,7 +349,12 @@ impl LpIpSolver for HighsSolver {
+             ));
+         }
+ 
+-        let mut native = convert(model)?;
++        // The safe wrapper owns and destroys the handle. Apply options before
++        // passing user data: HiGHS drops small coefficients during import.
++        let mut native = engine(
++            highs::Model::try_new(highs::ColProblem::new()),
++            "empty model",
++        )?;
+         let tolerances = options.tolerances;
+         set(&mut native, &mut report, "output_flag", false)?;
+         set(&mut native, &mut report, "threads", 1_i32)?;
+@@ -438,7 +415,7 @@ impl LpIpSolver for HighsSolver {
+                 iterations as i32,
+             )?;
+         }
+-        ffi::offset(&mut native, model.objective_offset())?;
++        ffi::load(&mut native, model)?;
+         if let Some(start) = start {
+             report.start_status =
+                 match native.try_set_solution(Some(&start.primal), None, None, None) {
+diff --git a/crates/highs/tests/bulk_load.rs b/crates/highs/tests/bulk_load.rs
+new file mode 100644
+index 0000000..2cb3527
+--- /dev/null
++++ b/crates/highs/tests/bulk_load.rs
+@@ -0,0 +1,113 @@
++//! Import regressions: analytic optima are checked in original coordinates.
++use lp_ip_craft::{
++    Bounds, CancellationToken, CsrMatrix, LpIpSolver, Model, ModelData, Options, Sense, Status,
++    VariableKind, check,
++};
++use lp_ip_craft_highs::HighsSolver;
++
++#[test]
++fn supported_small_coefficients_survive_import_in_lp_and_mip() {
++    let a = 2_f64.powi(-32); // 1e-12 < a < HiGHS's default drop threshold 1e-9.
++    let rhs = 2_f64.powi(-12);
++    let optimum = 2_f64.powi(20);
++    for sense in [Sense::Minimize, Sense::Maximize] {
++        for kind in [VariableKind::Continuous, VariableKind::Integer] {
++            let rows = match sense {
++                Sense::Minimize => Bounds::new(vec![rhs], vec![f64::INFINITY]),
++                Sense::Maximize => Bounds::new(vec![f64::NEG_INFINITY], vec![rhs]),
++            };
++            let model = Model::new(ModelData {
++                sense,
++                objective: vec![1.0],
++                objective_offset: 7.0,
++                variables: Bounds::new(vec![0.0], vec![2.0 * optimum]),
++                kinds: vec![kind],
++                matrix: CsrMatrix::new(1, 1, vec![0, 1], vec![0], vec![a]),
++                rows,
++            })
++            .unwrap();
++            let result = HighsSolver::default()
++                .solve(
++                    &model,
++                    &Options::default(),
++                    None,
++                    &CancellationToken::default(),
++                )
++                .unwrap();
++            assert_eq!(
++                result.status,
++                Status::Optimal,
++                "{sense:?} {kind:?}: {}",
++                result.message
++            );
++            assert_eq!(result.candidate.as_ref().unwrap(), &[optimum]);
++            assert_eq!(result.evaluation.as_ref().unwrap().objective, optimum + 7.0);
++            if let Some(duals) = &result.duals {
++                let residual =
++                    check::lp_residuals(&model, result.candidate.as_ref().unwrap(), duals).unwrap();
++                assert!(residual.max() <= 1e-7, "{residual:?}");
++            } else {
++                assert_eq!(result.best_bound, Some(optimum + 7.0));
++            }
++        }
++    }
++}
++
++#[test]
++fn sparse_import_handles_zeros_empty_free_ranged_and_fixed_entries() {
++    for sense in [Sense::Minimize, Sense::Maximize] {
++        for kind in [VariableKind::Continuous, VariableKind::Binary] {
++            let model = Model::new(ModelData {
++                sense,
++                objective: vec![2.0, 3.0, 5.0, 0.0],
++                objective_offset: 7.0,
++                variables: Bounds::new(
++                    vec![0.0, 0.0, 2.0, f64::NEG_INFINITY],
++                    vec![3.0, 1.0, 2.0, f64::INFINITY],
++                ),
++                kinds: vec![
++                    VariableKind::Continuous,
++                    kind,
++                    VariableKind::Continuous,
++                    VariableKind::Continuous,
++                ],
++                matrix: CsrMatrix::new(
++                    4,
++                    4,
++                    vec![0, 0, 3, 4, 5],
++                    vec![0, 1, 2, 3, 2],
++                    vec![1.0, 2.0, -0.0, 3.0, 1.0],
++                ),
++                rows: Bounds::new(
++                    vec![0.0, 2.5, f64::NEG_INFINITY, 1.0],
++                    vec![0.0, f64::INFINITY, f64::INFINITY, 3.0],
++                ),
++            })
++            .unwrap();
++            let original = model.clone();
++            let result = HighsSolver::default()
++                .solve(
++                    &model,
++                    &Options::default(),
++                    None,
++                    &CancellationToken::default(),
++                )
++                .unwrap();
++            assert_eq!(model, original); // Import never mutates the validated input.
++            assert_eq!(result.status, Status::Optimal, "{}", result.message);
++            let reference = if sense == Sense::Minimize { 21.0 } else { 26.0 };
++            assert_eq!(result.evaluation.as_ref().unwrap().objective, reference);
++            assert!(result.evaluation.as_ref().unwrap().feasible_candidate);
++            if let Some(duals) = &result.duals {
++                assert!(
++                    check::lp_residuals(&model, result.candidate.as_ref().unwrap(), duals)
++                        .unwrap()
++                        .max()
++                        <= 1e-7
++                );
++            } else {
++                assert_eq!(result.best_bound, Some(reference));
++            }
++        }
++    }
++}
+diff --git a/docs/api.md b/docs/api.md
+index a1679b5..8576933 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -1,6 +1,6 @@
+ # Contract: model, solve, results
+ 
+-Version 0.3.0 (iteration 2). Interfaces are pre-release; `publish = false`
++Version 0.4.0 (iteration 3). Interfaces are pre-release; `publish = false`
+ prevents accidental releases.
+ 
+ ## The model
+@@ -273,6 +273,21 @@ claims optimality, infeasibility or unboundedness.
+ Rust bindings; `highs-sys` builds HiGHS from source. Each solve builds a fresh
+ native model on the calling thread and destroys it before returning.
+ 
++Since iteration 3, settings are applied to an empty safe-wrapper-owned handle
++before importing user data. The adapter borrows the model's cost, bound and
++coefficient arrays for a single synchronous `Highs_passLp`/`Highs_passMip` call
++in row-wise (CSR) form. HiGHS copies those arrays; no borrowed pointer is kept.
++Only checked native-width index buffers and, for MIPs, an integrality buffer
++are constructed in Rust. This avoids the previous per-column growable builder
++and its extra CSC/value copies. HiGHS still converts CSR to its internal layout.
++
++`small_matrix_value=1e-12` now takes effect **before** import. Earlier versions
++set it after loading, when HiGHS could already have dropped entries at its
++initial `1e-9` threshold. Explicit zeros may legitimately be removed; an
++unexpected change in the count of nonzero coefficients raises `BackendError`.
++The same primal/dual checks, starts, cancellation and budget rules still apply.
++There is no persistent model or basis reuse and no new public setting.
++
+ | `HighsOptions` field | Default | Meaning |
+ | --- | --- | --- |
+ | `time_limit_seconds` | `None` | cooperative budget for the whole call after validation (conversion, run, checks); HiGHS gets the remaining time as `time_limit` and the interrupt callback polls it |
+diff --git a/docs/iteration-3-bound-availability.md b/docs/iteration-3-bound-availability.md
+new file mode 100644
+index 0000000..4237c1f
+--- /dev/null
++++ b/docs/iteration-3-bound-availability.md
+@@ -0,0 +1,19 @@
++# Bound availability after bulk-import changes
++
++Version 0.4.0, compared with reviewed `main` at `a7a0407`.
++Reproduced using `python examples/bound_availability.py --table`.
++All finite bounds passed the example's exact rational Lagrangian check.
++The availability counts match the reviewed iteration 2 record.
++
++Seed 1, 100 models per family.
++
++| Variable boxes | Multipliers | Finite bounds | Median looseness | Otherwise |
++| --- | --- | ---: | ---: | --- |
++| box [0, 3] | HiGHS duals | 100 / 100 | 2.5e-15 | - |
++| box [0, 3] | margin duals | 100 / 100 | 2.5e-15 | - |
++| x >= 0, no upper bound | HiGHS duals | 5 / 100 | 1.4e-16 | unbounded_variable 95 (exact bound of these duals infinite: 79) |
++| x >= 0, no upper bound | margin duals | 100 / 100 | 1.4e-06 | - |
++| half the columns free | HiGHS duals | 2 / 100 | 1.5e-16 | unbounded_variable 98 (exact bound of these duals infinite: 98) |
++| half the columns free | margin duals | 4 / 100 | 1.3e-06 | unbounded_variable 96 (exact bound of these duals infinite: 96) |
++| MIP: integers in [0, 4], continuous x >= 0 | HiGHS duals | 15 / 100 | 7.2e-16 | unbounded_variable 85 (exact bound of these duals infinite: 73) |
++| MIP: integers in [0, 4], continuous x >= 0 | margin duals | 100 / 100 | 8.2e-02 | - |
+diff --git a/docs/iteration-3-efficiency-results.json b/docs/iteration-3-efficiency-results.json
+new file mode 100644
+index 0000000..ebd1f26
+--- /dev/null
++++ b/docs/iteration-3-efficiency-results.json
+@@ -0,0 +1,2210 @@
++{
++  "repeats": 7,
++  "warmups_per_process": 1,
++  "order": "alternating baseline/new",
++  "metadata": {
++    "baseline": {
++      "version": "0.3.0",
++      "python": "3.12.14",
++      "platform": "Linux-6.18.44-x86_64-with-glibc2.39"
++    },
++    "new": {
++      "version": "0.4.0",
++      "python": "3.12.14",
++      "platform": "Linux-6.18.44-x86_64-with-glibc2.39"
++    }
++  },
++  "summary": [
++    {
++      "case": "box-lp",
++      "median": {
++        "baseline": {
++          "wall_seconds": 0.016335049000190338,
++          "total_seconds": 0.011170329,
++          "conversion_seconds": 0.004023346,
++          "solve_seconds": 0.003915373,
++          "check_seconds": 0.003021623
++        },
++        "new": {
++          "wall_seconds": 0.01497977200006062,
++          "total_seconds": 0.009920833,
++          "conversion_seconds": 0.001644203,
++          "solve_seconds": 0.00440317,
++          "check_seconds": 0.003735982
++        }
++      },
++      "wall_range": {
++        "baseline": [
++          0.015662032999898656,
++          0.01731316599989441
++        ],
++        "new": [
++          0.014444674000060331,
++          0.0162708319999183
++        ]
++      },
++      "ratios": {
++        "wall_seconds": 1.0904738069527515,
++        "total_seconds": 1.1259466820981665,
++        "conversion_seconds": 2.446988601772409,
++        "solve_seconds": 0.8892168596715548,
++        "check_seconds": 0.8087894963091364
++      }
++    },
++    {
++      "case": "sparse-import-lp",
++      "median": {
++        "baseline": {
++          "wall_seconds": 0.10382412299986754,
++          "total_seconds": 0.099812494,
++          "conversion_seconds": 0.011397442,
++          "solve_seconds": 0.085485438,
++          "check_seconds": 0.002394306
++        },
++        "new": {
++          "wall_seconds": 0.09179878999975699,
++          "total_seconds": 0.087560399,
++          "conversion_seconds": 0.004627929,
++          "solve_seconds": 0.080792068,
++          "check_seconds": 0.002192261
++        }
++      },
++      "wall_range": {
++        "baseline": [
++          0.097715918999711,
++          0.11671037000041906
++        ],
++        "new": [
++          0.08800357100017209,
++          0.10473601000012422
++        ]
++      },
++      "ratios": {
++        "wall_seconds": 1.1309966394997406,
++        "total_seconds": 1.139927354602393,
++        "conversion_seconds": 2.462752129516248,
++        "solve_seconds": 1.0580919651666796,
++        "check_seconds": 1.0921628400997874
++      }
++    },
++    {
++      "case": "transport-lp",
++      "median": {
++        "baseline": {
++          "wall_seconds": 0.012233635000029608,
++          "total_seconds": 0.011977367,
++          "conversion_seconds": 0.000618725,
++          "solve_seconds": 0.011200134,
++          "check_seconds": 0.000158519
++        },
++        "new": {
++          "wall_seconds": 0.011876144999860117,
++          "total_seconds": 0.011593217,
++          "conversion_seconds": 0.000197838,
++          "solve_seconds": 0.011239372,
++          "check_seconds": 0.000155274
++        }
++      },
++      "wall_range": {
++        "baseline": [
++          0.012061194000125397,
++          0.014039932000287081
++        ],
++        "new": [
++          0.011616381999829173,
++          0.014190639999924315
++        ]
++      },
++      "ratios": {
++        "wall_seconds": 1.0301015186471454,
++        "total_seconds": 1.0331357551575202,
++        "conversion_seconds": 3.127432545820317,
++        "solve_seconds": 0.9965088796776191,
++        "check_seconds": 1.0208985406442805
++      }
++    },
++    {
++      "case": "partition-mip",
++      "median": {
++        "baseline": {
++          "wall_seconds": 0.06263992599997437,
++          "total_seconds": 0.062253893,
++          "conversion_seconds": 0.001492414,
++          "solve_seconds": 0.060634177,
++          "check_seconds": 0.000184178
++        },
++        "new": {
++          "wall_seconds": 0.06131400300000678,
++          "total_seconds": 0.060898886,
++          "conversion_seconds": 0.000365642,
++          "solve_seconds": 0.060318239,
++          "check_seconds": 0.000179542
++        }
++      },
++      "wall_range": {
++        "baseline": [
++          0.060453003000020544,
++          0.06541813100011495
++        ],
++        "new": [
++          0.05858918900003118,
++          0.06288840100023663
++        ]
++      },
++      "ratios": {
++        "wall_seconds": 1.0216251253399233,
++        "total_seconds": 1.02225011143882,
++        "conversion_seconds": 4.0816262901964215,
++        "solve_seconds": 1.005237851854395,
++        "check_seconds": 1.0258212563077163
++      }
++    }
++  ],
++  "runs": [
++    {
++      "label": "baseline",
++      "repeat": 0,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004489780999847426,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.017094876000101067,
++        "total_seconds": 0.011571415,
++        "conversion_seconds": 0.004159352,
++        "solve_seconds": 0.003982625,
++        "check_seconds": 0.003428908
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.017094876000101067,
++          "total_seconds": 0.011571415,
++          "conversion_seconds": 0.004159352,
++          "solve_seconds": 0.003982625,
++          "check_seconds": 0.003428908,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 0,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004845126999953209,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.015004910000243399,
++        "total_seconds": 0.009920833,
++        "conversion_seconds": 0.001639266,
++        "solve_seconds": 0.004330981,
++        "check_seconds": 0.003949735
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.015004910000243399,
++          "total_seconds": 0.009920833,
++          "conversion_seconds": 0.001639266,
++          "solve_seconds": 0.004330981,
++          "check_seconds": 0.003949735,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 1,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004581738999604568,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.01497977200006062,
++        "total_seconds": 0.009550754,
++        "conversion_seconds": 0.001583502,
++        "solve_seconds": 0.004309729,
++        "check_seconds": 0.003657113
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.01497977200006062,
++          "total_seconds": 0.009550754,
++          "conversion_seconds": 0.001583502,
++          "solve_seconds": 0.004309729,
++          "check_seconds": 0.003657113,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 1,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.006975774999773421,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.01720670600025187,
++        "total_seconds": 0.011758598,
++        "conversion_seconds": 0.00482072,
++        "solve_seconds": 0.003915373,
++        "check_seconds": 0.003021623
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.01720670600025187,
++          "total_seconds": 0.011758598,
++          "conversion_seconds": 0.00482072,
++          "solve_seconds": 0.003915373,
++          "check_seconds": 0.003021623,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 2,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004540796999663144,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.016335049000190338,
++        "total_seconds": 0.011055216,
++        "conversion_seconds": 0.003956766,
++        "solve_seconds": 0.003908011,
++        "check_seconds": 0.003189898
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.016335049000190338,
++          "total_seconds": 0.011055216,
++          "conversion_seconds": 0.003956766,
++          "solve_seconds": 0.003908011,
++          "check_seconds": 0.003189898,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 2,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004699926999819581,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.014775413000279514,
++        "total_seconds": 0.009932499,
++        "conversion_seconds": 0.001701679,
++        "solve_seconds": 0.004398332,
++        "check_seconds": 0.003832087
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.014775413000279514,
++          "total_seconds": 0.009932499,
++          "conversion_seconds": 0.001701679,
++          "solve_seconds": 0.004398332,
++          "check_seconds": 0.003832087,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 3,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004675040000165609,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.014827010999852064,
++        "total_seconds": 0.00999188,
++        "conversion_seconds": 0.001585845,
++        "solve_seconds": 0.004669762,
++        "check_seconds": 0.003735982
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.014827010999852064,
++          "total_seconds": 0.00999188,
++          "conversion_seconds": 0.001585845,
++          "solve_seconds": 0.004669762,
++          "check_seconds": 0.003735982,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 3,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.0048672799998712435,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.016250672000296618,
++        "total_seconds": 0.011170329,
++        "conversion_seconds": 0.003996025,
++        "solve_seconds": 0.004165271,
++        "check_seconds": 0.003008483
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.016250672000296618,
++          "total_seconds": 0.011170329,
++          "conversion_seconds": 0.003996025,
++          "solve_seconds": 0.004165271,
++          "check_seconds": 0.003008483,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 4,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004495169000165333,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.01731316599989441,
++        "total_seconds": 0.01178619,
++        "conversion_seconds": 0.004409339,
++        "solve_seconds": 0.004255947,
++        "check_seconds": 0.003120453
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.01731316599989441,
++          "total_seconds": 0.01178619,
++          "conversion_seconds": 0.004409339,
++          "solve_seconds": 0.004255947,
++          "check_seconds": 0.003120453,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 4,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004812646999653225,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.014444674000060331,
++        "total_seconds": 0.009653318,
++        "conversion_seconds": 0.001644203,
++        "solve_seconds": 0.00440317,
++        "check_seconds": 0.003605655
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.014444674000060331,
++          "total_seconds": 0.009653318,
++          "conversion_seconds": 0.001644203,
++          "solve_seconds": 0.00440317,
++          "check_seconds": 0.003605655,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 5,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004845987999942736,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.015149888999985706,
++        "total_seconds": 0.009743445,
++        "conversion_seconds": 0.001736863,
++        "solve_seconds": 0.00444316,
++        "check_seconds": 0.00356293
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.015149888999985706,
++          "total_seconds": 0.009743445,
++          "conversion_seconds": 0.001736863,
++          "solve_seconds": 0.00444316,
++          "check_seconds": 0.00356293,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 5,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004643321999992622,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.015662032999898656,
++        "total_seconds": 0.010679508,
++        "conversion_seconds": 0.004023346,
++        "solve_seconds": 0.003728741,
++        "check_seconds": 0.00292678
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.015662032999898656,
++          "total_seconds": 0.010679508,
++          "conversion_seconds": 0.004023346,
++          "solve_seconds": 0.003728741,
++          "check_seconds": 0.00292678,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 6,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.004585464999763644,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.01580267500003174,
++        "total_seconds": 0.010703444,
++        "conversion_seconds": 0.003976445,
++        "solve_seconds": 0.003789803,
++        "check_seconds": 0.002936765
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.01580267500003174,
++          "total_seconds": 0.010703444,
++          "conversion_seconds": 0.003976445,
++          "solve_seconds": 0.003789803,
++          "check_seconds": 0.002936765,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 6,
++      "case": "box-lp",
++      "n": 100000,
++      "m": 0,
++      "nnz": 0,
++      "model_construction_seconds": 0.0050683039999057655,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.0162708319999183,
++        "total_seconds": 0.01150159,
++        "conversion_seconds": 0.001938508,
++        "solve_seconds": 0.005454097,
++        "check_seconds": 0.004108315
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.0162708319999183,
++          "total_seconds": 0.01150159,
++          "conversion_seconds": 0.001938508,
++          "solve_seconds": 0.005454097,
++          "check_seconds": 0.004108315,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 0,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.010845359000086319,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.097715918999711,
++        "total_seconds": 0.093800946,
++        "conversion_seconds": 0.011557283,
++        "solve_seconds": 0.079784318,
++        "check_seconds": 0.002458312
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.097715918999711,
++          "total_seconds": 0.093800946,
++          "conversion_seconds": 0.011557283,
++          "solve_seconds": 0.079784318,
++          "check_seconds": 0.002458312,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 0,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.011047073000099772,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.08800357100017209,
++        "total_seconds": 0.08391106,
++        "conversion_seconds": 0.004627929,
++        "solve_seconds": 0.076870599,
++        "check_seconds": 0.002411902
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.08800357100017209,
++          "total_seconds": 0.08391106,
++          "conversion_seconds": 0.004627929,
++          "solve_seconds": 0.076870599,
++          "check_seconds": 0.002411902,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 1,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.010712307000176224,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.0904228049998892,
++        "total_seconds": 0.086117573,
++        "conversion_seconds": 0.004723773,
++        "solve_seconds": 0.079200106,
++        "check_seconds": 0.002193202
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.0904228049998892,
++          "total_seconds": 0.086117573,
++          "conversion_seconds": 0.004723773,
++          "solve_seconds": 0.079200106,
++          "check_seconds": 0.002193202,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 1,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.010808742999870447,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.10125137800014272,
++        "total_seconds": 0.09719409,
++        "conversion_seconds": 0.010112451,
++        "solve_seconds": 0.084686121,
++        "check_seconds": 0.002394306
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.10125137800014272,
++          "total_seconds": 0.09719409,
++          "conversion_seconds": 0.010112451,
++          "solve_seconds": 0.084686121,
++          "check_seconds": 0.002394306,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 2,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.013298032999955467,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.09826749199964979,
++        "total_seconds": 0.094409816,
++        "conversion_seconds": 0.010188517,
++        "solve_seconds": 0.081997952,
++        "check_seconds": 0.002222346
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.09826749199964979,
++          "total_seconds": 0.094409816,
++          "conversion_seconds": 0.010188517,
++          "solve_seconds": 0.081997952,
++          "check_seconds": 0.002222346,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 2,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.010628842000187433,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.09281833199975154,
++        "total_seconds": 0.08890345,
++        "conversion_seconds": 0.004872719,
++        "solve_seconds": 0.081843929,
++        "check_seconds": 0.002186252
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.09281833199975154,
++          "total_seconds": 0.08890345,
++          "conversion_seconds": 0.004872719,
++          "solve_seconds": 0.081843929,
++          "check_seconds": 0.002186252,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 3,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.01090536899982908,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.09330552800020087,
++        "total_seconds": 0.089325507,
++        "conversion_seconds": 0.004393635,
++        "solve_seconds": 0.082756908,
++        "check_seconds": 0.002174554
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.09330552800020087,
++          "total_seconds": 0.089325507,
++          "conversion_seconds": 0.004393635,
++          "solve_seconds": 0.082756908,
++          "check_seconds": 0.002174554,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 3,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.011340906999976141,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.10948778600004516,
++        "total_seconds": 0.105238619,
++        "conversion_seconds": 0.011181937,
++        "solve_seconds": 0.091434653,
++        "check_seconds": 0.002620728
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.10948778600004516,
++          "total_seconds": 0.105238619,
++          "conversion_seconds": 0.011181937,
++          "solve_seconds": 0.091434653,
++          "check_seconds": 0.002620728,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 4,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.01090892399997756,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.10382412299986754,
++        "total_seconds": 0.099812494,
++        "conversion_seconds": 0.01208468,
++        "solve_seconds": 0.085485438,
++        "check_seconds": 0.002241525
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.10382412299986754,
++          "total_seconds": 0.099812494,
++          "conversion_seconds": 0.01208468,
++          "solve_seconds": 0.085485438,
++          "check_seconds": 0.002241525,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 4,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.01145478800026467,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.09011476900013804,
++        "total_seconds": 0.086151775,
++        "conversion_seconds": 0.004440526,
++        "solve_seconds": 0.079491136,
++        "check_seconds": 0.002219311
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.09011476900013804,
++          "total_seconds": 0.086151775,
++          "conversion_seconds": 0.004440526,
++          "solve_seconds": 0.079491136,
++          "check_seconds": 0.002219311,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 5,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.012646608000068227,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.10473601000012422,
++        "total_seconds": 0.09980281,
++        "conversion_seconds": 0.005089225,
++        "solve_seconds": 0.092521535,
++        "check_seconds": 0.002191249
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.10473601000012422,
++          "total_seconds": 0.09980281,
++          "conversion_seconds": 0.005089225,
++          "solve_seconds": 0.092521535,
++          "check_seconds": 0.002191249,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 5,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.01111374300035095,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.10985295899990888,
++        "total_seconds": 0.105638721,
++        "conversion_seconds": 0.012498885,
++        "solve_seconds": 0.090879582,
++        "check_seconds": 0.002259162
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.10985295899990888,
++          "total_seconds": 0.105638721,
++          "conversion_seconds": 0.012498885,
++          "solve_seconds": 0.090879582,
++          "check_seconds": 0.002259162,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 6,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.010870415999761462,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.11671037000041906,
++        "total_seconds": 0.11269113,
++        "conversion_seconds": 0.011397442,
++        "solve_seconds": 0.098728305,
++        "check_seconds": 0.002564633
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.11671037000041906,
++          "total_seconds": 0.11269113,
++          "conversion_seconds": 0.011397442,
++          "solve_seconds": 0.098728305,
++          "check_seconds": 0.002564633,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 6,
++      "case": "sparse-import-lp",
++      "n": 40000,
++      "m": 40000,
++      "nnz": 200000,
++      "model_construction_seconds": 0.010584834999917803,
++      "reference_objective": 0.0,
++      "median": {
++        "wall_seconds": 0.09179878999975699,
++        "total_seconds": 0.087560399,
++        "conversion_seconds": 0.00457542,
++        "solve_seconds": 0.080792068,
++        "check_seconds": 0.002192261
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.09179878999975699,
++          "total_seconds": 0.087560399,
++          "conversion_seconds": 0.00457542,
++          "solve_seconds": 0.080792068,
++          "check_seconds": 0.002192261,
++          "objective": 0.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 0,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0006197659999997995,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.012271521000002394,
++        "total_seconds": 0.012039361,
++        "conversion_seconds": 0.00062868,
++        "solve_seconds": 0.011218792,
++        "check_seconds": 0.000191679
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.012271521000002394,
++          "total_seconds": 0.012039361,
++          "conversion_seconds": 0.00062868,
++          "solve_seconds": 0.011218792,
++          "check_seconds": 0.000191679,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 0,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005454039996948268,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.011876144999860117,
++        "total_seconds": 0.011593217,
++        "conversion_seconds": 0.000197838,
++        "solve_seconds": 0.011239372,
++        "check_seconds": 0.000155825
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.011876144999860117,
++          "total_seconds": 0.011593217,
++          "conversion_seconds": 0.000197838,
++          "solve_seconds": 0.011239372,
++          "check_seconds": 0.000155825,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 1,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005424189998848306,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.01287322000007407,
++        "total_seconds": 0.012633699,
++        "conversion_seconds": 0.000196217,
++        "solve_seconds": 0.012281997,
++        "check_seconds": 0.000155274
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.01287322000007407,
++          "total_seconds": 0.012633699,
++          "conversion_seconds": 0.000196217,
++          "solve_seconds": 0.012281997,
++          "check_seconds": 0.000155274,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 1,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005591239996647346,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.01214389899996604,
++        "total_seconds": 0.011888953,
++        "conversion_seconds": 0.000619956,
++        "solve_seconds": 0.011110278,
++        "check_seconds": 0.000158519
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.01214389899996604,
++          "total_seconds": 0.011888953,
++          "conversion_seconds": 0.000619956,
++          "solve_seconds": 0.011110278,
++          "check_seconds": 0.000158519,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 2,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.000583861999984947,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.012153855000178737,
++        "total_seconds": 0.01192563,
++        "conversion_seconds": 0.000618725,
++        "solve_seconds": 0.011150929,
++        "check_seconds": 0.000155775
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.012153855000178737,
++          "total_seconds": 0.01192563,
++          "conversion_seconds": 0.000618725,
++          "solve_seconds": 0.011150929,
++          "check_seconds": 0.000155775,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 2,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005570609996539133,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.011616381999829173,
++        "total_seconds": 0.011321326,
++        "conversion_seconds": 0.000186491,
++        "solve_seconds": 0.010979741,
++        "check_seconds": 0.000154844
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.011616381999829173,
++          "total_seconds": 0.011321326,
++          "conversion_seconds": 0.000186491,
++          "solve_seconds": 0.010979741,
++          "check_seconds": 0.000154844,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 3,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005761499996879138,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.012170330000117247,
++        "total_seconds": 0.011943447,
++        "conversion_seconds": 0.00019221,
++        "solve_seconds": 0.011595462,
++        "check_seconds": 0.000155565
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.012170330000117247,
++          "total_seconds": 0.011943447,
++          "conversion_seconds": 0.00019221,
++          "solve_seconds": 0.011595462,
++          "check_seconds": 0.000155565,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 3,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005394439999690803,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.012061194000125397,
++        "total_seconds": 0.011836054,
++        "conversion_seconds": 0.000613686,
++        "solve_seconds": 0.01106478,
++        "check_seconds": 0.000157277
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.012061194000125397,
++          "total_seconds": 0.011836054,
++          "conversion_seconds": 0.000613686,
++          "solve_seconds": 0.01106478,
++          "check_seconds": 0.000157277,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 4,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0006228309998732584,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.012233635000029608,
++        "total_seconds": 0.011977367,
++        "conversion_seconds": 0.000618704,
++        "solve_seconds": 0.011200134,
++        "check_seconds": 0.000158149
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.012233635000029608,
++          "total_seconds": 0.011977367,
++          "conversion_seconds": 0.000618704,
++          "solve_seconds": 0.011200134,
++          "check_seconds": 0.000158149,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 4,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005653140001413703,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.011735262000001967,
++        "total_seconds": 0.011503592,
++        "conversion_seconds": 0.000198559,
++        "solve_seconds": 0.011151961,
++        "check_seconds": 0.000152801
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.011735262000001967,
++          "total_seconds": 0.011503592,
++          "conversion_seconds": 0.000198559,
++          "solve_seconds": 0.011151961,
++          "check_seconds": 0.000152801,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 5,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005824889999530569,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.014190639999924315,
++        "total_seconds": 0.013944128,
++        "conversion_seconds": 0.000204259,
++        "solve_seconds": 0.013490232,
++        "check_seconds": 0.000249437
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.014190639999924315,
++          "total_seconds": 0.013944128,
++          "conversion_seconds": 0.000204259,
++          "solve_seconds": 0.013490232,
++          "check_seconds": 0.000249437,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 5,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0005621690002044488,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.012461769999845274,
++        "total_seconds": 0.012215217,
++        "conversion_seconds": 0.000606025,
++        "solve_seconds": 0.01144899,
++        "check_seconds": 0.000159982
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.012461769999845274,
++          "total_seconds": 0.012215217,
++          "conversion_seconds": 0.000606025,
++          "solve_seconds": 0.01144899,
++          "check_seconds": 0.000159982,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 6,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.0006265460001486645,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.014039932000287081,
++        "total_seconds": 0.013779619,
++        "conversion_seconds": 0.000627317,
++        "solve_seconds": 0.012991349,
++        "check_seconds": 0.000160713
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.014039932000287081,
++          "total_seconds": 0.013779619,
++          "conversion_seconds": 0.000627317,
++          "solve_seconds": 0.012991349,
++          "check_seconds": 0.000160713,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 6,
++      "case": "transport-lp",
++      "n": 4800,
++      "m": 140,
++      "nnz": 9600,
++      "model_construction_seconds": 0.000577432000227418,
++      "reference_objective": null,
++      "median": {
++        "wall_seconds": 0.011640408000403113,
++        "total_seconds": 0.011389419,
++        "conversion_seconds": 0.000210307,
++        "solve_seconds": 0.011024188,
++        "check_seconds": 0.000154734
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.011640408000403113,
++          "total_seconds": 0.011389419,
++          "conversion_seconds": 0.000210307,
++          "solve_seconds": 0.011024188,
++          "check_seconds": 0.000154734,
++          "objective": 16980.0,
++          "status": "optimal",
++          "iterations": 188,
++          "nodes": 0,
++          "best_bound": null,
++          "residuals": {
++            "primal": 0.0,
++            "stationarity": 0.0,
++            "complementarity": 0.0,
++            "dual_sign": 0.0,
++            "duality_gap": 0.0
++          }
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 0,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0015655239999432524,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06541813100011495,
++        "total_seconds": 0.064925327,
++        "conversion_seconds": 0.001492414,
++        "solve_seconds": 0.06324566,
++        "check_seconds": 0.000186692
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06541813100011495,
++          "total_seconds": 0.064925327,
++          "conversion_seconds": 0.001492414,
++          "solve_seconds": 0.06324566,
++          "check_seconds": 0.000186692,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 0,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.001475208000101702,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.061320542999965255,
++        "total_seconds": 0.060929623,
++        "conversion_seconds": 0.00035716,
++        "solve_seconds": 0.060395556,
++        "check_seconds": 0.000176396
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.061320542999965255,
++          "total_seconds": 0.060929623,
++          "conversion_seconds": 0.00035716,
++          "solve_seconds": 0.060395556,
++          "check_seconds": 0.000176396,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 1,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0014838309998594923,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06284174100028395,
++        "total_seconds": 0.062374986,
++        "conversion_seconds": 0.000365642,
++        "solve_seconds": 0.061829332,
++        "check_seconds": 0.000179542
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06284174100028395,
++          "total_seconds": 0.062374986,
++          "conversion_seconds": 0.000365642,
++          "solve_seconds": 0.061829332,
++          "check_seconds": 0.000179542,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 1,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.00146217900010015,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06263992599997437,
++        "total_seconds": 0.062253893,
++        "conversion_seconds": 0.001410791,
++        "solve_seconds": 0.060634177,
++        "check_seconds": 0.000208335
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06263992599997437,
++          "total_seconds": 0.062253893,
++          "conversion_seconds": 0.001410791,
++          "solve_seconds": 0.060634177,
++          "check_seconds": 0.000208335,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 2,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0018050659996333707,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06473492399982206,
++        "total_seconds": 0.064326698,
++        "conversion_seconds": 0.001533636,
++        "solve_seconds": 0.062608293,
++        "check_seconds": 0.000184178
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06473492399982206,
++          "total_seconds": 0.064326698,
++          "conversion_seconds": 0.001533636,
++          "solve_seconds": 0.062608293,
++          "check_seconds": 0.000184178,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 2,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0015749080002933624,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06288840100023663,
++        "total_seconds": 0.062467336,
++        "conversion_seconds": 0.000345152,
++        "solve_seconds": 0.061910614,
++        "check_seconds": 0.000211249
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06288840100023663,
++          "total_seconds": 0.062467336,
++          "conversion_seconds": 0.000345152,
++          "solve_seconds": 0.061910614,
++          "check_seconds": 0.000211249,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 3,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0017381750003551133,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06131400300000678,
++        "total_seconds": 0.060898886,
++        "conversion_seconds": 0.000400395,
++        "solve_seconds": 0.060318239,
++        "check_seconds": 0.000179421
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06131400300000678,
++          "total_seconds": 0.060898886,
++          "conversion_seconds": 0.000400395,
++          "solve_seconds": 0.060318239,
++          "check_seconds": 0.000179421,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 3,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0014938459999029874,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06432929699985834,
++        "total_seconds": 0.06394114,
++        "conversion_seconds": 0.002563811,
++        "solve_seconds": 0.061194612,
++        "check_seconds": 0.000182015
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06432929699985834,
++          "total_seconds": 0.06394114,
++          "conversion_seconds": 0.002563811,
++          "solve_seconds": 0.061194612,
++          "check_seconds": 0.000182015,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 4,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0014945670000088285,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06078304099992238,
++        "total_seconds": 0.060361685,
++        "conversion_seconds": 0.001414416,
++        "solve_seconds": 0.05876271,
++        "check_seconds": 0.000184128
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06078304099992238,
++          "total_seconds": 0.060361685,
++          "conversion_seconds": 0.001414416,
++          "solve_seconds": 0.05876271,
++          "check_seconds": 0.000184128,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 4,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0015909730000203126,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.05858918900003118,
++        "total_seconds": 0.058138318,
++        "conversion_seconds": 0.000479244,
++        "solve_seconds": 0.05746476,
++        "check_seconds": 0.000193522
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.05858918900003118,
++          "total_seconds": 0.058138318,
++          "conversion_seconds": 0.000479244,
++          "solve_seconds": 0.05746476,
++          "check_seconds": 0.000193522,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 5,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.001470710999910807,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.05932819400004519,
++        "total_seconds": 0.058932788,
++        "conversion_seconds": 0.000511323,
++        "solve_seconds": 0.058246211,
++        "check_seconds": 0.000174634
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.05932819400004519,
++          "total_seconds": 0.058932788,
++          "conversion_seconds": 0.000511323,
++          "solve_seconds": 0.058246211,
++          "check_seconds": 0.000174634,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 5,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0014557389999936277,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06079817499994533,
++        "total_seconds": 0.060419062,
++        "conversion_seconds": 0.00138345,
++        "solve_seconds": 0.058856142,
++        "check_seconds": 0.00017906
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06079817499994533,
++          "total_seconds": 0.060419062,
++          "conversion_seconds": 0.00138345,
++          "solve_seconds": 0.058856142,
++          "check_seconds": 0.00017906,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "baseline",
++      "repeat": 6,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.0014871960001983098,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.060453003000020544,
++        "total_seconds": 0.060031727,
++        "conversion_seconds": 0.001572114,
++        "solve_seconds": 0.0582726,
++        "check_seconds": 0.000186501
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.060453003000020544,
++          "total_seconds": 0.060031727,
++          "conversion_seconds": 0.001572114,
++          "solve_seconds": 0.0582726,
++          "check_seconds": 0.000186501,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    },
++    {
++      "label": "new",
++      "repeat": 6,
++      "case": "partition-mip",
++      "n": 12000,
++      "m": 2000,
++      "nnz": 12000,
++      "model_construction_seconds": 0.001730443000269588,
++      "reference_objective": 20261.0,
++      "median": {
++        "wall_seconds": 0.06082794899975852,
++        "total_seconds": 0.060394675,
++        "conversion_seconds": 0.000355708,
++        "solve_seconds": 0.059857063,
++        "check_seconds": 0.000181424
++      },
++      "runs": [
++        {
++          "wall_seconds": 0.06082794899975852,
++          "total_seconds": 0.060394675,
++          "conversion_seconds": 0.000355708,
++          "solve_seconds": 0.059857063,
++          "check_seconds": 0.000181424,
++          "objective": 20261.0,
++          "status": "optimal",
++          "iterations": 0,
++          "nodes": 0,
++          "best_bound": 20261.0,
++          "residuals": null
++        }
++      ]
++    }
++  ],
++  "benchmark_sha256": "7e77a1db95abf905447d4d1f520544737fd21c01d0821a47593d8bf6335855dd"
++}
+diff --git a/docs/iteration-3-plan.md b/docs/iteration-3-plan.md
+new file mode 100644
+index 0000000..fbb065c
+--- /dev/null
++++ b/docs/iteration-3-plan.md
+@@ -0,0 +1,128 @@
++# Iteration 3 plan — efficient, faithful HiGHS model loading
++
++16 October 2026. Base: reviewed public `main` at
++`a7a04074747a99048810204efe0421b4093c9fb4` (iteration 2, version 0.3.0).
++
++## Review and scope
++
++The base adds reviewed outward-rounded conservative bounds and margin-dual
++examples for one-sided columns. Preserve their arithmetic, exact-oracle tests,
++statuses and availability behavior. The GTOC target card remains incomplete;
++this iteration must not claim performance on an unavailable application.
++
++The efficiency target is the adapter's setup path. Every solve currently
++copies immutable CSR data through `highs::RowProblem`: per-column growable
++index/value vectors, flattening into CSC, and copying costs/bounds into the
++builder before HiGHS imports them. This adds allocation and memory traffic
++before LP/MIP search. The safe binding itself ultimately uses the bulk C API.
++The pinned HiGHS 1.15.0 API accepts CSR directly, allowing those intermediates
++to be removed while retaining the same solver and independent checks.
++
++A related correctness issue is visible in the existing order: the adapter
++loads the matrix before applying `small_matrix_value=1e-12`. HiGHS's initial
++threshold is 1e-9, so some supported nonzero coefficients can be discarded
++before the intended option takes effect. Reproduce this on the base and fix
++it as part of arranging the new import path.
++
++## Measurement first
++
++Reproduce the reviewed base tests. Before modifying the adapter, build a release
++wheel and use `examples/benchmark_efficiency.py` to record setup, engine,
++independent-check and end-to-end times on four fixed fixtures:
++
++1. A 100,000-column row-free LP, to expose column allocation overhead.
++2. A 40,000-row/column sparse LP with 200,000 entries and an analytic optimum,
++   explicitly an import fixture rather than a hard optimization problem.
++3. A balanced 60-by-80 transportation LP requiring a simplex solve.
++4. A 12,000-binary-variable partition MIP with an analytic optimum.
++
++Keep model construction outside each timed solve and report it separately.
++Use existing `BackendReport` phase times; no new telemetry API is necessary.
++Warm each case, record every run, and compare identical fixtures using separately
++installed baseline/new wheels. Alternate process order in the final comparison.
++Require the same accepted objectives, unchanged residual thresholds and record
++iteration/node counts. Use medians, ranges and full raw JSON; never add CI timing
++thresholds. Report negative or neutral results as well as improvements.
++
++## Implementation
++
++Baseline reproduced: 71 Rust tests plus one doctest and 94 compiled Python
++tests pass. A three-run profile measured median setup times of 3.37 ms (box),
++8.88 ms (sparse import), 0.64 ms (transport) and 1.37 ms (partition). Setup is
++only part of end-to-end time: approximately 23%, 9%, 5% and 2%, respectively,
++in this initial sample. Therefore the main expected gain is reduced import
++overhead; engine-dominated workloads may show little total improvement.
++The small-coefficient regression fails on the base with a false `Infeasible`
++status for an analytically feasible minimization LP.
++
++- Create an empty handle owned by the existing safe `highs::Model` wrapper.
++  Apply existing typed settings before importing user data.
++- Add one narrow, documented unsafe boundary in `ffi.rs` calling
++  `Highs_passLp` or `Highs_passMip` with `kHighsMatrixFormatRowwise`.
++- Borrow original cost, bound and coefficient slices for the synchronous C
++  call. Convert `usize` CSR indices to checked `HighsInt` buffers; allocate
++  an integrality buffer only for a MIP. Pass sense and offset in the same call.
++- Preserve canonical row ordering, finite/infinite bounds, empty rows,
++  row-free models, explicit zeros, variable domains, error handling, starts,
++  cancellation and cooperative time-budget semantics. HiGHS copies the arrays;
++  the adapter retains no borrowed pointer after import.
++- Preserve warning handling for legal imports, including explicit zeros. Check
++  that the imported nonzero count equals the count of stored nonzero values,
++  so unexpected coefficient removal cannot silently change a model.
++- Keep the core and Python API unchanged except version 0.4.0. This path applies
++  to all normal HiGHS solves without a new option. Do not remove independent
++  primal/dual checks to make a timing result look better.
++- No persistent native handle, basis reuse, matrix mutation API, native search
++  algorithm, new dependency or parallelism in this iteration. Those require
++  a distinct workload contract and lifecycle design.
++
++## Correctness and release gates
++
++- Existing Rust, compiled Python and dummy-only suites, including all exact
++  conservative-bound oracles, margin duals, cancellation, limits, starts and
++  independent worker tests.
++- New analytic LP/MIP cases for coefficients between 1e-12 and 1e-9 in both
++  senses, plus rejection at/below the documented lower threshold.
++- Sparse import cases with explicit zeros, empty/free rows, unused columns,
++  fixed and ranged bounds, objective offsets and mixed domains. Compare LP
++  residuals and MIP objective/bound against analytic or enumerated answers.
++- Deterministic generated small LPs/MIPs checked against exhaustive integer
++  oracles where applicable, plus identical benchmark objectives across wheels.
++- Formatting, Clippy (native and feature-disabled), debug Rust tests, rustdoc,
++  Rust 1.85 compatibility, strict Python type checking and clean wheel installs.
++- Re-run bound availability. Preserve and report all available/unavailable
++  counts; never weaken tolerances or interval arithmetic to obtain speed.
++- Add benchmark smoke checks to CI, retain historical evidence, and package
++  full source, plan, results, raw measurements and reproduction commands.
++
++## Stop rule and follow-up
++
++Keep the optimization if it reduces setup cost on the large import fixtures
++without an unexplained material regression on the transportation or partition
++cases. If engine time dominates those cases, report the limited end-to-end
++benefit rather than adding unrelated changes. Application data is still needed
++to choose basis reuse, batching, parallel workers or native LP/MIP components.
++
++## Completion record
++
++Implemented as version 0.4.0 with the planned API-compatible bulk CSR path.
++The small-coefficient regression now passes. All 74 Rust tests plus one
++doctest, 102 native Python tests and 71 dummy-only tests pass, as do Rust 1.85,
++formatting, Clippy, rustdoc and mypy. Bound availability matches the reviewed
++base. Seven alternating baseline/new measurements show 2.4–4.1× faster setup;
++median end-to-end reductions are 8.3% (box), 11.6% (sparse import), 2.9%
++(transport) and 2.1% (partition). The small engine-dominated improvements have
++overlapping timing ranges. Full source, tests, raw measurements and detailed
++limits are in `docs/iteration-3-results.md` and
++`docs/iteration-3-validation.md` in the source ZIP.
++
++## Primary implementation references
++
++- Pinned HiGHS source, `highs/interfaces/highs_c_api.h` and `Highs.cpp` from
++  the `highs-sys=1.15.0` crate: CSR import, synchronous copying, model validation.
++- Pinned `highs=2.4.0`, `src/matrix_row.rs` and `src/lib.rs`: builder allocation,
++  CSC flattening, safe handle ownership and warning handling.
++- [HiGHS source](https://github.com/ERGO-Code/HiGHS) and
++  [Rust bindings](https://github.com/rust-or/highs).
++- Repository `docs/iteration-2-results.md`, `docs/safe-dual-bounds.md` and
++  `docs/target-card.md` for the current correctness and application boundaries.
+diff --git a/docs/iteration-3-results.md b/docs/iteration-3-results.md
+new file mode 100644
+index 0000000..f40c61f
+--- /dev/null
++++ b/docs/iteration-3-results.md
+@@ -0,0 +1,145 @@
++# Iteration 3 results — efficient HiGHS model loading
++
++Version 0.4.0 · 16 October 2026, America/Lima.
++Base: reviewed public `main` at `a7a04074747a99048810204efe0421b4093c9fb4`.
++[Plan](iteration-3-plan.md) · [API](api.md) · [Validation](iteration-3-validation.md).
++
++## Review and implementation
++
++The merged iteration 2 conservative-bound kernel and margin-dual work are
++preserved. Before changes, the reviewed base passed 71 Rust tests plus one
++doctest and 94 compiled Python tests. The target GTOC application is still
++unavailable, so this iteration measures adapter overhead on explicit fixtures.
++
++The new path passes the existing immutable CSR arrays directly into HiGHS's
++bulk C API. It removes the `RowProblem` builder's per-column growable vectors,
++CSC flattening and additional cost/bound/value copies. The Rust side now
++allocates checked native-width CSR index buffers and, only for a MIP, an
++integrality vector. Original floating-point arrays are borrowed for the call;
++HiGHS copies them and converts CSR to its internal format. This is reduced
++copying, not a zero-copy solver.
++
++The existing safe `highs::Model` wrapper owns the native handle. Settings are
++applied before import; sense, offset, bounds and domains are loaded together.
++The narrowly scoped unsafe boundary documents dimensions, checked index
++conversion, pointer lifetimes and the pinned HiGHS copy behavior. Empty rows,
++row-free models, free/fixed variables and explicit zero coefficients are covered.
++An imported nonzero-count check prevents silent coefficient removal.
++
++No public Rust/Python signature or setting changed. Normal `backend="highs"`
++solves use the new path automatically. Independent acceptance checks, starts,
++limits, cancellation, status mapping and the conservative-bound algorithm are
++unchanged. There is still a fresh native handle per solve. Only package
++versions changed in Cargo.lock; external dependency pins are unchanged.
++
++## Correctness defect fixed while removing setup overhead
++
++The old adapter set `small_matrix_value=1e-12` after importing the model.
++HiGHS had already applied its default `1e-9` threshold by then. Thus a matrix
++coefficient accepted by the adapter could disappear before optimization.
++
++A deterministic reproducer is
++
++```text
++minimize x + 7
++subject to 2^(-32) x >= 2^(-12),  0 <= x <= 2^21.
++```
++
++Its exact optimum is `x=2^20`, objective `2^20+7`. The old code returned
++`Infeasible`. The new loader applies the threshold before import and returns
++the correct optimum for both LP and integer domains. The maximization variant
++with the opposite row side also passes. The same regressions run through Rust
++and the compiled Python wrapper. Coefficients at or below the documented
++`1e-12` minimum remain explicitly unsupported. Explicit zeros may be removed;
++unexpected removal of any nonzero causes a backend error before solving.
++
++## Efficiency measurements
++
++Release abi3 wheels for baseline 0.3.0 and new 0.4.0, installed separately.
++Linux x86_64, CPython 3.12.14, Rust 1.99.1, HiGHS 1.15.0. Seven measured runs
++per version and case, with alternating baseline/new process order. Each child
++warms one solve before measuring one. Compilation was complete before this
++comparison; no build or other validation job ran alongside it.
++
++| Fixture | Variables | Rows | Stored entries | Purpose |
++| --- | ---: | ---: | ---: | --- |
++| Box LP | 100,000 | 0 | 0 | Column-import overhead; analytic optimum |
++| Sparse import LP | 40,000 | 40,000 | 200,000 | Sparse loading and presolve; analytic optimum |
++| Transportation LP | 4,800 | 140 | 9,600 | Balanced transportation requiring simplex work |
++| Partition MIP | 12,000 binary | 2,000 | 12,000 | Assignment by disjoint groups; analytic optimum |
++
++Median times below are milliseconds. End-to-end means the Python `solve` call,
++including backend validation, native work and result conversion; it excludes
++Python process startup and initial construction of the immutable `Model`.
++
++| Fixture | Setup before | Setup after | Setup ratio | Total before | Total after | Total time reduction |
++| --- | ---: | ---: | ---: | ---: | ---: | ---: |
++| Box LP | 4.023 | 1.644 | 2.45× | 16.335 | 14.980 | 8.3% |
++| Sparse import LP | 11.397 | 4.628 | 2.46× | 103.824 | 91.799 | 11.6% |
++| Transportation LP | 0.619 | 0.198 | 3.13× | 12.234 | 11.876 | 2.9% |
++| Partition MIP | 1.492 | 0.366 | 4.08× | 62.640 | 61.314 | 2.1% |
++
++All 56 measured solves returned independently accepted optima. Objectives,
++iteration counts and node counts are identical across versions and repetitions:
++0 for the two import LP objectives, 16,980 for transportation (188 iterations),
++and 20,261 for the partition MIP (zero search nodes). The other fixtures use
++zero simplex iterations. These easy MIP/import fixtures do not measure hard
++branch-and-bound search.
++
++The 8–12% total reduction on large import fixtures is useful, while the
++2–3% changes on engine-dominated cases are small relative to timing variation.
++Their runtime ranges overlap; do not interpret those small differences as a
++general search speedup. Even some unchanged phases move in the opposite
++direction (for example, checks on the box LP). This iteration's demonstrated
++mechanism is faster setup. No peak-memory reduction or 16-core throughput
++number is claimed.
++
++[Raw results](iteration-3-efficiency-results.json) include every run, phase,
++objective, residual, iteration/node count, model-construction time, wall-time
++range, versions and benchmark-script hash. Phase medians are independent and
++need not sum to the median total. The benchmark checks acceptance without
++asserting a runtime threshold.
++
++Reproduce using the new wheel and a separate baseline environment:
++
++```bash
++python examples/benchmark_efficiency.py --repeats 7 \
++    --baseline-python /path/to/baseline-venv/bin/python > comparison.json
++```
++
++Run without `--baseline-python` for a single-version profile. CI includes an
++acceptance smoke check on these fixtures, not a speed gate.
++
++## Correctness and compatibility results
++
++- **74 Rust tests plus one doctest pass.** New regressions cover small
++  coefficients, sparse boundary cases and rejection of unexpected coefficient
++  removal. Existing analytic/random LP checks and exhaustive integer oracles
++  remain intact.
++- **102 compiled Python tests pass.** The feature-disabled build passes 71
++  tests and skips 31 HiGHS-only cases; unavailable backend dispatch raises
++  `NotImplementedError`.
++- Formatting, native/dummy Clippy with warnings denied, rustdoc with warnings
++  denied, Rust 1.85.0 compatibility and strict Python mypy checks pass.
++  Both Rust examples and all four existing Python examples pass.
++- [Bound availability](iteration-3-bound-availability.md) reproduces reviewed
++  iteration 2: ordinary duals give finite bounds on 100/100 bounded-box,
++  5/100 one-sided, 2/100 partly free and 15/100 mixed-integer relaxation cases.
++  Margin duals give 100/100, 100/100, 4/100 and 100/100 respectively. Every
++  finite result passes the example's exact rational Lagrangian check.
++
++See [validation](iteration-3-validation.md) for commands, environment and limits.
++The earlier review's 210,000-case external oracle is historical evidence;
++this delivery reruns the checked-in exact-oracle suites and examples, not that
++uncommitted review probe. Cross-platform CI is configured but was not executed
++on GitHub during this task.
++
++## Remaining efficiency work
++
++HiGHS engine time dominates the transportation and partition cases. Improving
++it requires actual workload evidence: repeated related LPs could justify basis
++reuse and incremental objective/bound changes; independent models could justify
++batching or a 16-worker throughput study. The current change reduces import
++work without adding persistent solver state. It does not implement a native
++Rust simplex/MIP engine, cut generation, parallel search, or safe pruning.
++The GTOC target card remains deliberately incomplete.
+diff --git a/docs/iteration-3-validation.md b/docs/iteration-3-validation.md
+new file mode 100644
+index 0000000..684ea84
+--- /dev/null
++++ b/docs/iteration-3-validation.md
+@@ -0,0 +1,79 @@
++# Iteration 3 validation
++
++Version 0.4.0. Base: `a7a04074747a99048810204efe0421b4093c9fb4`.
++Local platform: Linux x86_64, CPython 3.12.14, Rust 1.99.1, maturin 1.9.4,
++PyO3 0.30.1, HiGHS 1.15.0 / `highs` 2.4.0. Rust 1.85.0 is checked separately.
++The source changes do not update any external dependency.
++
++| Gate | Local result |
++| --- | --- |
++| Reviewed baseline Rust suite | 71 tests + 1 doctest pass |
++| Reviewed baseline release wheel, original Python suite | 94 pass |
++| New Rust debug suite | 74 tests + 1 doctest pass |
++| New release wheel in a fresh virtual environment | 102 Python tests pass |
++| Feature-disabled wheel in an isolated import directory | 71 pass, 31 HiGHS-only cases skipped; dispatch rejects the unavailable backend |
++| Rust formatting and `git diff --check` | Pass |
++| Clippy, native and feature-disabled, warnings denied | Pass |
++| Rustdoc, warnings denied | Pass |
++| Strict mypy on the Python package | Pass |
++| Rust 1.85.0 workspace/all-target check | Pass |
++| Both Rust examples and all four Python examples | Pass |
++| Bound availability, seed 1, 100 models per family | Reviewed counts preserved; no finite bound fails the exact rational oracle |
++| Alternating release-wheel efficiency comparison | 7 runs per version/case; all 56 measured solves accepted; objectives and iteration/node counts match |
++
++New Rust tests exercise tiny supported coefficients in both senses and LP/MIP
++modes; explicit zeros, empty/free/ranged rows, fixed/free/unused variables;
++objective offsets, input immutability and native nonzero-count mismatch rejection.
++New Python cases exercise the small-coefficient fix, the unchanged rejection
++threshold, and an all-zero matrix with empty rows. Existing randomized LP/MIP
++oracles, conservative-bound exact arithmetic, starts, limits, cancellation,
++parallel workers and binding-contract tests remain in the suite.
++
++The small-coefficient regression was run on the reviewed base before changing
++the adapter: it returned `Infeasible` for the feasible minimization LP. After
++implementation, all four sense/domain combinations return their analytic optimum.
++
++## Reproduction
++
++Install a C++ compiler, CMake and libclang. With Rust >=1.85 and Python >=3.10:
++
++```bash
++python3 -m venv .venv
++source .venv/bin/activate
++python -m pip install 'maturin>=1.9.4,<2' pytest numpy mypy
++bash scripts/check.sh
++mypy --strict python/lp_ip_craft
++RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
++cargo +1.85.0 check --workspace --all-targets --locked
++python examples/benchmark_efficiency.py --repeats 7 > efficiency.json
++```
++
++The local validation installed a built release wheel in a fresh environment
++instead of the script's editable `maturin develop` step. With maturin 1.9.4,
++`PYO3_BUILD_EXTENSION_MODULE=1` was supplied during wheel builds. The dummy-only
++wheel was built separately with `--no-default-features` and installed in an
++isolated directory, never on top of the normal wheel.
++
++For a baseline comparison, install version 0.3.0 from the base commit in a
++separate environment, keep the new version active, and run:
++
++```bash
++python examples/benchmark_efficiency.py --repeats 7 \
++    --baseline-python /path/to/baseline-venv/bin/python > comparison.json
++```
++
++The script uses shell-free child processes, alternating baseline/new order.
++Each child constructs the same fixture, warms one solve and measures one solve.
++Process launch and Python model construction are excluded from solve wall time;
++model construction is recorded separately. The existing backend phase timers
++exclude backend input validation and Python result conversion. Full Python
++`solve` wall time includes both. Every case checks status, objective and primal
++feasibility; LP cases also recompute the independent dual residuals.
++
++CI adds a benchmark acceptance smoke check without a timing threshold. The
++existing Linux/macOS/Windows and Python 3.10/3.14 matrix remains configured;
++these remote jobs were not run as part of this local task. No GTOC application,
++16-core throughput, peak-memory campaign or basis reuse was measured.
++
++Detailed [results](iteration-3-results.md), [raw timings](iteration-3-efficiency-results.json)
++and [bound availability](iteration-3-bound-availability.md) accompany this record.
+diff --git a/examples/benchmark_efficiency.py b/examples/benchmark_efficiency.py
+new file mode 100644
+index 0000000..75239f0
+--- /dev/null
++++ b/examples/benchmark_efficiency.py
+@@ -0,0 +1,142 @@
++"""Reproducible adapter benchmarks; setup fixtures are not GTOC applications.
++
++python examples/benchmark_efficiency.py --repeats 5 > efficiency.json
++Run the same script against each installed wheel. No timing threshold is asserted.
++"""
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++from pathlib import Path
++import platform
++import statistics
++import subprocess
++import sys
++import time
++
++import lp_ip_craft as lp
++
++
++def cases():
++    # Analytic optimum at the variable lower bounds. These two intentionally
++    # expose import/check overhead rather than hard optimization search.
++    n = 100_000
++    yield "box-lp", dict(objective=[1.] * n, lower=[0.] * n, upper=[1.] * n,
++                         row_lower=[], row_upper=[], indptr=[0], indices=[], values=[]), 0.0
++    n, width = 40_000, 5
++    indices = [j for i in range(n) for j in sorted((i + k * 7919) % n for k in range(width))]
++    yield "sparse-import-lp", dict(objective=[1.] * n, lower=[0.] * n, upper=[1.] * n,
++        row_lower=[-float('inf')] * n, row_upper=[3.] * n,
++        indptr=list(range(0, n * width + 1, width)), indices=indices, values=[1.] * (n * width)), 0.0
++    origins, destinations = 60, 80
++    n = origins * destinations
++    rows = [list(range(i * destinations, (i + 1) * destinations)) for i in range(origins)]
++    rows += [list(range(j, n, destinations)) for j in range(destinations)]
++    indptr = [0]
++    for row in rows:
++        indptr.append(indptr[-1] + len(row))
++    rhs = [float(destinations)] * origins + [float(origins)] * destinations
++    yield "transport-lp", dict(objective=[1. + (j * 37 + j // destinations * 11) % 101 for j in range(n)],
++        lower=[0.] * n, upper=[float('inf')] * n, row_lower=rhs, row_upper=rhs,
++        indptr=indptr, indices=[j for row in rows for j in row], values=[1.] * (2 * n)), None
++    groups, width = 2000, 6
++    costs = [float(1 + (i * 37 + j * 13) % 97) for i in range(groups) for j in range(width)]
++    n = groups * width
++    yield "partition-mip", dict(objective=costs, objective_offset=7.,
++        lower=[0.] * n, upper=[1.] * n, kinds=['binary'] * n,
++        row_lower=[1.] * groups, row_upper=[1.] * groups,
++        indptr=list(range(0, n + 1, width)), indices=list(range(n)), values=[1.] * n), \
++        7. + sum(min(costs[i:i+width]) for i in range(0, n, width))
++
++
++def run_case(name, data, reference, repeats):
++    began = time.perf_counter()
++    model = lp.Model(**data)
++    construction = time.perf_counter() - began
++    runs = []
++    for k in range(repeats + 1):
++        began = time.perf_counter()
++        r = lp.solve(model, backend='highs')
++        wall = time.perf_counter() - began
++        assert r.status == 'optimal', r.message
++        assert r.evaluation is not None and r.evaluation.feasible_candidate
++        objective = r.evaluation.objective
++        if reference is not None:
++            assert abs(objective - reference) <= 1e-7 * (1 + abs(reference))
++        residuals = None
++        if r.duals is not None:
++            check = lp.lp_residuals(model, r.candidate, r.duals)
++            residuals = vars(check)
++            assert check.primal <= 1e-7
++            assert check.stationarity <= 1e-7 * (1 + max(map(abs, data['objective'])))
++            assert check.dual_sign <= 1e-7 * (1 + max(map(abs, data['objective'])))
++            assert check.duality_gap <= 1e-7
++        if k:
++            runs.append(dict(wall_seconds=wall, **{key: getattr(r.backend, key) for key in
++                ('total_seconds', 'conversion_seconds', 'solve_seconds', 'check_seconds')},
++                objective=objective, status=r.status, iterations=r.iterations, nodes=r.nodes,
++                best_bound=r.best_bound, residuals=residuals))
++    keys = ('wall_seconds', 'total_seconds', 'conversion_seconds', 'solve_seconds', 'check_seconds')
++    return dict(case=name, n=len(data['objective']), m=len(data['row_lower']), nnz=len(data['values']),
++                model_construction_seconds=construction, reference_objective=reference,
++                median={key: statistics.median(r[key] for r in runs) for key in keys}, runs=runs)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
++    parser.add_argument('--repeats', type=int, default=5)
++    parser.add_argument('--case', action='append', help='Only this case (repeatable)')
++    parser.add_argument('--baseline-python', help='Python executable with the baseline wheel installed; compare in alternating process order')
++    args = parser.parse_args()
++    if args.repeats < 1:
++        parser.error('--repeats must be positive')
++    selected = [(name, data, ref) for name, data, ref in cases() if not args.case or name in args.case]
++    if not selected:
++        parser.error('no matching cases')
++    if args.baseline_python:
++        result = compare(args.baseline_python, [name for name, _, _ in selected], args.repeats)
++    else:
++        result = dict(version=lp.__version__, python=platform.python_version(), platform=platform.platform(),
++                      repeats=args.repeats, warmups=1,
++                      cases=[run_case(name, data, ref, args.repeats) for name, data, ref in selected])
++    result['benchmark_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
++    print(json.dumps(result, indent=2, allow_nan=False))
++
++
++def compare(baseline_python, names, repeats):
++    """Each child warms once and measures once. Wall time excludes process launch."""
++    # Preserve the virtual-environment executable path, including its symlink.
++    executables = {'baseline': str(Path(baseline_python).absolute()), 'new': sys.executable}
++    all_runs, summaries = [], []
++    metadata = {}
++    for name in names:
++        for rep in range(repeats):
++            for label in (('baseline', 'new') if rep % 2 == 0 else ('new', 'baseline')):
++                child = subprocess.run([executables[label], str(Path(__file__).resolve()),
++                                        '--case', name, '--repeats', '1'],
++                                       check=True, capture_output=True, text=True)
++                result = json.loads(child.stdout)
++                metadata[label] = {k: result[k] for k in ('version', 'python', 'platform')}
++                case = result['cases'][0]
++                all_runs.append(dict(label=label, repeat=rep, **case))
++        groups = {label: [r['runs'][0] for r in all_runs if r['case'] == name and r['label'] == label]
++                  for label in executables}
++        first = groups['baseline'][0]
++        for rows in groups.values():
++            for row in rows:
++                if abs(row['objective'] - first['objective']) > 1e-7 * (1 + abs(first['objective'])):
++                    raise RuntimeError(f'objective mismatch for {name}')
++        keys = ('wall_seconds', 'total_seconds', 'conversion_seconds', 'solve_seconds', 'check_seconds')
++        summary = {label: {key: statistics.median(r[key] for r in rows) for key in keys}
++                   for label, rows in groups.items()}
++        summaries.append(dict(case=name, median=summary,
++            wall_range={label: [min(r['wall_seconds'] for r in rows), max(r['wall_seconds'] for r in rows)]
++                        for label, rows in groups.items()},
++            ratios={key: summary['baseline'][key] / summary['new'][key] for key in keys}))
++    return dict(repeats=repeats, warmups_per_process=1, order='alternating baseline/new',
++                metadata=metadata, summary=summaries, runs=all_runs)
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/pyproject.toml b/pyproject.toml
+index 5a590ab..d98bf9d 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -4,7 +4,7 @@ build-backend = "maturin"
+ 
+ [project]
+ name = "lp-ip-craft"
+-version = "0.3.0"
++version = "0.4.0"
+ description = "LP and mixed-integer LP in Rust with a HiGHS backend and Python bindings"
+ readme = "README.md"
+ license = "MIT"
+diff --git a/python/lp_ip_craft/__init__.py b/python/lp_ip_craft/__init__.py
+index c960348..1837910 100644
+--- a/python/lp_ip_craft/__init__.py
++++ b/python/lp_ip_craft/__init__.py
+@@ -29,7 +29,7 @@ from ._native import lp_residuals as _lp_residuals
+ from ._native import safe_dual_bound as _safe_dual_bound
+ from ._native import solve_native as _solve_native
+ 
+-__version__ = "0.3.0"
++__version__ = "0.4.0"
+ 
+ __all__ = [
+     "BACKENDS",
+diff --git a/tests/test_bulk_load.py b/tests/test_bulk_load.py
+new file mode 100644
+index 0000000..42c258e
+--- /dev/null
++++ b/tests/test_bulk_load.py
+@@ -0,0 +1,45 @@
++"""Bulk-import behavior at the compiled Python boundary."""
++import math
++
++import pytest
++
++from lp_ip_craft import BACKENDS, Model, lp_residuals, solve
++
++pytestmark = pytest.mark.skipif('highs' not in BACKENDS, reason='built without HiGHS')
++
++
++@pytest.mark.parametrize('sense', ['minimize', 'maximize'])
++@pytest.mark.parametrize('kind', ['continuous', 'integer'])
++def test_supported_small_matrix_entry_is_not_dropped(sense, kind):
++    rhs, optimum = 2.**-12, 2.**20
++    model = Model(objective=[1.], objective_offset=7., sense=sense,
++        lower=[0.], upper=[2*optimum], kinds=[kind], indptr=[0, 1], indices=[0], values=[2.**-32],
++        row_lower=[rhs if sense == 'minimize' else -math.inf],
++        row_upper=[rhs if sense == 'maximize' else math.inf])
++    r = solve(model, backend='highs')
++    assert r.status == 'optimal', r.message
++    assert r.candidate == [optimum]
++    assert r.evaluation.objective == optimum + 7.
++    if r.duals is not None:
++        assert max(vars(lp_residuals(model, r.candidate, r.duals)).values()) <= 1e-7
++    else:
++        assert r.best_bound == optimum + 7.
++
++
++@pytest.mark.parametrize('coefficient', [1e-12, -1e-12, 1e-13])
++def test_unsupported_matrix_entries_remain_explicit_errors(coefficient):
++    model = Model(objective=[1.], lower=[0.], upper=[1.], indptr=[0, 1],
++                  indices=[0], values=[coefficient], row_lower=[-1.], row_upper=[1.])
++    with pytest.raises(NotImplementedError, match='matrix value'):
++        solve(model, backend='highs')
++
++
++def test_empty_rows_and_only_explicit_zeros():
++    # nnz > 0 at the interface, but all entries legitimately vanish on import.
++    model = Model(objective=[1., -1.], lower=[0., 0.], upper=[1., 1.],
++                  indptr=[0, 0, 2], indices=[0, 1], values=[0., -0.],
++                  row_lower=[0., -math.inf], row_upper=[0., math.inf])
++    r = solve(model, backend='highs')
++    assert r.status == 'optimal' and r.candidate == [0., 1.]
++    assert r.evaluation.row_activity == [0., 0.]
++    assert r.evaluation.objective == -1.

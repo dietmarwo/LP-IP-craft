@@ -1,0 +1,25 @@
+[package]
+name="performance-native"
+version="0.1.0"
+edition="2024"
+publish=false
+[features]
+default=["backend_native","evolved","search-diagnostics"]
+search-diagnostics=[]
+evolved=[]
+backend_native=[]
+backend_highs=[]
+kernel-profile=["lp-ip-craft-native/kernel-profile"]
+basis-replay=["kernel-profile", "lp-ip-craft-native/basis-replay"]
+[dependencies]
+lp-ip-craft={path="../../crates/core"}
+lp-ip-craft-native={path="../../crates/native"}
+serde_json="1"
+[[bin]]
+name="performance-native"
+path="../shared/main.rs"
+
+[[bin]]
+name="basis-replay"
+path="../shared/replay.rs"
+required-features=["basis-replay"]

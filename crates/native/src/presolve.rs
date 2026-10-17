@@ -106,3 +106,64 @@ mod tests {
         assert!(active_rows(&model, &Bounds::free(2), true)[0]);
     }
 }
+
+/// Integer-valued row activities permit exact inward rounding of bounds.
+/// This is a MIP-equivalent relaxation, not an LP-equivalent reduction.
+pub(crate) fn strengthen_integer_rows(model: &Model) -> lp_ip_craft::Result<Option<Model>> {
+    if !model.is_mip() {
+        return Ok(None);
+    }
+    let a = model.matrix();
+    let mut data = None;
+    for i in 0..model.m() {
+        let integral = (a.pattern.indptr[i]..a.pattern.indptr[i + 1]).all(|k| {
+            let v = a.values[k];
+            v == 0.
+                || (model.kinds()[a.pattern.indices[k]].is_integral()
+                    && v.fract() == 0.
+                    && v.abs() <= 9_007_199_254_740_991.)
+        });
+        if !integral {
+            continue;
+        }
+        let (l, u) = (model.rows().lower[i].ceil(), model.rows().upper[i].floor());
+        if l <= u && (l != model.rows().lower[i] || u != model.rows().upper[i]) {
+            let d = data.get_or_insert_with(|| model.data().clone());
+            d.rows.lower[i] = l;
+            d.rows.upper[i] = u;
+        }
+    }
+    data.map(Model::new).transpose()
+}
+
+#[cfg(test)]
+mod integer_tests {
+    use super::*;
+    use lp_ip_craft::*;
+    #[test]
+    fn row_rounding_requires_exact_integral_activity() {
+        let m = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![1., 1., 1.],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![-2.; 3], vec![2.; 3]),
+            kinds: vec![
+                VariableKind::Integer,
+                VariableKind::Integer,
+                VariableKind::Continuous,
+            ],
+            matrix: CsrMatrix::from_dense(
+                4,
+                3,
+                &[-1., 2., 0., 0., 1., 1., 0.5, 1., 0., 1., 0., 0.],
+            )
+            .unwrap(),
+            rows: Bounds::new(vec![-1.7, -1.7, -1.7, 0.2], vec![2.9, 2.9, 2.9, 0.8]),
+        })
+        .unwrap();
+        let r = strengthen_integer_rows(&m).unwrap().unwrap();
+        assert_eq!(r.rows().lower, vec![-1., -1.7, -1.7, 0.2]);
+        assert_eq!(r.rows().upper, vec![2., 2.9, 2.9, 0.8]);
+        assert_eq!(m.rows().upper[0], 2.9);
+    }
+}

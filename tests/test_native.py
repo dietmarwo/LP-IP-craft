@@ -117,3 +117,42 @@ def test_infeasible_root_cannot_certify_tolerance_start_as_optimal():
     m=make(c=[1.],a=[[1.],[1.]],up=[1.],rl=[-math.inf,1.],ru=[0.99999995,math.inf],kinds=["integer"])
     r=solve(m,backend="native",start=[1.])
     assert r.status=="numerical_failure" and r.candidate==[1.]
+
+
+def test_strengthened_integer_rows_do_not_block_continuous_certification():
+    import json
+    from pathlib import Path
+    case = json.loads((Path(__file__).parent / "data/mip_integer_row_certification.json").read_text())
+    m = Model(**case["model"])
+    r = solve(m, backend="native")
+    assert r.status == "optimal"
+    assert abs(r.evaluation.objective - case["objective"]) < 1e-6
+    assert r.nodes < 1000
+
+@pytest.mark.parametrize("method", ["auto", "eta", "forrest_tomlin"])
+def test_basis_update_controls(method):
+    r = solve(make(), backend="native", backend_options=NativeOptions(basis_update=method))
+    assert r.status == "optimal"
+    assert r.evaluation.objective == pytest.approx(9.)
+    assert dict(r.backend.effective_options)["basis_update"] == method
+
+def test_unknown_basis_update_is_rejected():
+    with pytest.raises(ValueError, match="basis_update"):
+        solve(make(), backend="native", backend_options=NativeOptions(basis_update="unknown"))
+
+@pytest.mark.parametrize("ordering", ["auto", "natural", "min_degree"])
+@pytest.mark.parametrize("adaptive", [False, True])
+def test_factorization_controls(ordering, adaptive):
+    r = solve(make(), backend="native", backend_options=NativeOptions(
+        factor_ordering=ordering, factor_pivot_search=8, adaptive_refactor=adaptive))
+    assert r.status == "optimal" and r.evaluation.objective == pytest.approx(9.)
+    assert dict(r.backend.effective_options)["factor_ordering"] == ordering
+
+@pytest.mark.parametrize("search", [0, 65])
+def test_invalid_factor_pivot_search(search):
+    with pytest.raises(ValueError, match="factor_pivot_search"):
+        solve(make(), backend="native", backend_options=NativeOptions(factor_pivot_search=search))
+
+def test_invalid_factor_ordering():
+    with pytest.raises(ValueError, match="factor_ordering"):
+        solve(make(), backend="native", backend_options=NativeOptions(factor_ordering="unknown"))

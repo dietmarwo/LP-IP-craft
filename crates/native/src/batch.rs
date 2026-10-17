@@ -1,0 +1,74 @@
+//! Independent-job parallelism; no shared basis, tree or numerical workspace.
+use crate::*;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
+impl NativeSolver {
+    /// Solve independent models in input order using 1..=16 workers. Each job
+    /// has its own limits and result/error. A shared cancellation token affects
+    /// running and queued jobs. Component workers are disabled inside the pool.
+    /// No warm starts are supplied by this API. Models are borrowed, not copied.
+    pub fn solve_batch(
+        &self,
+        models: &[&Model],
+        options: &Options,
+        workers: usize,
+        cancel: &CancellationToken,
+    ) -> Result<Vec<Result<SolveResult>>> {
+        self.settings.validate()?;
+        options.validate()?;
+        if !(1..=16).contains(&workers) {
+            return Err(Error::InvalidInput(
+                "batch workers must be in 1..=16".into(),
+            ));
+        }
+        let mut settings = self.settings.clone();
+        settings.component_threads = 1;
+        let workers = workers.min(models.len());
+        if workers <= 1 {
+            let mut solver = NativeSolver::new(settings);
+            return Ok(models
+                .iter()
+                .map(|model| solver.solve(model, options, None, cancel))
+                .collect());
+        }
+        let next = AtomicUsize::new(0);
+        let out: Mutex<Vec<Option<Result<SolveResult>>>> =
+            Mutex::new((0..models.len()).map(|_| None).collect());
+        std::thread::scope(|scope| -> Result<()> {
+            let mut handles = Vec::new();
+            for _ in 0..workers {
+                let (settings, next, out) = (settings.clone(), &next, &out);
+                let handle = std::thread::Builder::new()
+                    .name("lpip-batch".into())
+                    .spawn_scoped(scope, move || -> Result<()> {
+                        let mut solver = NativeSolver::new(settings);
+                        loop {
+                            let i = next.fetch_add(1, Ordering::Relaxed);
+                            if i >= models.len() {
+                                break;
+                            }
+                            let r = solver.solve(models[i], options, None, cancel);
+                            out.lock().map_err(|_| {
+                                Error::Backend("batch result lock poisoned".into())
+                            })?[i] = Some(r);
+                        }
+                        Ok(())
+                    })
+                    .map_err(|e| Error::Backend(format!("batch worker creation: {e}")))?;
+                handles.push(handle);
+            }
+            for h in handles {
+                h.join()
+                    .map_err(|_| Error::Backend("batch worker panicked".into()))??;
+            }
+            Ok(())
+        })?;
+        out.into_inner()
+            .map_err(|_| Error::Backend("batch result lock poisoned".into()))?
+            .into_iter()
+            .map(|r| r.ok_or_else(|| Error::Backend("batch result missing".into())))
+            .collect()
+    }
+}
