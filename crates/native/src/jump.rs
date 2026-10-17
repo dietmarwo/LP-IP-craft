@@ -31,13 +31,23 @@ pub(crate) fn search(
             }
         }
     }
+    // Integer columns move only within their integral bounds, so a clamped
+    // value can never be fractional.
+    let box_of = |j: usize| {
+        if model.kinds()[j].is_integral() {
+            (bounds.lower[j].ceil(), bounds.upper[j].floor())
+        } else {
+            (bounds.lower[j], bounds.upper[j])
+        }
+    };
     let initial = |j: usize| {
         let v = if model.kinds()[j].is_integral() {
             seed[j].round()
         } else {
             seed[j]
         };
-        v.max(bounds.lower[j]).min(bounds.upper[j])
+        let (l, u) = box_of(j);
+        v.max(l).min(u)
     };
     let mut x: Vec<f64> = (0..n).map(initial).collect();
     let mut lhs = vec![0.; m];
@@ -67,7 +77,8 @@ pub(crate) fn search(
             }
             dirty[j] = false;
             let old = x[j];
-            let mut candidates = vec![old, bounds.lower[j], bounds.upper[j]];
+            let (lower, upper) = box_of(j);
+            let mut candidates = vec![old, lower, upper];
             for &(i, c) in &incident[j] {
                 for b in [model.rows().lower[i], model.rows().upper[i]] {
                     if b.is_finite() {
@@ -83,7 +94,7 @@ pub(crate) fn search(
             }
             let mut best = (f64::NEG_INFINITY, old);
             for v in candidates {
-                let v = v.max(bounds.lower[j]).min(bounds.upper[j]);
+                let v = v.max(lower).min(upper);
                 if !v.is_finite() || v == old {
                     continue;
                 }
@@ -145,10 +156,11 @@ pub(crate) fn search(
             // A deterministic restart explores a different corner while keeping fixed columns.
             if stall % 32 == 0 {
                 for (j, value) in x.iter_mut().enumerate() {
+                    let (lower, upper) = box_of(j);
                     let v = if (j + stall / 32) % 3 == 0 {
-                        bounds.upper[j]
+                        upper
                     } else {
-                        bounds.lower[j]
+                        lower
                     };
                     *value = if v.is_finite() {
                         if model.kinds()[j].is_integral() {
@@ -218,5 +230,35 @@ mod tests {
         assert!(x.is_none() && t.steps == 0);
         c.cancel();
         assert!(search(&m, m.variables(), &[0.4; 3], &b, 100).0.is_none());
+    }
+    #[test]
+    fn integer_columns_stay_integral_under_fractional_bounds() {
+        // x is integer in [0, 2.5]; the seed rounds to 3, which the bound clamps.
+        let m = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![0.],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.], vec![2.5]),
+            kinds: vec![VariableKind::Integer],
+            matrix: CsrMatrix::from_dense(1, 1, &[1.]).unwrap(),
+            rows: Bounds::new(vec![1.], vec![f64::INFINITY]),
+        })
+        .unwrap();
+        let s = NativeOptions::default();
+        let c = CancellationToken::default();
+        let b = Budget {
+            start: std::time::Instant::now(),
+            settings: &s,
+            cancel: &c,
+            pivots: 0,
+        };
+        let (x, _) = search(&m, m.variables(), &[2.7], &b, 100);
+        let x = x.expect("a feasible integral point exists");
+        assert_eq!(x, vec![2.]);
+        assert!(
+            check::evaluate(&m, &x, &Tolerances::default())
+                .unwrap()
+                .feasible_candidate
+        );
     }
 }

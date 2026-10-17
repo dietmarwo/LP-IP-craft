@@ -128,6 +128,11 @@ pub(crate) fn separate(
                     if cancel.is_cancelled() {
                         break;
                     }
+                    if w > capacity {
+                        // The row alone forces x_j = 0; leave it out of the cut
+                        // and keep lifting the remaining items.
+                        continue;
+                    }
                     if let Some(max) = max_profit(&terms, capacity - w, &mut stats.work) {
                         let alpha = (rhs - max).max(0);
                         if alpha > 0 {
@@ -215,6 +220,43 @@ mod tests {
             {
                 assert!(
                     check::evaluate(&m, &x, &Tolerances::default())
+                        .unwrap()
+                        .feasible_candidate
+                );
+            }
+        }
+    }
+    #[test]
+    fn items_heavier_than_the_capacity_do_not_stop_lifting() {
+        // x3 alone exceeds the capacity; x4 must still be lifted after it.
+        let mut m = Model::new(ModelData {
+            sense: Sense::Maximize,
+            objective: vec![1.; 5],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; 5], vec![1.; 5]),
+            kinds: vec![VariableKind::Binary; 5],
+            matrix: CsrMatrix::from_dense(1, 5, &[3., 3., 3., 9., 4.]).unwrap(),
+            rows: Bounds::new(vec![f64::NEG_INFINITY], vec![5.]),
+        })
+        .unwrap();
+        let original = m.clone();
+        let x = [0.55, 0.55, 0.55, 0., 0.];
+        let stats = separate(&mut m, &x, true, &CancellationToken::default()).unwrap();
+        assert!(stats.added > 0);
+        let a = m.matrix();
+        let lifted_x4 = (1..m.m()).any(|i| {
+            (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
+                .any(|k| a.pattern.indices[k] == 4 && a.values[k] > 0.)
+        });
+        assert!(lifted_x4, "x4 should be lifted past the infeasible item x3");
+        for mask in 0..32 {
+            let p: Vec<_> = (0..5).map(|j| ((mask >> j) & 1) as f64).collect();
+            if check::evaluate(&original, &p, &Tolerances::default())
+                .unwrap()
+                .feasible_candidate
+            {
+                assert!(
+                    check::evaluate(&m, &p, &Tolerances::default())
                         .unwrap()
                         .feasible_candidate
                 );
