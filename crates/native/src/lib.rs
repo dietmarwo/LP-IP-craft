@@ -9,6 +9,7 @@ mod incumbent;
 mod lp;
 mod lu;
 mod presolve;
+mod propagate;
 
 use lp::{Basis, Lp};
 use lp_ip_craft::{
@@ -504,6 +505,8 @@ struct Counters {
     unverified_infeasible: u64,
     heuristic_candidates: u64,
     pruned_nodes: u64,
+    propagated_infeasible: u64,
+    implied_bounds: u64,
 }
 
 impl LpIpSolver for NativeSolver {
@@ -594,6 +597,7 @@ impl LpIpSolver for NativeSolver {
                 consider(model, s.primal.clone(), options, &mut result, &mut pool)?;
             }
         }
+        let domain = propagate::Domain::new(model, settings.presolve);
         let root = model.variables();
         let mut node_box = NodeBox {
             bounds: root.clone(),
@@ -672,6 +676,23 @@ impl LpIpSolver for NativeSolver {
                 }
             };
             node_box.enter(root, &node.branch, lp)?;
+            let before = node_box.changed.len();
+            if !domain.apply(&mut node_box.bounds, &mut node_box.changed, &budget) {
+                counters.propagated_infeasible += 1;
+                if node.depth == 0 {
+                    status = if result.candidate.is_some() {
+                        Status::NumericalFailure
+                    } else {
+                        Status::Infeasible
+                    };
+                    break;
+                }
+                continue;
+            }
+            for &j in &node_box.changed[before..] {
+                lp.set_bound(j, node_box.bounds.lower[j], node_box.bounds.upper[j])?;
+            }
+            counters.implied_bounds += (node_box.changed.len() - before) as u64;
             let warm = if !settings.node_reoptimization {
                 if !fresh {
                     lp.reset_to_slack();
@@ -947,6 +968,11 @@ impl LpIpSolver for NativeSolver {
                 ),
                 ("heuristic_candidates", counters.heuristic_candidates),
                 ("pruned_nodes", counters.pruned_nodes),
+                (
+                    "propagated_infeasible_nodes",
+                    counters.propagated_infeasible,
+                ),
+                ("implied_bounds", counters.implied_bounds),
                 ("certification_solves", certifier.attempts),
                 ("certified_incumbents", certifier.certified),
             ]
