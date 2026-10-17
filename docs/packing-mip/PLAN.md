@@ -201,3 +201,15 @@ in child bound chains; include the excluded regions' certified lower bound in
 the aggregate global bound. Expose a disable switch. Gate with independent
 exhaustive optima, frozen safe-bound checks, sibling restoration, and all held-
 out MIPs. Preserve pre-fixing raw results for comparison.
+
+### Step 5b completed
+
+Certified opposite-domain fixing retained. Five paired rounds against the
+pre-fixing candidate: nodecopy 105 -> 42 nodes, 1.411 -> .702 ms; multi-
+knapsack18 47 -> 22 nodes, .516 -> .318 ms; heldout1018 59 -> 39 nodes,
+.836 -> .565 ms; integer-knapsack32 108 -> 53 nodes, .782 -> .571 ms.
+Selection20 15 -> 11 nodes; selection32 unchanged and 14% slower in this run.
+The fixing switch is enabled by default; optional root probing remains off.
+Original-point exhaustive optimality and limit tests pass. Final oracle and
+benchmark runs now include this change. The public-summary script was also
+fixed to retain unsupported-error records without assuming node counts exist.

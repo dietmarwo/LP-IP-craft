@@ -49,16 +49,60 @@ fn root_probes_preserve_optimum_and_obey_shared_limits() {
     for strong in [false, true] {
         let r = run(&model, strong, None, None);
         assert_eq!(r.status, Status::Optimal);
-        assert_eq!(r.evaluation.unwrap().objective, best);
+        assert_eq!(r.evaluation.as_ref().unwrap().objective, best);
+        if let Some(b) = r.best_bound {
+            assert!(b >= best - 1e-7);
+        }
     }
     let r = run(&model, true, Some(1), None);
     assert!(r.nodes <= 1);
     assert_eq!(probes(&r), 0);
     let r = run(&model, true, Some(3), None);
     assert!(r.nodes <= 3);
+    if let Some(b) = r.best_bound {
+        assert!(b >= best - 1e-7);
+    }
     assert!(probes(&r) <= 2);
     let r = run(&model, true, None, Some(45));
     assert!(r.iterations <= 45);
     let r = run(&model, true, None, None);
     assert!(probes(&r) > 0);
+}
+
+#[test]
+fn conservative_fixings_reduce_search_without_changing_the_optimum() {
+    let model = fixtures::legacy("nodecopy");
+    let mut results = Vec::new();
+    for fixing in [false, true] {
+        let r = NativeSolver::new(NativeOptions {
+            reduced_cost_fixing: fixing,
+            component_threads: 1,
+            decompose: false,
+            ..Default::default()
+        })
+        .solve(
+            &model,
+            &Options::default(),
+            None,
+            &CancellationToken::default(),
+        )
+        .unwrap();
+        assert_eq!(r.status, Status::Optimal);
+        results.push(r);
+    }
+    assert_eq!(
+        results[0].evaluation.as_ref().unwrap().objective,
+        results[1].evaluation.as_ref().unwrap().objective
+    );
+    assert!(results[1].nodes < results[0].nodes);
+    let fixed: u64 = results[1]
+        .backend
+        .effective_options
+        .iter()
+        .find(|(k, _)| k == "diagnostics.reduced_cost_fixings")
+        .unwrap()
+        .1
+        .parse()
+        .unwrap();
+    assert!(fixed > 0);
 }

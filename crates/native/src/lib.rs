@@ -20,8 +20,8 @@ pub mod replay;
 
 use lp::{Basis, Lp};
 use lp_ip_craft::{
-    BackendReport, Bounds, CancellationToken, Error, LpIpSolver, Model, Options, Result, Sense,
-    SolveResult, StartStatus, Status, WarmStart, check, safe_dual_bound_with_bounds,
+    BackendReport, Bounds, CancellationToken, Duals, Error, LpIpSolver, Model, Options, Result,
+    Sense, SolveResult, StartStatus, Status, WarmStart, check, safe_dual_bound_with_bounds,
 };
 use std::sync::Arc;
 use std::time::Instant;
@@ -101,6 +101,8 @@ pub struct NativeOptions {
     pub node_reoptimization: bool,
     /// Bounded root lookahead on eligible multi-constraint MIPs.
     pub strong_branching: bool,
+    /// Fix integer bound values using conservative opposite-domain dual bounds.
+    pub reduced_cost_fixing: bool,
     /// Independently checked rounding and bounded unit-move incumbents.
     pub incumbent_heuristic: bool,
     /// Tighten conservative bounds to a verified integral objective lattice.
@@ -135,6 +137,7 @@ impl Default for NativeOptions {
             redundant_row_min_ratio: 1.0,
             node_reoptimization: true,
             strong_branching: false,
+            reduced_cost_fixing: true,
             incumbent_heuristic: true,
             objective_lattice: true,
             decompose: true,
@@ -575,6 +578,7 @@ struct Counters {
     implied_bounds: u64,
     strong_probes: u64,
     strong_pivots: u64,
+    reduced_cost_fixings: u64,
 }
 
 impl LpIpSolver for NativeSolver {
@@ -954,12 +958,30 @@ impl LpIpSolver for NativeSolver {
                 branch
             };
             if let Some(j) = branch {
+                let fixes = if settings.reduced_cost_fixing && lattice && node.depth <= 8 {
+                    reduced_cost_fixes(model, node_bounds, &x, &duals, pool.upper, bound, &budget)?
+                } else {
+                    Vec::new()
+                };
+                let mut child_parent = node.branch.clone();
+                if !fixes.is_empty() {
+                    closed_bound = closed_bound.min(pool.upper);
+                    counters.reduced_cost_fixings += fixes.len() as u64;
+                    for (column, value) in fixes {
+                        child_parent = Some(Arc::new(Branch {
+                            parent: child_parent,
+                            j: column,
+                            lower: value,
+                            upper: value,
+                        }));
+                    }
+                }
                 let (l, u) = (node_bounds.lower[j], node_bounds.upper[j]);
                 let (floor, ceil) = (x[j].floor(), x[j].ceil());
                 let child = |lower: f64, upper: f64, up: bool| {
                     (lower <= upper).then(|| Node {
                         branch: Some(Arc::new(Branch {
-                            parent: node.branch.clone(),
+                            parent: child_parent.clone(),
                             j,
                             lower,
                             upper,
@@ -1094,6 +1116,7 @@ impl LpIpSolver for NativeSolver {
                 ("implied_bounds", counters.implied_bounds),
                 ("strong_branch_probes", counters.strong_probes),
                 ("strong_branch_pivots", counters.strong_pivots),
+                ("reduced_cost_fixings", counters.reduced_cost_fixings),
                 ("certification_solves", certifier.attempts),
                 ("certified_incumbents", certifier.certified),
             ]
@@ -1119,6 +1142,74 @@ impl LpIpSolver for NativeSolver {
             .is_some_and(|t| result.backend.total_seconds > t);
         Ok(result)
     }
+}
+
+/// Each removed opposite domain has a conservative bound >= the certified
+/// incumbent. Combining these fixings therefore preserves every improving
+/// integer point. No floating-point reduced cost is used as a pruning proof.
+fn reduced_cost_fixes(
+    model: &Model,
+    bounds: &Bounds,
+    x: &[f64],
+    duals: &Duals,
+    upper: f64,
+    parent_bound: Option<f64>,
+    budget: &Budget<'_>,
+) -> Result<Vec<(usize, f64)>> {
+    let Some(parent_bound) = parent_bound.filter(|_| upper.is_finite()) else {
+        return Ok(Vec::new());
+    };
+    let gap = (upper - parent_bound).max(0.);
+    let mut trials = Vec::new();
+    for (j, &value) in x.iter().enumerate() {
+        if !model.kinds()[j].is_integral()
+            || value.fract() != 0.
+            || bounds.upper[j] - bounds.lower[j] < 1.
+        {
+            continue;
+        }
+        let rc = oriented(model, duals.reduced_costs[j]);
+        let gain = if value == bounds.lower[j] {
+            rc
+        } else if value == bounds.upper[j] {
+            -rc
+        } else {
+            continue;
+        };
+        if gain.is_finite() && gain > 0. && gain >= 0.9 * gap {
+            trials.push((j, value, gain));
+        }
+    }
+    trials.sort_by(|a, b| b.2.total_cmp(&a.2).then(a.0.cmp(&b.0)));
+    trials.truncate(16);
+    if trials.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut opposite = bounds.clone();
+    let mut fixes = Vec::new();
+    for (j, value, _) in trials {
+        if budget.stop().is_some() {
+            break;
+        }
+        let (lo, hi) = (opposite.lower[j], opposite.upper[j]);
+        if value == lo {
+            opposite.lower[j] = lo + 1.;
+        } else {
+            opposite.upper[j] = hi - 1.;
+        }
+        let proof = safe_dual_bound_with_bounds(model, &opposite, &duals.row_duals)?
+            .bound
+            .map(|v| oriented(model, v));
+        if proof.is_some_and(|b| b >= upper) {
+            opposite.lower[j] = value;
+            opposite.upper[j] = value;
+            fixes.push((j, value));
+        } else {
+            opposite.lower[j] = lo;
+            opposite.upper[j] = hi;
+        }
+    }
+    Ok(fixes)
 }
 
 /// Limit lookahead to models where several coupled long rows can justify it.
@@ -1358,6 +1449,7 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ),
         ("node_reoptimization", s.node_reoptimization.to_string()),
         ("strong_branching", s.strong_branching.to_string()),
+        ("reduced_cost_fixing", s.reduced_cost_fixing.to_string()),
         ("incumbent_heuristic", s.incumbent_heuristic.to_string()),
         ("objective_lattice", s.objective_lattice.to_string()),
     ]

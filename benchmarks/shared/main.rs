@@ -176,6 +176,7 @@ fn main() {
             component_threads: workers,
             decompose: !is_family,
             node_reoptimization: warm,
+            reduced_cost_fixing: args.get(12).is_none_or(|s| s != "no_fix"),
             strong_branching: args.get(11).is_some_and(|s| s == "strong"),
             basis_update: match args.get(6).map(String::as_str).unwrap_or("auto") {
                 "eta" => lp_ip_craft_native::BasisUpdate::Eta,

@@ -32,7 +32,7 @@ for backend,name,size in order:
     rows=[r for r in out['records'] if r['round']>0 and (r['backend'],r['fixture'],r['size'])==(backend,name,size)]
     runs=[r['runs'][1] for r in rows if 'runs' in r]
     d=dict(backend=backend,fixture=name,size=size,processes=len(rows),errors=sum('error' in r for r in rows),accepted=sum(r['accepted'] for r in runs),statuses=[r['status'] for r in runs])
-    if runs:d.update(median_ms=statistics.median(r['seconds']*1000 for r in runs),range_ms=[min(r['seconds']*1000 for r in runs),max(r['seconds']*1000 for r in runs)],nodes=statistics.median(r['nodes'] for r in runs),iterations=statistics.median(r['iterations'] for r in runs),objectives=[r['checks'].get('objective') for r in runs if r.get('checks')],rss_mib=statistics.median(r['peak_rss_kib']/1024 for r in rows if 'runs' in r))
+    if runs:d.update(median_ms=statistics.median(r['seconds']*1000 for r in runs),range_ms=[min(r['seconds']*1000 for r in runs),max(r['seconds']*1000 for r in runs)],nodes=statistics.median(r['nodes'] for r in runs if 'nodes' in r) if any('nodes' in r for r in runs) else None,iterations=statistics.median(r['iterations'] for r in runs if 'iterations' in r) if any('iterations' in r for r in runs) else None,objectives=[r['checks'].get('objective') for r in runs if r.get('checks')],rss_mib=statistics.median(r['peak_rss_kib']/1024 for r in rows if 'runs' in r))
     out['summary'].append(d)
 for name,size in cases:
     objs=[v for r in out['summary'] if r['fixture']==name and r['size']==int(size) and r['accepted']==a.rounds for v in r.get('objectives',[])]

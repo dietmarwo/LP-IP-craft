@@ -113,6 +113,7 @@ class NativeOptions:
     redundant_row_min_ratio: float = 1.0
     node_reoptimization: bool = True
     strong_branching: bool = False
+    reduced_cost_fixing: bool = True
     incumbent_heuristic: bool = True
     objective_lattice: bool = True
     decompose: bool = True

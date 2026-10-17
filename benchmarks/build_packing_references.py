@@ -16,7 +16,7 @@ for f in ['main.rs','fixtures.rs','extended.rs','imports.rs']:
 # This is the sole harness control unavailable in the 0.19 API. Its release
 # default is false in 0.20, so removing it preserves the matched configuration.
 main=(root/'shared/main.rs').read_text()
-(root/'shared/baseline-main.rs').write_text('\n'.join(l for l in main.splitlines() if 'strong_branching:' not in l)+'\n')
+(root/'shared/baseline-main.rs').write_text('\n'.join(l for l in main.splitlines() if 'strong_branching:' not in l and 'reduced_cost_fixing:' not in l)+'\n')
 (root/'Cargo.toml').write_text('[workspace]\nmembers=["baseline","highs"]\nresolver="3"\n[profile.release]\ncodegen-units=1\n')
 for label,repo,backend,entry in [('baseline',a.baseline_repo,'native','baseline-main.rs'),('highs',a.highs_repo,'highs','main.rs')]:
     dest=root/label;dest.mkdir(exist_ok=True)
