@@ -165,3 +165,24 @@ reuse and restore the parent basis; they only choose a branch and initialize
 pseudocosts, never prune from unchecked numerical estimates. Count every probe
 as a processed relaxation and charge all pivots/time to the global budget.
 Expose a switch for ablation. Keep only if paired hard-MIP results justify it.
+
+### Step 5 completed
+
+Bounded root strong branching implemented behind `strong_branching=false`.
+Four probes count toward the shared node/pivot/time limits and never prune;
+restoration occurs even on failed probes. Default activation rejected: nodecopy
+105 -> 121 relaxations, 1.58 -> 1.79 ms. Product-score pseudocost smoothing
+also rejected as the default (nodecopy 111). Retained two-observation smoothing
+with a balanced 0.8*min+0.2*max degradation score: nodecopy remains 105, multi-
+knapsack18 51 -> 47 nodes, multi-knapsack20 82 -> 80. Single-row and selection
+node counts unchanged. Gains modest; no claim of mature branch-and-cut strength.
+Added exhaustive nodecopy optimality plus node/pivot-budget tests with probes.
+
+### Step 6 implementation decision
+
+Final coverage adds ten original public MPS inputs (seven LPs, three MIPs),
+unchanged finite/infinite bounds, and separately seeded binary holdouts. Public
+MIPs with infinite variable bounds remain visible unsupported cases. Rebuild
+baseline and HiGHS harnesses with identical generators/checks, omitting only
+new solver controls absent in baseline. Run standard, holdout, public, large-
+irregular and kernel-profile comparisons in separate sequential batches.

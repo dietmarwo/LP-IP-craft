@@ -384,6 +384,7 @@ fn native_settings(
             "incumbent_heuristic" => settings.incumbent_heuristic = field(&value, &key)?,
             "objective_lattice" => settings.objective_lattice = field(&value, &key)?,
             "node_reoptimization" => settings.node_reoptimization = field(&value, &key)?,
+            "strong_branching" => settings.strong_branching = field(&value, &key)?,
             "steepest_edge" => settings.steepest_edge = field(&value, &key)?,
             "redundant_row_min_ratio" => settings.redundant_row_min_ratio = field(&value, &key)?,
             "redundant_rows" => settings.redundant_rows = field(&value, &key)?,

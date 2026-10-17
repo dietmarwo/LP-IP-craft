@@ -74,7 +74,7 @@ def parse(path):
 def main():
     p=argparse.ArgumentParser();p.add_argument('--source',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
     records=[]
-    for name in ['afiro','adlittle','israel','egout','avgas','flugpl','bell5']:
+    for name in ['afiro','adlittle','israel','e226','etamacro','25fv47','egout','avgas','flugpl','bell5']:
         src=a.source/(name+'.mps');m=parse(src);dest=a.output/src.name;shutil.copyfile(src,dest)
         A=csr_matrix((m['values'],m['indices'],m['indptr']),shape=(len(m['row_lower']),len(m['objective'])))
         integral=np.array([k!='continuous' for k in m['kinds']],int)

@@ -1,5 +1,5 @@
-mod fixtures;
 mod extended;
+mod fixtures;
 mod imports;
 use lp_ip_craft::*;
 use serde_json::{Value, json};
@@ -101,12 +101,38 @@ fn main() {
     let workers: usize = args.get(4).unwrap().parse().unwrap();
     let repeats: usize = args.get(5).unwrap().parse().unwrap();
     assert!(repeats > 0);
-    let is_family = matches!(name, "packing" | "network" | "irregular" | "selection" | "packing-wide" | "packing-permuted" | "long-row-mip" | "integer-knapsack" | "multi-knapsack" | "graph-mip");
+    let is_family = matches!(
+        name,
+        "packing"
+            | "network"
+            | "irregular"
+            | "selection"
+            | "packing-wide"
+            | "packing-permuted"
+            | "long-row-mip"
+            | "integer-knapsack"
+            | "multi-knapsack"
+            | "graph-mip"
+    );
     let began = Instant::now();
     let (model, expected) = match name {
-        "packing-wide" | "packing-permuted" => { let (m,e)=extended::packing(size,name=="packing-permuted"); (m,Some(e)) }
-        "long-row-mip" | "integer-knapsack" => { let (m,e)=extended::knapsack(size,name=="integer-knapsack"); (m,Some(e)) }
-        "multi-knapsack" | "graph-mip" => { let m=extended::binary(size,name=="graph-mip");let e=exact_binary(&m); (m,Some(e)) }
+        "mixed-overload" => {
+            let (m, e) = extended::mixed(size);
+            (m, Some(e))
+        }
+        "packing-wide" | "packing-permuted" => {
+            let (m, e) = extended::packing(size, name == "packing-permuted");
+            (m, Some(e))
+        }
+        "long-row-mip" | "integer-knapsack" => {
+            let (m, e) = extended::knapsack(size, name == "integer-knapsack");
+            (m, Some(e))
+        }
+        "multi-knapsack" | "graph-mip" => {
+            let m = extended::binary(size, name == "graph-mip");
+            let e = exact_binary(&m);
+            (m, Some(e))
+        }
         "packing" => {
             let (m, e) = fixtures::packing(size);
             (m, Some(e))
@@ -132,7 +158,10 @@ fn main() {
             };
             (m, e)
         }
-        _ if name.starts_with("json=") => { let (m,e)=extended::json_file(&name[5..]); (m,Some(e)) },
+        _ if name.starts_with("json=") => {
+            let (m, e) = extended::json_file(&name[5..]);
+            (m, Some(e))
+        }
         _ => imports::fixture(name),
     };
     let construction = began.elapsed().as_secs_f64();
@@ -146,6 +175,7 @@ fn main() {
             component_threads: workers,
             decompose: !is_family,
             node_reoptimization: warm,
+            strong_branching: args.get(11).is_some_and(|s| s == "strong"),
             basis_update: match args.get(6).map(String::as_str).unwrap_or("auto") {
                 "eta" => lp_ip_craft_native::BasisUpdate::Eta,
                 "ft" => lp_ip_craft_native::BasisUpdate::ForrestTomlin,
@@ -234,7 +264,9 @@ fn main() {
             }
         }
         #[cfg(feature = "kernel-profile")]
-        { record["kernel_profile"] = json!(lp_ip_craft_native::profile::snapshot()); }
+        {
+            record["kernel_profile"] = json!(lp_ip_craft_native::profile::snapshot());
+        }
         runs.push(record);
     }
     let rss = std::fs::read_to_string("/proc/self/status")

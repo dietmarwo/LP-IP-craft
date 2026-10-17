@@ -8,10 +8,19 @@ fn main() {
     let mut runs = Vec::new();
     for run in 0..=repeats {
         profile::reset();
-        let result = replay::run_with_options(&case, 20_000_000, args.get(3).map_or(4, |s|s.parse().unwrap()), args.get(4).is_some_and(|s|s=="min_degree")).unwrap();
+        let result = replay::run_with_options(
+            &case,
+            20_000_000,
+            args.get(3).map_or(4, |s| s.parse().unwrap()),
+            args.get(4).is_some_and(|s| s == "min_degree"),
+        )
+        .unwrap();
         runs.push(json!({"run":run,"factor_seconds":result.factor_seconds,"solve_seconds":result.solve_seconds,
             "entries":result.entries,"dense_dimension":result.dense_dimension,"pivot_fingerprint":format!("{:016x}",result.pivot_fingerprint),
             "backward_error":result.max_backward_error,"accepted":result.max_backward_error < 1e-9,"kernel_profile":profile::snapshot()}));
     }
-    println!("{}",json!({"file":path.file_name().unwrap().to_str(),"m":case.columns.len(),"nnz":case.columns.iter().map(Vec::len).sum::<usize>(),"rhs":case.rhs.len(),"runs":runs}));
+    println!(
+        "{}",
+        json!({"file":path.file_name().unwrap().to_str(),"m":case.columns.len(),"nnz":case.columns.iter().map(Vec::len).sum::<usize>(),"rhs":case.rhs.len(),"runs":runs})
+    );
 }

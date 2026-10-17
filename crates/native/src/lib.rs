@@ -99,6 +99,8 @@ pub struct NativeOptions {
     pub redundant_row_min_ratio: f64,
     /// Reoptimize branch-and-bound children from the parent basis.
     pub node_reoptimization: bool,
+    /// Bounded root lookahead on eligible multi-constraint MIPs.
+    pub strong_branching: bool,
     /// Independently checked rounding and bounded unit-move incumbents.
     pub incumbent_heuristic: bool,
     /// Tighten conservative bounds to a verified integral objective lattice.
@@ -132,6 +134,7 @@ impl Default for NativeOptions {
             redundant_rows: true,
             redundant_row_min_ratio: 1.0,
             node_reoptimization: true,
+            strong_branching: false,
             incumbent_heuristic: true,
             objective_lattice: true,
             decompose: true,
@@ -482,16 +485,17 @@ impl Pseudocosts {
     fn known(&self) -> bool {
         self.total_count[0] + self.total_count[1] > 0
     }
-    /// Variable average, else the average over all variables, else 1.
+    /// Variable observations smoothed by two observations of the global mean.
     fn estimate(&self, j: usize, up: bool) -> f64 {
         let d = usize::from(up);
-        if self.count[j][d] > 0 {
-            self.sum[j][d] / f64::from(self.count[j][d])
-        } else if self.total_count[d] > 0 {
+        let prior = if self.total_count[d] > 0 {
             self.total[d] / f64::from(self.total_count[d])
         } else {
-            1.0
-        }
+            1.
+        };
+        // Two global observations keep a single degenerate child from making
+        // a variable appear permanently free to branch on in one direction.
+        (self.sum[j][d] + 2. * prior) / (f64::from(self.count[j][d]) + 2.)
     }
 }
 
@@ -569,6 +573,8 @@ struct Counters {
     pruned_nodes: u64,
     propagated_infeasible: u64,
     implied_bounds: u64,
+    strong_probes: u64,
+    strong_pivots: u64,
 }
 
 impl LpIpSolver for NativeSolver {
@@ -921,6 +927,32 @@ impl LpIpSolver for NativeSolver {
                 result.backend.check_seconds += checks.elapsed().as_secs_f64();
                 continue;
             }
+            let mut probe_seconds = 0.;
+            let branch = if branch.is_some()
+                && node.depth == 0
+                && settings.strong_branching
+                && settings.node_reoptimization
+                && eligible_strong_branching(model)
+            {
+                let probe_started = Instant::now();
+                let chosen = strong_branch(
+                    model,
+                    node_bounds,
+                    &x,
+                    objective,
+                    options,
+                    lp,
+                    &mut pseudocosts,
+                    &mut budget,
+                    &mut result.nodes,
+                    &mut counters,
+                )?;
+                probe_seconds = probe_started.elapsed().as_secs_f64();
+                result.backend.solve_seconds += probe_seconds;
+                chosen.or(branch)
+            } else {
+                branch
+            };
             if let Some(j) = branch {
                 let (l, u) = (node_bounds.lower[j], node_bounds.upper[j]);
                 let (floor, ceil) = (x[j].floor(), x[j].ceil());
@@ -995,7 +1027,8 @@ impl LpIpSolver for NativeSolver {
                     all_bounds = false;
                 }
             }
-            result.backend.check_seconds += checks.elapsed().as_secs_f64();
+            result.backend.check_seconds +=
+                (checks.elapsed().as_secs_f64() - probe_seconds).max(0.);
         }
         if model.is_mip() {
             for o in open.iter().map(|o| &o.node).chain(dive.as_ref()) {
@@ -1059,6 +1092,8 @@ impl LpIpSolver for NativeSolver {
                     counters.propagated_infeasible,
                 ),
                 ("implied_bounds", counters.implied_bounds),
+                ("strong_branch_probes", counters.strong_probes),
+                ("strong_branch_pivots", counters.strong_pivots),
                 ("certification_solves", certifier.attempts),
                 ("certified_incumbents", certifier.certified),
             ]
@@ -1086,8 +1121,141 @@ impl LpIpSolver for NativeSolver {
     }
 }
 
+/// Limit lookahead to models where several coupled long rows can justify it.
+fn eligible_strong_branching(model: &Model) -> bool {
+    (12..=256).contains(&model.n())
+        && model.m() <= 512
+        && model.nnz() <= 10000
+        && model
+            .matrix()
+            .pattern
+            .indptr
+            .windows(2)
+            .filter(|w| w[1] - w[0] > 8)
+            .take(2)
+            .count()
+            == 2
+}
+
+#[allow(clippy::too_many_arguments)]
+fn strong_branch(
+    model: &Model,
+    bounds: &Bounds,
+    x: &[f64],
+    objective: f64,
+    options: &Options,
+    lp: &mut Lp,
+    pseudocosts: &mut Pseudocosts,
+    budget: &mut Budget<'_>,
+    nodes: &mut u64,
+    counters: &mut Counters,
+) -> Result<Option<usize>> {
+    let mut candidates: Vec<_> = (0..model.n())
+        .filter(|&j| {
+            model.kinds()[j].is_integral()
+                && (x[j] - x[j].round()).abs() > options.tolerances.integrality
+        })
+        .collect();
+    candidates.sort_by(|&a, &b| {
+        (x[b] - x[b].round())
+            .abs()
+            .total_cmp(&(x[a] - x[a].round()).abs())
+            .then(a.cmp(&b))
+    });
+    candidates.truncate(2);
+    if candidates.len() < 2 {
+        return Ok(None);
+    }
+    let basis = lp.snapshot();
+    let mut best = None;
+    let mut best_score = -1.;
+    for j in candidates {
+        let mut gains = [0.; 2];
+        let mut complete = true;
+        for (d, gain) in gains.iter_mut().enumerate() {
+            if budget.stop().is_some()
+                || budget.settings.node_limit.is_some_and(|cap| *nodes >= cap)
+            {
+                complete = false;
+                break;
+            }
+            let up = d == 1;
+            let (lo, hi) = if up {
+                (bounds.lower[j].max(x[j].ceil()), bounds.upper[j])
+            } else {
+                (bounds.lower[j], bounds.upper[j].min(x[j].floor()))
+            };
+            if lo > hi {
+                complete = false;
+                break;
+            }
+            lp.set_bound(j, lo, hi)?;
+            let mut settings = budget.settings.clone();
+            settings.iteration_limit = Some(
+                settings
+                    .iteration_limit
+                    .unwrap_or(u64::MAX)
+                    .min(budget.pivots.saturating_add(32)),
+            );
+            let mut probe = Budget {
+                start: budget.start,
+                settings: &settings,
+                cancel: budget.cancel,
+                pivots: budget.pivots,
+            };
+            let status = lp.solve(&mut probe, false);
+            counters.strong_pivots += probe.pivots - budget.pivots;
+            budget.pivots = probe.pivots;
+            *nodes += 1;
+            counters.strong_probes += 1;
+            if status.as_ref().is_ok_and(|s| *s == Status::Optimal) {
+                let point = lp.point();
+                let value = oriented(
+                    model,
+                    model
+                        .objective()
+                        .iter()
+                        .zip(&point)
+                        .map(|(c, v)| c * v)
+                        .sum(),
+                );
+                *gain = (value - objective).max(0.);
+                pseudocosts.record(
+                    Origin {
+                        j,
+                        up,
+                        distance: if up {
+                            x[j].ceil() - x[j]
+                        } else {
+                            x[j] - x[j].floor()
+                        },
+                        parent_objective: objective,
+                    },
+                    value,
+                );
+            } else {
+                complete = false;
+            }
+            // Restore bounds and basis even on a failed/limited probe. Its
+            // status is a branching hint only, never a pruning certificate.
+            lp.set_bound(j, bounds.lower[j], bounds.upper[j])?;
+            lp.restore(&basis);
+            // Numerical probe failures do not fail the main search.
+            let _ = status;
+        }
+        if complete {
+            let score = gains[0].max(1e-6) * gains[1].max(1e-6);
+            if score > best_score {
+                best_score = score;
+                best = Some(j);
+            }
+        }
+    }
+    Ok(best)
+}
+
 /// Branching variable among the fractional integer variables: best
-/// pseudocost product score once any history exists, else most fractional.
+/// balanced pseudocost score once any history exists, else most fractional.
 /// If rounding an integral-looking LP point does not certify, any integer
 /// variable with a nonzero fraction that can still be split inside its box.
 fn branching_variable(
@@ -1108,8 +1276,9 @@ fn branching_variable(
         fractional
             .map(|(j, f)| {
                 let down = x[j] - x[j].floor();
-                let score = (pseudocosts.estimate(j, false) * down).max(1e-6)
-                    * (pseudocosts.estimate(j, true) * (1.0 - down)).max(1e-6);
+                let a = (pseudocosts.estimate(j, false) * down).max(1e-6);
+                let b = (pseudocosts.estimate(j, true) * (1.0 - down)).max(1e-6);
+                let score = 0.8 * a.min(b) + 0.2 * a.max(b);
                 (j, score + 1e-12 * f)
             })
             .max_by(most)
@@ -1188,6 +1357,7 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
             s.redundant_row_min_ratio.to_string(),
         ),
         ("node_reoptimization", s.node_reoptimization.to_string()),
+        ("strong_branching", s.strong_branching.to_string()),
         ("incumbent_heuristic", s.incumbent_heuristic.to_string()),
         ("objective_lattice", s.objective_lattice.to_string()),
     ]

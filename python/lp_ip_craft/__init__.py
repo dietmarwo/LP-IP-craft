@@ -29,7 +29,7 @@ from ._native import lp_residuals as _lp_residuals
 from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 
-__version__ = "0.19.0"
+__version__ = "0.20.0"
 
 __all__ = [
     "BACKENDS",
@@ -112,6 +112,7 @@ class NativeOptions:
     redundant_rows: bool = True
     redundant_row_min_ratio: float = 1.0
     node_reoptimization: bool = True
+    strong_branching: bool = False
     incumbent_heuristic: bool = True
     objective_lattice: bool = True
     decompose: bool = True

@@ -1,13 +1,17 @@
 """Matched fresh-process comparison; every failure remains in the output."""
-import argparse,hashlib,json,statistics,subprocess
+import argparse,hashlib,json,statistics,subprocess,platform,os
 from pathlib import Path
 p=argparse.ArgumentParser();p.add_argument('--binary',action='append',required=True,help='label=/absolute/path')
 p.add_argument('--output',required=True);p.add_argument('--rounds',type=int,default=5)
-p.add_argument('--case',action='append',help='fixture:size');a=p.parse_args()
+p.add_argument('--case',action='append',help='fixture:size');p.add_argument('--public-corpus',type=Path);p.add_argument('--holdout',action='store_true');a=p.parse_args()
 bins=dict(s.split('=',1) for s in a.binary)
 cases=[s.split(':') for s in (a.case or ['packing:1024','packing:2048','packing:4096','packing-wide:256','packing-wide:1024','packing-permuted:1024','network:512','irregular:256','irregular:1024','nodecopy:0','selection:20','selection:32','long-row-mip:64','integer-knapsack:32','multi-knapsack:18','graph-mip:18'])]
+if a.public_corpus:
+    cases=[['json='+str(f.resolve()),'0'] for f in sorted(a.public_corpus.glob('*.json')) if f.name!='manifest.json']
+if a.holdout:
+    cases=[['multi-knapsack',str(s)] for s in [1018,2018,3018,4018]]+[['graph-mip',str(s)] for s in [1018,2018,3018]]+[['mixed-overload',str(s)] for s in [1016,2016,3016]]+[['integer-knapsack','48'],['long-row-mip','96']]
 assert a.rounds>0
-out={'protocol':'One discarded round; rotated/reversed fresh processes; one warmup and one measured solve; single thread; same 30s time, 100000 nodes and 1000000 simplex iterations. External checks excluded. No exclusive host.', 'binary_sha256':{k:hashlib.sha256(Path(v).read_bytes()).hexdigest() for k,v in bins.items()},'records':[]}
+out={'platform':platform.platform(),'affinity':sorted(os.sched_getaffinity(0)),'cpu':next((l.split(':',1)[1].strip() for l in Path('/proc/cpuinfo').read_text().splitlines() if l.startswith('model name')),'unknown'),'protocol':'One discarded round; rotated/reversed fresh processes; one warmup and one measured solve; single thread; same 30s time, 100000 nodes and 1000000 simplex iterations. External checks excluded. No exclusive host.', 'binary_sha256':{k:hashlib.sha256(Path(v).read_bytes()).hexdigest() for k,v in bins.items()},'records':[]}
 order=[(k,n,int(s)) for n,s in cases for k in bins];fingerprints={}
 for rnd in range(a.rounds+1):
     todo=order[rnd%len(order):]+order[:rnd%len(order)]

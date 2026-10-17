@@ -93,3 +93,28 @@ minimum-degree heuristic; it is not the COLAMD reference implementation. Dense
 rows and a symbolic-work cap limit ordering overhead. Auto uses it only on large
 bases after substantial dense fill was observed. `factor_pivot_search` accepts
 1..64; the default remains 4 after the measured search-budget sweep.
+
+## Packing, search and coverage (0.20)
+
+Detailed pre-implementation plan: `docs/packing-mip/PLAN.md`. New fixtures:
+packing-wide/permuted, long-row-mip, integer-knapsack, multi-knapsack,
+graph-mip and mixed-overload. Binary tags encode seed variants: e.g. 1018 means
+18 variables with a separate seed. Reference objectives use exhaustive binary
+enumeration, capacity DP or analytic elimination of the continuous overload.
+
+```sh
+python benchmarks/build_packing_references.py --baseline-repo /path/to/0.19 \
+  --highs-repo benchmarks/reference/highs-0.4.0/LP-IP-craft --output /tmp/lpip-refs
+python benchmarks/compare_packing_mip.py \
+  --binary baseline=/path/to/packing-baseline --binary native=/path/to/performance-native \
+  --binary highs=/path/to/packing-highs --output comparison.json --rounds 5
+```
+
+Add `--holdout` for the reserved seeded MIP suite, or
+`--public-corpus docs/packing-mip/corpus` for all ten original public inputs.
+Each comparison records every failure and unsupported input, including warmups;
+one process round is discarded. Do not infer coverage-wide performance from
+accepted-only timing averages. The twelfth optional harness argument `strong`
+enables root lookahead; default off because the measured overhead did not pay.
+All probe relaxations count as nodes, and all their pivots count against the
+whole-call limit. `diagnostics.strong_branch_probes/pivots` separate probe work.
