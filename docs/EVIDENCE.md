@@ -58,3 +58,34 @@ hash.
   per-release patches for 0.21–0.24; those arrive as one import commit. The
   directory also contains `.0010-…patch.lX2GNP`, a truncated 15 MB temporary
   copy of patch 0010 from packaging, which was ignored.
+
+## SpOC4 evidence (0.25 and 0.26)
+
+The raw SpOC4 records are not committed either. Both releases' records ship
+in the 0.26 delivery archive, whose `MANIFEST.sha256` is complete and valid:
+
+- `LP-IP-craft-0.26.0-spoc4-repair.zip`,
+  SHA-256 `7cc10abfe9b061dd8850ef54bf1ae5a5926b9fca9034e5863d93869fd91488c0`
+
+[`evidence-0.26.0.sha256`](evidence-0.26.0.sha256) lists those 186 files,
+checked the same way from the extracted `LP-IP-craft-0.26.0/` directory.
+
+| Directory | Files | MB | Contents |
+| --- | ---: | ---: | --- |
+| benchmarks/spoc4-025/results | 44 | 0.96 | 0.25 full-table records, solution vectors, kernel profiles, audit |
+| docs/spoc4-025/data | 13 | 0.37 | 0.25 validation logs and baseline records |
+| benchmarks/spoc4-026/results | 60 | 1.48 | 0.26 suite records and original-order solution vectors |
+| benchmarks/spoc4-026/results-adapter | 48 | 1.08 | exploratory runs from the adapter start (with zero-weight picks) |
+| benchmarks/spoc4-026/reference | 6 | 0.99 | HiGHS IPM reference for matching-II, prices and logs |
+| docs/spoc4-026/data | 15 | 0.04 | 0.26 validation logs |
+
+The ESA input tables and their GPL-3.0 provenance are committed under
+`benchmarks/spoc4-025/data/`. With the records copied back,
+`python benchmarks/summarize_spoc4_025.py` rechecks the 0.25 vectors and
+`python benchmarks/audit_spoc4_026.py` regenerates
+`benchmarks/spoc4-026/AUDIT.json`.
+
+The 0.25.0 source itself was never delivered separately here: its release
+commit `c2eb282` exists only in the authoring repository. The 0.25 import
+commit is the 0.26 tree with the archive's own 0.26 patch
+(`patches/LP-IP-craft-0.26.0.patch`, based on `c2eb282`) applied in reverse.

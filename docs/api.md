@@ -248,3 +248,16 @@ Directed root separation reports `diagnostics.directed_root_cuts`, `diagnostics.
 Mixed deductions record a bounded node-local reason trail (source row, column, old and new endpoints). All changed columns, including continuous implications, are restored through NodeBox before a sibling is entered. Reasons do not drive conflict learning.
 
 All new optional policies are opt-in because effects vary by model. Exact rational certification is enabled by default, and can be disabled for matched ablations. Failure to reconstruct a witness never weakens acceptance, pruning or stopping thresholds. Decimal-looking data are interpreted as their exact supplied binary64 values; tolerance-feasible equality points may have no exact witness.
+
+
+## Native 0.25 packing and parallel search
+
+The new modes are opt-in and documented, with ranges and accounting semantics, in [spoc4-025/IMPLEMENTATION.md](spoc4-025/IMPLEMENTATION.md). A useful application starting recipe is:
+
+```python
+NativeOptions(packing_root=True, packing_neighborhoods=64,
+              packing_neighborhood_size=192, packing_workers=4,
+              scalable_branching=True, time_limit_seconds=30.0)
+```
+
+Use `packing_cuts=True` to test bounded cross-resource clique/odd-cycle cuts. Use `tree_threads=4, tree_split_depth=2` to test a disjoint binary frontier. These options are experimental; see the application measurements before enabling more modes. For sixteen tree workers use at least depth 4, and account for private full-model/factor memory. Neighborhood workers share immutable incidence and exchange complete candidates at batch boundaries. The existing component control remains separate.

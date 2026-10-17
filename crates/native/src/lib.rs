@@ -17,6 +17,7 @@ mod lp;
 mod lu;
 mod mixed;
 mod ordering;
+mod packing;
 mod presolve;
 pub mod profile;
 mod propagate;
@@ -24,6 +25,7 @@ mod rational;
 #[cfg(feature = "basis-replay")]
 pub mod replay;
 mod root;
+mod tree;
 mod witness;
 
 use lp::{Basis, Lp};
@@ -157,6 +159,62 @@ pub struct NativeOptions {
     pub mip_diagnostics: bool,
     /// Maximum retained search events (0 means summaries only, at most 4096).
     pub mip_trace_limit: usize,
+    // Opt-in controls for binary unit-packing models (maximize, nonnegative
+    // weights, rows `sum x <= 1`), bounded probing and the disjoint frontier.
+    // All are off by default; docs/spoc4-025 and docs/spoc4-026 give details.
+    /// Greedy incumbent plus a factorization-free primal-dual root pass whose
+    /// prices give a checked upper bound. Also enables the packing driver.
+    pub packing_root: bool,
+    /// First-order root steps, at most 100000.
+    pub packing_root_iterations: usize,
+    /// Root work cap in matrix/vector units, `2*nnz+4*n+4*m` per step.
+    pub packing_root_work: u64,
+    /// Residual repair tasks per round, at most 4096; positive enables the
+    /// packing driver.
+    pub packing_neighborhoods: usize,
+    /// Maximum columns per residual, 4..=1024.
+    pub packing_neighborhood_size: usize,
+    /// Residual workers, 1..=16. Fixed-work results do not depend on it.
+    pub packing_workers: usize,
+    /// Node ceiling per residual task, at most 100000.
+    pub packing_neighborhood_nodes: u64,
+    /// Hint-directed triangle and odd-cycle cuts before the proof search.
+    pub packing_cuts: bool,
+    /// Edge-visit cap of that separator, at most 100000000.
+    pub packing_cut_work: u64,
+    /// Merge compatible improving repairs of one snapshot batch.
+    pub packing_combine_repairs: bool,
+    /// Repair rounds, 1..=32; `packing_neighborhoods * packing_rounds <= 4096`.
+    pub packing_rounds: usize,
+    /// Extra residual columns per round, at most 1024 (capacity saturates at 1024).
+    pub packing_neighborhood_growth: usize,
+    /// Repair seeds: `"incumbent"`, `"rejected"` or `"mixed"`.
+    pub packing_seed_strategy: String,
+    /// Local clique cuts inside each residual before it is solved.
+    pub packing_residual_cliques: bool,
+    /// Operation cap of the local clique separator per task, at most 1000000.
+    pub packing_clique_work: u64,
+    /// Report the best checked root prices as `diagnostics.packing_root_prices`.
+    pub packing_price_diagnostics: bool,
+    /// Wall-time cap of the repair phase (finite, nonnegative; 0 skips it).
+    pub packing_repair_seconds: Option<f64>,
+    /// Wall-time cap of the exact search after repairs (finite,
+    /// nonnegative; 0 skips it and returns `time_limit`).
+    pub packing_proof_seconds: Option<f64>,
+    /// Conservative bound from current prices of an interrupted simplex solve.
+    pub partial_dual_bounds: bool,
+    /// Reliability probing on a bounded shortlist, without the old size gate.
+    pub scalable_branching: bool,
+    /// Shortlist size of scalable probing, 1..=16.
+    pub branch_probe_candidates: usize,
+    /// Pivots reserved per probe direction, at most 1024.
+    pub branch_probe_pivots: u64,
+    /// Cumulative probe-work reservation per serial search, at most 1e10.
+    pub branch_probe_work: u64,
+    /// Workers for the disjoint binary frontier, 1..=16 (1 disables it).
+    pub tree_threads: usize,
+    /// Frontier depth, at most 8: `2^depth` disjoint subtrees (0 disables it).
+    pub tree_split_depth: usize,
 }
 impl Default for NativeOptions {
     fn default() -> Self {
@@ -204,12 +262,122 @@ impl Default for NativeOptions {
             factor_replay: false,
             mip_diagnostics: false,
             mip_trace_limit: 256,
+            packing_root: false,
+            packing_root_iterations: 1000,
+            packing_root_work: 200_000_000,
+            packing_neighborhoods: 0,
+            packing_neighborhood_size: 192,
+            packing_workers: 1,
+            packing_neighborhood_nodes: 128,
+            packing_cuts: false,
+            packing_cut_work: 2_000_000,
+            packing_combine_repairs: false,
+            packing_rounds: 1,
+            packing_neighborhood_growth: 0,
+            packing_seed_strategy: "incumbent".into(),
+            packing_residual_cliques: false,
+            packing_clique_work: 50_000,
+            packing_price_diagnostics: false,
+            packing_repair_seconds: None,
+            packing_proof_seconds: None,
+            partial_dual_bounds: false,
+            scalable_branching: false,
+            branch_probe_candidates: 4,
+            branch_probe_pivots: 32,
+            branch_probe_work: 2_000_000,
+            tree_threads: 1,
+            tree_split_depth: 2,
         }
     }
 }
 impl NativeOptions {
     /// Validate settings before cancellation or numerical work.
     pub fn validate(&self) -> Result<()> {
+        let phase = |t: Option<f64>| t.is_none_or(|t| t.is_finite() && t >= 0.);
+        for (ok, message) in [
+            (
+                (1..=32).contains(&self.packing_rounds),
+                "packing_rounds must lie in 1..=32",
+            ),
+            (
+                self.packing_neighborhoods
+                    .saturating_mul(self.packing_rounds)
+                    <= 4096,
+                "packing_neighborhoods * packing_rounds must be at most 4096",
+            ),
+            (
+                self.packing_neighborhood_growth <= 1024,
+                "packing_neighborhood_growth must be at most 1024",
+            ),
+            (
+                self.packing_clique_work <= 1_000_000,
+                "packing_clique_work must be at most 1000000",
+            ),
+            (
+                ["incumbent", "rejected", "mixed"].contains(&self.packing_seed_strategy.as_str()),
+                "packing_seed_strategy must be incumbent, rejected or mixed",
+            ),
+            (
+                phase(self.packing_repair_seconds),
+                "packing_repair_seconds must be finite and nonnegative",
+            ),
+            (
+                phase(self.packing_proof_seconds),
+                "packing_proof_seconds must be finite and nonnegative",
+            ),
+            (
+                self.packing_root_iterations <= 100_000,
+                "packing_root_iterations must be at most 100000",
+            ),
+            (
+                self.packing_root_work <= 10_000_000_000,
+                "packing_root_work must be at most 10000000000",
+            ),
+            (
+                self.packing_neighborhoods <= 4096,
+                "packing_neighborhoods must be at most 4096",
+            ),
+            (
+                (4..=1024).contains(&self.packing_neighborhood_size),
+                "packing_neighborhood_size must lie in 4..=1024",
+            ),
+            (
+                (1..=16).contains(&self.packing_workers),
+                "packing_workers must lie in 1..=16",
+            ),
+            (
+                self.packing_neighborhood_nodes <= 100_000,
+                "packing_neighborhood_nodes must be at most 100000",
+            ),
+            (
+                self.packing_cut_work <= 100_000_000,
+                "packing_cut_work must be at most 100000000",
+            ),
+            (
+                (1..=16).contains(&self.branch_probe_candidates),
+                "branch_probe_candidates must lie in 1..=16",
+            ),
+            (
+                self.branch_probe_pivots <= 1024,
+                "branch_probe_pivots must be at most 1024",
+            ),
+            (
+                self.branch_probe_work <= 10_000_000_000,
+                "branch_probe_work must be at most 10000000000",
+            ),
+            (
+                (1..=16).contains(&self.tree_threads),
+                "tree_threads must lie in 1..=16",
+            ),
+            (
+                self.tree_split_depth <= 8,
+                "tree_split_depth must be at most 8",
+            ),
+        ] {
+            if !ok {
+                return Err(Error::InvalidInput(message.into()));
+            }
+        }
         if !(1..=16).contains(&self.reliability_threshold) || self.reliability_max_probes > 1024 {
             return Err(Error::InvalidInput(
                 "reliability threshold must be 1..=16 and max probes at most 1024".into(),
@@ -757,6 +925,8 @@ struct Counters {
     implied_bounds: u64,
     strong_probes: u64,
     strong_pivots: u64,
+    strong_work: u64,
+    strong_work_exits: u64,
     reduced_cost_fixings: u64,
 }
 
@@ -931,7 +1101,7 @@ impl NativeSolver {
                     open.len() + usize::from(dive.is_some()),
                 );
             }
-            let node = match dive.take() {
+            let mut node = match dive.take() {
                 Some(node) => node,
                 None => match open.pop() {
                     Some(Open { node, .. }) => {
@@ -1101,6 +1271,21 @@ impl NativeSolver {
                 continue;
             }
             if s != Status::Optimal {
+                if settings.partial_dual_bounds {
+                    let duals = lp.duals(model);
+                    if duals.row_duals.iter().all(|v| v.is_finite()) {
+                        if let Some(value) =
+                            safe_dual_bound_with_bounds(model, node_bounds, &duals.row_duals)?.bound
+                        {
+                            let b = oriented(model, value);
+                            let b = if lattice { b.ceil() } else { b };
+                            node.bound = Some(node.bound.map_or(b, |old| old.max(b)));
+                            if !model.is_mip() {
+                                result.best_bound = Some(oriented(model, b));
+                            }
+                        }
+                    }
+                }
                 status = if model.is_mip() && s == Status::Unbounded {
                     Status::Unknown
                 } else {
@@ -1236,12 +1421,14 @@ impl NativeSolver {
             }
             let mut probe_seconds = 0.;
             let branch = if branch.is_some()
-                && ((settings.reliability_branching
+                && (((settings.reliability_branching || settings.scalable_branching)
                     && node.depth <= 8
                     && counters.strong_probes < settings.reliability_max_probes)
                     || (node.depth == 0 && settings.strong_branching))
                 && settings.node_reoptimization
-                && (if settings.reliability_branching {
+                && (if settings.scalable_branching {
+                    true
+                } else if settings.reliability_branching {
                     model.n() <= 1024 && model.m() <= 1024 && model.nnz() <= 20000
                 } else {
                     eligible_strong_branching(model)
@@ -1451,6 +1638,8 @@ impl NativeSolver {
                 ("implied_bounds", counters.implied_bounds),
                 ("strong_branch_probes", counters.strong_probes),
                 ("strong_branch_pivots", counters.strong_pivots),
+                ("strong_branch_work", counters.strong_work),
+                ("strong_branch_work_exits", counters.strong_work_exits),
                 ("reduced_cost_fixings", counters.reduced_cost_fixings),
                 ("certification_solves", certifier.lp_attempts),
                 ("rational_witness_attempts", certifier.witness_attempts),
@@ -1603,26 +1792,49 @@ fn strong_branch(
     nodes: &mut u64,
     counters: &mut Counters,
 ) -> Result<Option<usize>> {
-    let mut candidates: Vec<_> = (0..model.n())
-        .filter(|&j| {
-            model.kinds()[j].is_integral()
-                && (x[j] - x[j].round()).abs() > options.tolerances.integrality
-                && (!budget.settings.reliability_branching
-                    || pseudocosts.count[j]
-                        .iter()
-                        .any(|&n| n < budget.settings.reliability_threshold))
-        })
-        .collect();
-    candidates.sort_by(|&a, &b| {
-        (x[b] - x[b].round())
-            .abs()
-            .total_cmp(&(x[a] - x[a].round()).abs())
-            .then(a.cmp(&b))
-    });
-    candidates.truncate(2);
+    let reliable = budget.settings.reliability_branching || budget.settings.scalable_branching;
+    let eligible = |j: usize| {
+        model.kinds()[j].is_integral()
+            && (x[j] - x[j].round()).abs() > options.tolerances.integrality
+            && (!reliable
+                || pseudocosts.count[j]
+                    .iter()
+                    .any(|&n| n < budget.settings.reliability_threshold))
+    };
+    let mut candidates = Vec::new();
+    if budget.settings.scalable_branching {
+        let mut structure = vec![0.; model.n()];
+        let a = model.matrix();
+        for range in a.pattern.indptr.windows(2) {
+            let degree = (range[1] - range[0]).max(1) as f64;
+            for &j in &a.pattern.indices[range[0]..range[1]] {
+                structure[j] += 1. / degree;
+            }
+        }
+        let score = |j: usize| (x[j] - x[j].round()).abs() * (1. + structure[j]);
+        for j in (0..model.n()).filter(|&j| eligible(j)) {
+            let at = candidates
+                .iter()
+                .position(|&k| score(j) > score(k))
+                .unwrap_or(candidates.len());
+            if at < budget.settings.branch_probe_candidates {
+                candidates.insert(at, j);
+                candidates.truncate(budget.settings.branch_probe_candidates);
+            }
+        }
+    } else {
+        candidates = (0..model.n()).filter(|&j| eligible(j)).collect();
+        candidates.sort_by(|&a, &b| {
+            (x[b] - x[b].round())
+                .abs()
+                .total_cmp(&(x[a] - x[a].round()).abs())
+                .then(a.cmp(&b))
+        });
+        candidates.truncate(2);
+    }
     // One unreliable candidate is worth probing for its pseudocosts; the
     // legacy root rule keeps its 0.23 behaviour and probes only a real choice.
-    if candidates.is_empty() || (!budget.settings.reliability_branching && candidates.len() < 2) {
+    if candidates.is_empty() || (!reliable && candidates.len() < 2) {
         return Ok(None);
     }
     let basis = lp.snapshot();
@@ -1633,8 +1845,7 @@ fn strong_branch(
         let mut complete = true;
         for (d, gain) in gains.iter_mut().enumerate() {
             if budget.stop().is_some()
-                || (budget.settings.reliability_branching
-                    && counters.strong_probes >= budget.settings.reliability_max_probes)
+                || (reliable && counters.strong_probes >= budget.settings.reliability_max_probes)
                 || budget.settings.node_limit.is_some_and(|cap| *nodes >= cap)
             {
                 complete = false;
@@ -1650,13 +1861,30 @@ fn strong_branch(
                 complete = false;
                 break;
             }
+            let probe_cap = if budget.settings.scalable_branching {
+                let unit = (model.nnz() + model.n() + model.m()).max(1) as u64;
+                let left = budget
+                    .settings
+                    .branch_probe_work
+                    .saturating_sub(counters.strong_work);
+                let cap = budget.settings.branch_probe_pivots.min(left / unit);
+                if cap == 0 {
+                    counters.strong_work_exits += 1;
+                    complete = false;
+                    break;
+                }
+                counters.strong_work += cap * unit;
+                cap
+            } else {
+                32
+            };
             lp.set_bound(j, lo, hi)?;
             let mut settings = budget.settings.clone();
             settings.iteration_limit = Some(
                 settings
                     .iteration_limit
                     .unwrap_or(u64::MAX)
-                    .min(budget.pivots.saturating_add(32)),
+                    .min(budget.pivots.saturating_add(probe_cap)),
             );
             let mut probe = Budget {
                 start: budget.start,
@@ -1712,7 +1940,7 @@ fn strong_branch(
             }
         }
     }
-    if budget.settings.reliability_branching {
+    if reliable {
         Ok(branching_variable(model, bounds, x, options, pseudocosts).or(best))
     } else {
         Ok(best)
@@ -1797,6 +2025,61 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
             "bounded_dual_revised_simplex+markowitz_lu".into(),
         ),
         ("max_factor_entries", s.max_factor_entries.to_string()),
+        ("packing_root", s.packing_root.to_string()),
+        (
+            "packing_root_iterations",
+            s.packing_root_iterations.to_string(),
+        ),
+        ("packing_root_work", s.packing_root_work.to_string()),
+        ("packing_neighborhoods", s.packing_neighborhoods.to_string()),
+        (
+            "packing_neighborhood_size",
+            s.packing_neighborhood_size.to_string(),
+        ),
+        ("packing_workers", s.packing_workers.to_string()),
+        (
+            "packing_neighborhood_nodes",
+            s.packing_neighborhood_nodes.to_string(),
+        ),
+        ("packing_cuts", s.packing_cuts.to_string()),
+        ("packing_cut_work", s.packing_cut_work.to_string()),
+        (
+            "packing_combine_repairs",
+            s.packing_combine_repairs.to_string(),
+        ),
+        ("packing_rounds", s.packing_rounds.to_string()),
+        (
+            "packing_neighborhood_growth",
+            s.packing_neighborhood_growth.to_string(),
+        ),
+        ("packing_seed_strategy", s.packing_seed_strategy.to_string()),
+        (
+            "packing_residual_cliques",
+            s.packing_residual_cliques.to_string(),
+        ),
+        ("packing_clique_work", s.packing_clique_work.to_string()),
+        (
+            "packing_price_diagnostics",
+            s.packing_price_diagnostics.to_string(),
+        ),
+        (
+            "packing_repair_seconds",
+            format!("{:?}", s.packing_repair_seconds),
+        ),
+        (
+            "packing_proof_seconds",
+            format!("{:?}", s.packing_proof_seconds),
+        ),
+        ("partial_dual_bounds", s.partial_dual_bounds.to_string()),
+        ("scalable_branching", s.scalable_branching.to_string()),
+        (
+            "branch_probe_candidates",
+            s.branch_probe_candidates.to_string(),
+        ),
+        ("branch_probe_pivots", s.branch_probe_pivots.to_string()),
+        ("branch_probe_work", s.branch_probe_work.to_string()),
+        ("tree_threads", s.tree_threads.to_string()),
+        ("tree_split_depth", s.tree_split_depth.to_string()),
         ("refactor_interval", s.refactor_interval.to_string()),
         ("adaptive_refactor", s.adaptive_refactor.to_string()),
         ("basis_update", s.basis_update.as_str().to_string()),
@@ -1874,6 +2157,149 @@ impl LpIpSolver for NativeSolver {
         start: Option<&WarmStart>,
         cancel: &CancellationToken,
     ) -> Result<SolveResult> {
+        options.validate()?;
+        self.settings.validate()?;
+        if let Some(s) = start {
+            if s.primal.len() != model.n() || s.primal.iter().any(|v| !v.is_finite()) {
+                return Err(Error::InvalidInput(
+                    "start must contain n finite values".into(),
+                ));
+            }
+        }
+        if self.settings.packing_root
+            || self.settings.packing_neighborhoods > 0
+            || self.settings.packing_cuts
+        {
+            if let Some(result) = packing::solve(self, model, options, start, cancel)? {
+                return Ok(result);
+            }
+        }
+        if self.settings.tree_threads > 1 {
+            if let Some(result) = tree::solve(self, model, options, start, cancel, None, None)? {
+                return Ok(result);
+            }
+        }
         root::solve(self, model, options, start, cancel)
+    }
+}
+
+#[cfg(test)]
+mod option_validation_tests {
+    use super::*;
+    #[test]
+    fn invalid_packing_controls_name_the_field() {
+        let cases: Vec<(NativeOptions, &str)> = vec![
+            (
+                NativeOptions {
+                    packing_rounds: 0,
+                    ..Default::default()
+                },
+                "packing_rounds",
+            ),
+            (
+                NativeOptions {
+                    packing_neighborhoods: 4096,
+                    packing_rounds: 2,
+                    ..Default::default()
+                },
+                "packing_neighborhoods * packing_rounds",
+            ),
+            (
+                NativeOptions {
+                    packing_neighborhood_growth: 1025,
+                    ..Default::default()
+                },
+                "packing_neighborhood_growth",
+            ),
+            (
+                NativeOptions {
+                    packing_clique_work: 1_000_001,
+                    ..Default::default()
+                },
+                "packing_clique_work",
+            ),
+            (
+                NativeOptions {
+                    packing_seed_strategy: "best".into(),
+                    ..Default::default()
+                },
+                "packing_seed_strategy",
+            ),
+            (
+                NativeOptions {
+                    packing_repair_seconds: Some(f64::NAN),
+                    ..Default::default()
+                },
+                "packing_repair_seconds",
+            ),
+            (
+                NativeOptions {
+                    packing_proof_seconds: Some(-1.),
+                    ..Default::default()
+                },
+                "packing_proof_seconds",
+            ),
+            (
+                NativeOptions {
+                    packing_root_iterations: 100_001,
+                    ..Default::default()
+                },
+                "packing_root_iterations",
+            ),
+            (
+                NativeOptions {
+                    packing_neighborhood_size: 3,
+                    ..Default::default()
+                },
+                "packing_neighborhood_size",
+            ),
+            (
+                NativeOptions {
+                    packing_workers: 17,
+                    ..Default::default()
+                },
+                "packing_workers",
+            ),
+            (
+                NativeOptions {
+                    branch_probe_candidates: 0,
+                    ..Default::default()
+                },
+                "branch_probe_candidates",
+            ),
+            (
+                NativeOptions {
+                    tree_threads: 0,
+                    ..Default::default()
+                },
+                "tree_threads",
+            ),
+            (
+                NativeOptions {
+                    tree_split_depth: 9,
+                    ..Default::default()
+                },
+                "tree_split_depth",
+            ),
+        ];
+        for (settings, field) in cases {
+            match settings.validate() {
+                Err(Error::InvalidInput(message)) => {
+                    assert!(message.starts_with(field), "{message} should name {field}")
+                }
+                other => panic!("{field}: expected InvalidInput, got {other:?}"),
+            }
+        }
+        assert!(
+            NativeOptions {
+                packing_neighborhoods: 4096,
+                packing_rounds: 1,
+                packing_repair_seconds: Some(0.),
+                packing_proof_seconds: Some(0.),
+                ..Default::default()
+            }
+            .validate()
+            .is_ok()
+        );
     }
 }

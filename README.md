@@ -1,3 +1,7 @@
+> Native 0.26: compatible repair merging, successive rounds, rejected-transfer/root-price seeds, local residual clique cuts and separate repair/proof budgets. See [plan](docs/spoc4-026/PLAN.md), [API](docs/spoc4-026/IMPLEMENTATION.md), [results](docs/spoc4-026/RESULTS.md), [reproduction](docs/spoc4-026/REPRODUCE.md) and [review changes](docs/spoc4-026/REVIEW.md), which cover 0.25 too.
+
+> Native 0.25: opt-in packing primal-dual root bounds, early weighted incumbents, parallel residual neighborhoods, cross-resource triangle/odd-cycle cuts, work-budgeted scalable branching and disjoint-frontier parallel B&B. See [the plan](docs/spoc4-025/PLAN.md), [implementation/API](docs/spoc4-025/IMPLEMENTATION.md), [results](docs/spoc4-025/RESULTS.md) and [reproduction](docs/spoc4-025/REPRODUCE.md). Existing default search modes remain unchanged.
+
 > Native 0.24: bounded exact rational incumbent witnesses, reliability branching, serial Feasibility Jump, LP-directed lifted covers, and reversible mixed-row node propagation. See [the implementation plan](docs/mip-search-024/PLAN.md), [results](docs/mip-search-024/RESULTS.md), [reproduction instructions](docs/mip-search-024/REPRODUCE.md), and [review changes](docs/mip-search-024/REVIEW.md). Raw benchmark data ships in the delivery archive ([evidence manifest](docs/EVIDENCE.md)).
 
 > Native 0.23: reuse FT output support and captured spike seeds to remove redundant scans; add opt-in bounded MIP search diagnostics and six additional public MIPs. See [the plan](docs/packing-ftran-mip-diagnostics/PLAN.md), [diagnostic contract](docs/packing-ftran-mip-diagnostics/DIAGNOSTICS.md) and [results](docs/packing-ftran-mip-diagnostics/RESULTS.md).
@@ -14,7 +18,7 @@
 
 # LP-IP-craft — native Rust LP/MIP solver
 
-Version **0.24.0** extends the 0.16 architecture, which replaced both 0.15
+Version **0.26.0** extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine
@@ -50,9 +54,7 @@ cases, where 0.15 failed on up to 2 of 550 per seed, and its MIP search needs
 
 MIPs still require finite bounds on **all** variables, including continuous
 variables, of magnitude at most 2^53-1 after justified root inference; unresolved
-infinities remain unsupported. Each connected solve uses one thread;
-independent components can use up to 16 workers. No real GTOC formulation has
-been supplied; application readiness remains unverified.
+infinities remain unsupported. Each numerical kernel uses one thread; independent components, opt-in residual neighborhoods and binary frontiers can use private workers. The two real SpOC4 matching tables are now application benchmarks; their current quality/bound progress and remaining root bottleneck are documented in [the 0.26 results](docs/spoc4-026/RESULTS.md). GTOC application readiness remains unverified.
 
 ## Build and use
 

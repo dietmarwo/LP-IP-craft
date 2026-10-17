@@ -160,6 +160,8 @@ fn controls(settings: &NativeOptions, started: Instant) -> NativeOptions {
     // explicit scope instead of computing and silently discarding events.
     c.mip_diagnostics = false;
     c.decompose = false;
+    c.packing_workers = 1;
+    c.tree_threads = 1;
     c.time_limit_seconds = settings
         .time_limit_seconds
         .map(|t| (t - started.elapsed().as_secs_f64()).max(0.));

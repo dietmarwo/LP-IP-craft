@@ -13,3 +13,11 @@ __pycache__/
 
 # Raw report data ships in the delivery archive; see docs/EVIDENCE.md.
 /docs/*/data/
+
+# Raw SpOC4 observations and saved candidates ship in the 0.25 delivery ZIP.
+/benchmarks/spoc4-025/results/
+
+# Raw 0.26 application evidence ships in the source delivery archive.
+/benchmarks/spoc4-026/results/
+/benchmarks/spoc4-026/results-adapter/
+/benchmarks/spoc4-026/reference/
