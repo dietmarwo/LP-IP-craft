@@ -60,3 +60,26 @@ where dense storage would exceed the configured cap. No BLAS/native dependency.
 Test: direct dense/mixed-prefix residuals, singular and entry-cap behavior,
 eta/FT updates and reoptimization, all frozen RHSs, full Rust/Python/oracle gates.
 Compare factor and triangular-solve times on the frozen matrices and full LPs.
+
+Step 3 outcome: frozen replay residuals all pass. The latest irregular-4096
+basis drops from 1151 ms to 329 ms factorization and 38 ms to 29 ms for its RHS
+set in the paired development run. All Rust tests pass, including retained-tail
+eta and forced-FT updates. A full irregular-4096 LP is independently accepted in
+7.54 seconds (one retained development solve; final paired results still pending).
+The 32-bit-link step-2 variant still did not improve overall replay time; its
+regressions are retained, and the dense kernel is responsible for the net gain.
+
+## Step 4 — plan
+
+Add bounded approximate minimum-degree column ordering using merged symbolic
+row elements (implicit cliques), ignoring structurally dense rows and bounding
+symbolic work. Use it as a candidate priority while preserving Markowitz costs
+and numerical thresholds. Cache ordering across small changes in basis pattern.
+Expose natural/auto/min-degree and candidate-search budget controls for ablation.
+Compare search budgets and ordering on identical frozen bases and full LPs;
+select defaults from end-to-end results, not factor counts alone.
+
+Test: valid deterministic permutations, dense-row/work-budget behavior, changed
+patterns and cache reuse, residuals on all saved matrices, full solver acceptance,
+Rust tests and Python controls. Retain slower policies as explicit options and
+record rejected tuning trials. No weakening of pivot or final checks.

@@ -235,6 +235,7 @@ pub(crate) struct Lu {
     force_refactor: bool,
     sparse_btran: bool,
     update_nnz: usize,
+    dense: Option<crate::dense::DenseTail>,
     #[cfg(feature = "basis-replay")]
     dense_dimension: usize,
 }
@@ -321,6 +322,7 @@ impl Lu {
             force_refactor: false,
             sparse_btran: false,
             update_nnz: 0,
+            dense: None,
             #[cfg(feature = "basis-replay")]
             dense_dimension: 0,
             reach: Reach {
@@ -475,6 +477,45 @@ impl Lu {
         col_done: &mut [bool],
         cap: usize,
     ) -> Result<(), FactorError> {
+        let rows: Vec<_> = (0..self.m).filter(|&i| !row_done[i]).collect();
+        let positions: Vec<_> = (0..self.m).filter(|&p| !col_done[p]).collect();
+        let n = rows.len();
+        if n >= 64
+            && self
+                .entries()
+                .checked_add(n.saturating_mul(n))
+                .is_some_and(|v| v <= cap)
+        {
+            let _profile = crate::profile::enter("factor_dense");
+            if let Some(tail) = crate::dense::DenseTail::factor(cols, rows, positions, self.m) {
+                #[cfg(feature = "basis-replay")]
+                {
+                    self.dense_dimension = n;
+                }
+                for k in 0..n {
+                    let (r, p) = (tail.rows[k], tail.cols[k]);
+                    row_done[r] = true;
+                    col_done[p] = true;
+                    self.prow.push(r);
+                    self.pcol.push(p);
+                    self.diag.push(tail.data[k * n + k]);
+                }
+                self.l.start.resize(self.m + 1, self.l.index.len());
+                self.u.start.resize(self.m + 1, self.u.index.len());
+                self.dense = Some(tail);
+                return Ok(());
+            }
+        }
+        self.dense_phase_legacy(cols, row_done, col_done, cap)
+    }
+
+    fn dense_phase_legacy(
+        &mut self,
+        cols: &[Vec<Entry>],
+        row_done: &mut [bool],
+        col_done: &mut [bool],
+        cap: usize,
+    ) -> Result<(), FactorError> {
         let _dense = crate::profile::enter("factor_dense");
         let m = self.m;
         let rows_left: Vec<usize> = (0..m).filter(|&i| !row_done[i]).collect();
@@ -560,10 +601,19 @@ impl Lu {
     }
     #[cfg(feature = "kernel-profile")]
     pub fn factor_sizes(&self) -> (usize, usize) {
-        (self.l.value.len(), self.u.value.len())
+        {
+            let extra = self
+                .dense
+                .as_ref()
+                .map_or(0, |d| d.len() * (d.len() - 1) / 2);
+            (self.l.value.len() + extra, self.u.value.len() + extra)
+        }
     }
     pub fn ft_suitable(&self) -> bool {
-        self.m >= 128 && self.l.value.len() <= self.m / 8 && self.entries() <= 16 * self.m
+        self.dense.is_none()
+            && self.m >= 128
+            && self.l.value.len() <= self.m / 8
+            && self.entries() <= 16 * self.m
     }
     pub fn average_update_nnz(&self) -> usize {
         self.update_nnz / self.updates().max(1)
@@ -572,6 +622,7 @@ impl Lu {
         self.ft.is_some() && !self.force_refactor
     }
     pub fn enable_ft(&mut self) {
+        self.materialize_dense();
         self.ft = Some(super::ft::Ft::new(
             &self.prow, &self.pcol, &self.diag, &self.u,
         ));
@@ -585,6 +636,7 @@ impl Lu {
             .as_ref()
             .map_or(self.diag.len() + self.u.value.len(), |f| f.entries())
             + self.l.value.len()
+            + self.dense.as_ref().map_or(0, |d| d.data.len() - d.len())
             + self.eta_value.len()
             + self.etas.len()
     }
@@ -602,7 +654,115 @@ impl Lu {
             || self.entries() > cap
             || (self.m >= 128
                 && self.updates() >= 16
-                && self.eta_value.len() > 8 * (self.m + self.l.value.len() + self.u.value.len()))
+                && self.eta_value.len()
+                    > 8 * (self.m
+                        + self.l.value.len()
+                        + self.u.value.len()
+                        + self.dense.as_ref().map_or(0, |d| d.data.len() - d.len())))
+    }
+
+    fn materialize_dense(&mut self) {
+        let Some(tail) = self.dense.take() else {
+            return;
+        };
+        let n = tail.len();
+        let prefix = self.m - n;
+        self.l.start.truncate(prefix + 1);
+        self.u.start.truncate(prefix + 1);
+        for k in 0..n {
+            for i in k + 1..n {
+                let v = tail.data[i * n + k];
+                if v != 0. {
+                    self.l.index.push(tail.rows[i]);
+                    self.l.value.push(v);
+                }
+            }
+            self.l.start.push(self.l.index.len());
+            for j in k + 1..n {
+                let v = tail.data[k * n + j];
+                if v != 0. {
+                    self.u.index.push(tail.cols[j]);
+                    self.u.value.push(v);
+                }
+            }
+            self.u.start.push(self.u.index.len());
+        }
+        self.l_rows = self.l.transpose(self.m, &self.prow);
+        self.u_cols = self.u.transpose(self.m, &self.prow);
+    }
+    fn ftran_dense(&mut self, v: &mut [f64]) {
+        let _profile = crate::profile::enter("ftran_dense");
+        let tail = self.dense.as_mut().unwrap();
+        let prefix = self.m - tail.len();
+        for k in 0..prefix {
+            let t = v[self.prow[k]];
+            if t != 0. {
+                let (ix, val) = self.l.get(k);
+                for (&i, &a) in ix.iter().zip(val) {
+                    v[i] -= a * t;
+                }
+            }
+        }
+        tail.ftran(v, &mut self.work);
+        for &p in tail.cols.iter().rev() {
+            let t = self.work[p];
+            if t != 0. {
+                let (ix, val) = self.u_cols.get(p);
+                for (&i, &a) in ix.iter().zip(val) {
+                    v[i] -= a * t;
+                }
+            }
+        }
+        for k in (0..prefix).rev() {
+            let p = self.pcol[k];
+            let t = v[self.prow[k]] / self.diag[k];
+            self.work[p] = t;
+            if t != 0. {
+                let (ix, val) = self.u_cols.get(p);
+                for (&i, &a) in ix.iter().zip(val) {
+                    v[i] -= a * t;
+                }
+            }
+        }
+        v.copy_from_slice(&self.work);
+    }
+    fn btran_dense(&mut self, v: &mut [f64]) {
+        let _profile = crate::profile::enter("btran_dense");
+        let tail = self.dense.as_mut().unwrap();
+        let prefix = self.m - tail.len();
+        for k in 0..prefix {
+            let p = self.pcol[k];
+            let t = v[p] / self.diag[k];
+            self.work[self.prow[k]] = t;
+            if t != 0. {
+                let (ix, val) = self.u.get(k);
+                for (&q, &a) in ix.iter().zip(val) {
+                    v[q] -= a * t;
+                }
+            }
+        }
+        tail.btran(v, &mut self.work);
+        for &i in tail.rows.iter().rev() {
+            let t = self.work[i];
+            if t != 0. {
+                let (ix, val) = self.l_rows.get(i);
+                for (&r, &a) in ix.iter().zip(val) {
+                    self.work[r] -= a * t;
+                }
+            }
+        }
+        for k in (0..prefix).rev() {
+            let i = self.prow[k];
+            let t = self.work[i];
+            if t != 0. {
+                let (ix, val) = self.l_rows.get(i);
+                for (&r, &a) in ix.iter().zip(val) {
+                    self.work[r] -= a * t;
+                }
+            }
+        }
+        self.sparse_btran = false;
+        v.copy_from_slice(&self.work);
     }
 
     /// Solves `B x = v` in place: `v` is indexed by row on entry and by
@@ -627,69 +787,73 @@ impl Lu {
     }
     fn ftran_impl(&mut self, v: &mut [f64], capture: bool) {
         let _triangular = crate::profile::enter("ftran_triangular");
-        let _lower = crate::profile::enter("ftran_lower");
-        if !self.l.value.is_empty() {
-            if self
-                .reach
-                .find(v, &self.l, Some(&self.row_step), &self.row_step, 0)
-            {
-                for &i in &self.reach.nodes {
-                    let t = v[i];
-                    if t != 0. {
-                        let (index, value) = self.l.get(self.row_step[i]);
-                        for (&r, &l) in index.iter().zip(value) {
-                            v[r] -= l * t;
-                        }
-                    }
-                }
-            } else {
-                for k in 0..self.m {
-                    let t = v[self.prow[k]];
-                    if t != 0.0 {
-                        let (index, value) = self.l.get(k);
-                        for (&i, &l) in index.iter().zip(value) {
-                            v[i] -= l * t;
-                        }
-                    }
-                }
-            }
-        }
-        drop(_lower);
-        let w = &mut self.work;
-        if let Some(ft) = &mut self.ft {
-            ft.ftran(v, w, capture);
+        if self.dense.is_some() {
+            self.ftran_dense(v);
         } else {
-            if self
-                .reach
-                .find(v, &self.u_cols, Some(&self.row_position), &self.row_step, 1)
-            {
-                w.fill(0.);
-                for &i in self.reach.nodes.iter().rev() {
-                    let k = self.row_step[i];
-                    let p = self.pcol[k];
-                    let t = v[i] / self.diag[k];
-                    w[p] = t;
-                    if t != 0. {
-                        let (index, value) = self.u_cols.get(p);
-                        for (&r, &u) in index.iter().zip(value) {
-                            v[r] -= u * t;
+            let _lower = crate::profile::enter("ftran_lower");
+            if !self.l.value.is_empty() {
+                if self
+                    .reach
+                    .find(v, &self.l, Some(&self.row_step), &self.row_step, 0)
+                {
+                    for &i in &self.reach.nodes {
+                        let t = v[i];
+                        if t != 0. {
+                            let (index, value) = self.l.get(self.row_step[i]);
+                            for (&r, &l) in index.iter().zip(value) {
+                                v[r] -= l * t;
+                            }
                         }
                     }
-                }
-            } else {
-                for k in (0..self.m).rev() {
-                    let p = self.pcol[k];
-                    let t = v[self.prow[k]] / self.diag[k];
-                    w[p] = t;
-                    if t != 0.0 {
-                        let (index, value) = self.u_cols.get(p);
-                        for (&i, &u) in index.iter().zip(value) {
-                            v[i] -= u * t;
+                } else {
+                    for k in 0..self.m {
+                        let t = v[self.prow[k]];
+                        if t != 0.0 {
+                            let (index, value) = self.l.get(k);
+                            for (&i, &l) in index.iter().zip(value) {
+                                v[i] -= l * t;
+                            }
                         }
                     }
                 }
             }
-            v.copy_from_slice(w);
+            drop(_lower);
+            let w = &mut self.work;
+            if let Some(ft) = &mut self.ft {
+                ft.ftran(v, w, capture);
+            } else {
+                if self
+                    .reach
+                    .find(v, &self.u_cols, Some(&self.row_position), &self.row_step, 1)
+                {
+                    w.fill(0.);
+                    for &i in self.reach.nodes.iter().rev() {
+                        let k = self.row_step[i];
+                        let p = self.pcol[k];
+                        let t = v[i] / self.diag[k];
+                        w[p] = t;
+                        if t != 0. {
+                            let (index, value) = self.u_cols.get(p);
+                            for (&r, &u) in index.iter().zip(value) {
+                                v[r] -= u * t;
+                            }
+                        }
+                    }
+                } else {
+                    for k in (0..self.m).rev() {
+                        let p = self.pcol[k];
+                        let t = v[self.prow[k]] / self.diag[k];
+                        w[p] = t;
+                        if t != 0.0 {
+                            let (index, value) = self.u_cols.get(p);
+                            for (&i, &u) in index.iter().zip(value) {
+                                v[i] -= u * t;
+                            }
+                        }
+                    }
+                }
+                v.copy_from_slice(w);
+            }
         }
         drop(_triangular);
         let _eta = crate::profile::enter("ftran_eta");
@@ -765,6 +929,10 @@ impl Lu {
         }
         drop(_eta);
         let _triangular = crate::profile::enter("btran_triangular");
+        if self.dense.is_some() {
+            self.btran_dense(v);
+            return;
+        }
         let w = &mut self.work;
         if let Some(ft) = &mut self.ft {
             ft.btran(
@@ -1020,6 +1188,51 @@ mod tests {
                 col
             })
             .collect()
+    }
+
+    #[test]
+    fn retained_dense_tail_and_updates_match_full_basis() {
+        for m in [64, 97, 257] {
+            let mut columns: Vec<Vec<_>> = (0..m)
+                .map(|p| {
+                    (0..m)
+                        .map(|r| {
+                            let row = (r * 7 + 3) % m;
+                            (
+                                row,
+                                if r == p {
+                                    5.
+                                } else {
+                                    ((r + p) % 11) as f64 * 0.002 - 0.01
+                                },
+                            )
+                        })
+                        .collect()
+                })
+                .collect();
+            for ft in [false, true] {
+                let mut lu = factor(&columns, usize::MAX).unwrap();
+                assert!(lu.dense.is_some());
+                assert!(residual(&columns, &mut lu) < 1e-10);
+                if ft {
+                    lu.enable_ft();
+                    assert!(lu.dense.is_none());
+                }
+                for step in 0..5 {
+                    let p = step * 11 % m;
+                    for (_, v) in &mut columns[p] {
+                        *v *= 1.01;
+                    }
+                    let mut a = vec![0.; m];
+                    for &(i, v) in &columns[p] {
+                        a[i] = v;
+                    }
+                    lu.ftran_entering(&mut a);
+                    assert!(lu.update_sparse(p, &a, 0..m));
+                    assert!(residual(&columns, &mut lu) < 1e-10);
+                }
+            }
+        }
     }
 
     #[test]

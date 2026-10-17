@@ -6,6 +6,7 @@
 mod active;
 mod boxed;
 mod components;
+mod dense;
 mod ft;
 mod incumbent;
 mod lp;
