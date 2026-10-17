@@ -125,6 +125,7 @@ pub(crate) struct Lp {
     pi: Vec<f64>,
     weight: Vec<f64>,
     lu: Option<Lu>,
+    factor_workspace: crate::active::FactorWorkspace,
     rho: Vec<f64>,
     rho_index: Vec<usize>,
     column: Vec<f64>,
@@ -301,6 +302,7 @@ impl Lp {
             pi: vec![0.0; m],
             weight: vec![1.0; m],
             lu: None,
+            factor_workspace: Default::default(),
             rho: vec![0.0; m],
             rho_index: Vec::new(),
             column: vec![0.0; m],
@@ -725,7 +727,12 @@ impl Lp {
             };
             #[cfg(feature = "basis-replay")]
             crate::replay::capture(self.m, column, &[&self.rho, &self.pi]);
-            match Lu::factor(self.m, column, self.controls.max_factor_entries) {
+            match Lu::factor_with_workspace(
+                self.m,
+                column,
+                self.controls.max_factor_entries,
+                &mut self.factor_workspace,
+            ) {
                 Ok(mut lu) => {
                     #[cfg(feature = "kernel-profile")]
                     if std::env::var_os("LPIP_TRACE_FACTORS").is_some() {

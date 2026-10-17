@@ -13,6 +13,8 @@
 //! of `ftran` and `btran` push updates from nonzero entries only. Solves use
 //! dense work vectors of the basis dimension.
 
+use crate::active::{Active, Entry, FactorWorkspace};
+
 const NIL: usize = usize::MAX;
 /// Relative pivot threshold: `|a_rp| >= THRESHOLD * max_i |a_ip|`.
 const THRESHOLD: f64 = 0.1;
@@ -241,38 +243,58 @@ impl Lu {
     /// Factorizes the basis whose position `p` has the sparse column written
     /// by `column(p, out)` (entries `(row, value)`, rows `< m`, distinct).
     /// `cap` bounds the stored entries (diagonal, L and U).
+    #[cfg(any(test, feature = "basis-replay"))]
     pub fn factor(
+        m: usize,
+        column: impl FnMut(usize, &mut Vec<(usize, f64)>),
+        cap: usize,
+    ) -> Result<Self, FactorError> {
+        Self::factor_with_workspace(m, column, cap, &mut FactorWorkspace::default())
+    }
+    pub fn factor_with_workspace(
         m: usize,
         mut column: impl FnMut(usize, &mut Vec<(usize, f64)>),
         cap: usize,
+        workspace: &mut FactorWorkspace,
     ) -> Result<Self, FactorError> {
         let _profile = crate::profile::enter("factorization");
         let _assembly = crate::profile::enter("factor_assembly");
-        let mut cols: Vec<Vec<(usize, f64)>> = vec![Vec::new(); m];
-        for (p, col) in cols.iter_mut().enumerate() {
-            column(p, col);
-            col.retain(|&(_, v)| v != 0.0);
+        let FactorWorkspace {
+            matrix: a,
+            slot,
+            pivot_row,
+            pivot_col,
+            row_slots,
+            input,
+        } = workspace;
+        if m > u32::MAX as usize {
+            return Err(FactorError::TooLarge);
         }
-        let mut rows: Vec<Vec<usize>> = vec![Vec::new(); m];
-        for (p, col) in cols.iter().enumerate() {
-            for &(i, _) in col {
-                rows[i].push(p);
+        a.reset(m);
+        for p in 0..m {
+            input.clear();
+            column(p, input);
+            for &(i, v) in input.iter() {
+                if v != 0. {
+                    a.insert(p, i, v);
+                }
             }
         }
         let mut colb = Buckets::new(m, m);
         let mut rowb = Buckets::new(m, m);
         let mut active = 0usize;
-        for (p, col) in cols.iter().enumerate() {
+        for (p, col) in a.cols.iter().enumerate() {
             colb.insert(p, col.len());
             active += col.len();
         }
-        for (i, row) in rows.iter().enumerate() {
+        for (i, row) in a.rows.iter().enumerate() {
             rowb.insert(i, row.len());
         }
         let mut col_done = vec![false; m];
         let mut row_done = vec![false; m];
         // Scatter map from row to slot in the column being updated.
-        let mut slot = vec![NIL; m];
+        slot.resize(m, NIL);
+        slot.fill(NIL);
         let empty = || Lists {
             start: vec![0],
             ..Lists::default()
@@ -308,8 +330,7 @@ impl Lu {
             },
         };
         drop(_assembly);
-        let mut pivot_row: Vec<(usize, f64)> = Vec::new();
-        let mut pivot_col: Vec<(usize, f64)> = Vec::new();
+
         let mut singular = false;
         while lu.prow.len() < m {
             let remaining = (m - lu.prow.len()) as f64;
@@ -317,96 +338,86 @@ impl Lu {
                 break;
             }
             let _search = crate::profile::enter("factor_pivot_search");
-            let candidate = find_pivot(&cols, &rows, &colb, &rowb, m);
+            let candidate = find_pivot(a, &colb, &rowb, m);
             drop(_search);
             let Some((r, p)) = candidate else {
                 singular = true;
                 break;
             };
             let _extract = crate::profile::enter("factor_extract");
-            // Take row r out of the active columns; keep the U row.
+            // Save numeric order before swap removals update the cross indices.
             pivot_row.clear();
-            let mut a = 0.0;
-            active -= rows[r].len();
-            for &q in &rows[r] {
-                let k = cols[q]
-                    .iter()
-                    .position(|&(i, _)| i == r)
-                    .expect("row and column lists agree");
-                let (_, v) = cols[q].swap_remove(k);
+            row_slots.clear();
+            row_slots.extend_from_slice(&a.rows[r]);
+            let mut diagonal = 0.;
+            active -= row_slots.len();
+            for &(q, k) in row_slots.iter() {
+                let (q, k) = (q as usize, k as usize);
+                let value = a.cols[q][k].value;
                 if q == p {
-                    a = v;
+                    diagonal = value;
                 } else {
-                    pivot_row.push((q, v));
+                    pivot_row.push((q, value));
                 }
+                a.remove(q, k);
             }
-            // Take column p out of the active rows; keep the multipliers.
             pivot_col.clear();
-            active -= cols[p].len();
-            for &(i, v) in &cols[p] {
-                let k = rows[i]
-                    .iter()
-                    .position(|&q| q == p)
-                    .expect("row and column lists agree");
-                rows[i].swap_remove(k);
-                pivot_col.push((i, v / a));
+            active -= a.cols[p].len();
+            for e in &a.cols[p] {
+                pivot_col.push((e.row as usize, e.value / diagonal));
             }
-            cols[p].clear();
-            rows[r].clear();
+            while !a.cols[p].is_empty() {
+                a.remove(p, a.cols[p].len() - 1);
+            }
             colb.remove(p);
             rowb.remove(r);
             col_done[p] = true;
             row_done[r] = true;
             drop(_extract);
             let _eliminate = crate::profile::enter("factor_sparse_eliminate");
-            // Schur complement update of every column of the pivot row.
-            for &(q, u) in &pivot_row {
-                if u == 0.0 {
+            // Schur complement update; scatter map is per column, O(m) memory.
+            for &(q, u) in pivot_row.iter() {
+                if u == 0. {
                     continue;
                 }
-                for (k, &(i, _)) in cols[q].iter().enumerate() {
-                    slot[i] = k;
+                for (k, e) in a.cols[q].iter().enumerate() {
+                    slot[e.row as usize] = k;
                 }
-                for &(i, l) in &pivot_col {
+                a.dirty(q);
+                for &(i, l) in pivot_col.iter() {
                     let delta = -l * u;
                     if slot[i] != NIL {
-                        cols[q][slot[i]].1 += delta;
+                        a.cols[q][slot[i]].value += delta;
                     } else {
-                        slot[i] = cols[q].len();
-                        cols[q].push((i, delta));
-                        rows[i].push(q);
+                        slot[i] = a.cols[q].len();
+                        a.insert(q, i, delta);
                         active += 1;
                     }
                 }
                 let mut at = 0;
-                while at < cols[q].len() {
-                    let (i, v) = cols[q][at];
-                    slot[i] = NIL;
-                    if v == 0. {
-                        cols[q].swap_remove(at);
-                        let k = rows[i]
-                            .iter()
-                            .position(|&p| p == q)
-                            .expect("row and column lists agree");
-                        rows[i].swap_remove(k);
-                        rowb.change(i, rows[i].len());
+                while at < a.cols[q].len() {
+                    let e = a.cols[q][at];
+                    slot[e.row as usize] = NIL;
+                    if e.value == 0. {
+                        a.remove(q, at);
+                        rowb.change(e.row as usize, a.rows[e.row as usize].len());
                         active -= 1;
                     } else {
                         at += 1;
                     }
                 }
-                colb.change(q, cols[q].len());
+                colb.change(q, a.cols[q].len());
             }
-            for &(i, _) in &pivot_col {
-                rowb.change(i, rows[i].len());
+            for &(i, _) in pivot_col.iter() {
+                rowb.change(i, a.rows[i].len());
             }
-            lu.push_pivot(r, p, a, &pivot_col, &pivot_row);
+            lu.push_pivot(r, p, diagonal, pivot_col, pivot_row);
             if lu.entries() > cap {
                 return Err(FactorError::TooLarge);
             }
         }
         if !singular && lu.prow.len() < m {
-            lu.dense_phase(&cols, &mut row_done, &mut col_done, cap)?;
+            lu.dense_phase(&a.cols, &mut row_done, &mut col_done, cap)?;
         }
         if lu.prow.len() < m {
             return Err(FactorError::Singular {
@@ -459,7 +470,7 @@ impl Lu {
     /// unpivoted (the basis is singular).
     fn dense_phase(
         &mut self,
-        cols: &[Vec<(usize, f64)>],
+        cols: &[Vec<Entry>],
         row_done: &mut [bool],
         col_done: &mut [bool],
         cap: usize,
@@ -486,8 +497,8 @@ impl Lu {
         }
         let mut d = vec![0.0; k * k];
         for (c, &p) in cols_left.iter().enumerate() {
-            for &(i, v) in &cols[p] {
-                d[c * k + dense_row[i]] = v;
+            for e in &cols[p] {
+                d[c * k + dense_row[e.row as usize]] = e.value;
             }
         }
         let mut live: Vec<usize> = (0..k).collect();
@@ -872,13 +883,7 @@ impl Lu {
 /// Markowitz search over columns and rows by increasing active count. Stops
 /// at a zero-cost pivot, after `SEARCH` candidates once one is acceptable, or
 /// when no remaining count class can beat the best cost found.
-fn find_pivot(
-    cols: &[Vec<(usize, f64)>],
-    rows: &[Vec<usize>],
-    colb: &Buckets,
-    rowb: &Buckets,
-    m: usize,
-) -> Option<(usize, usize)> {
+fn find_pivot(a: &mut Active, colb: &Buckets, rowb: &Buckets, m: usize) -> Option<(usize, usize)> {
     struct Best {
         at: Option<(usize, usize)>,
         cost: usize,
@@ -908,13 +913,18 @@ fn find_pivot(
         value: 0.0,
     };
     let mut searched = 0;
-    let colmax = |p: usize| cols[p].iter().fold(0.0_f64, |a, &(_, v)| a.max(v.abs()));
     for count in 1..=m {
         let mut p = colb.head[count];
         while p != NIL {
-            let max = colmax(p);
-            for &(i, v) in &cols[p] {
-                best.consider(i, p, v, max, (rowb.count[i] - 1) * (count - 1));
+            let max = a.column_max(p);
+            for e in &a.cols[p] {
+                best.consider(
+                    e.row as usize,
+                    p,
+                    e.value,
+                    max,
+                    (rowb.count[e.row as usize] - 1) * (count - 1),
+                );
             }
             searched += 1;
             if best.done(searched) {
@@ -924,10 +934,17 @@ fn find_pivot(
         }
         let mut i = rowb.head[count];
         while i != NIL {
-            for &p in &rows[i] {
-                if let Some(&(_, v)) = cols[p].iter().find(|&&(row, _)| row == i) {
-                    best.consider(i, p, v, colmax(p), (count - 1) * (colb.count[p] - 1));
-                }
+            for slot in 0..a.rows[i].len() {
+                let (p, k) = a.rows[i][slot];
+                let (p, k) = (p as usize, k as usize);
+                let max = a.column_max(p);
+                best.consider(
+                    i,
+                    p,
+                    a.cols[p][k].value,
+                    max,
+                    (count - 1) * (colb.count[p] - 1),
+                );
             }
             searched += 1;
             if best.done(searched) {
@@ -1003,6 +1020,30 @@ mod tests {
                 col
             })
             .collect()
+    }
+
+    #[test]
+    fn reused_workspace_preserves_old_factors_across_dimensions() {
+        let mut workspace = FactorWorkspace::default();
+        for m in [17, 128, 5, 256, 17] {
+            let columns = random_columns(m, 3, 2);
+            let mut old = Lu::factor_with_workspace(
+                m,
+                |p, out| out.extend_from_slice(&columns[p]),
+                usize::MAX,
+                &mut workspace,
+            )
+            .unwrap();
+            let other: Vec<_> = (0..7).map(|i| vec![(i, 1.)]).collect();
+            let _new = Lu::factor_with_workspace(
+                7,
+                |p, out| out.extend_from_slice(&other[p]),
+                usize::MAX,
+                &mut workspace,
+            )
+            .unwrap();
+            assert!(residual(&columns, &mut old) < 1e-9);
+        }
     }
 
     #[test]

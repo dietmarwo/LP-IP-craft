@@ -3,6 +3,7 @@
 //! branch and bound with diving, pseudocost branching and independently
 //! checked results.
 #![forbid(unsafe_code)]
+mod active;
 mod boxed;
 mod components;
 mod ft;

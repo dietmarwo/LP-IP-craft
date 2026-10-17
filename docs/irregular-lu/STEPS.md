@@ -38,3 +38,25 @@ Test: all frozen bases must retain pivot fingerprints and factor entry counts,
 with forward/transpose residuals passing; test insertion/removal/cancellation
 metadata directly, workspace reuse across dimensions, full Rust tests, and paired
 replay timing. Measure memory as well as time because indices add storage.
+
+Step 2 outcome: all Rust tests pass. All 21 frozen cases retain exact pivot
+fingerprints and factor-entry counts in the first paired replay. Search and
+extraction improve, but extra metadata regressed sparse elimination and the
+unchanged dense tail dominates overall time. Replaced native-sized links with
+checked 32-bit links, restoring the old active-entry footprint; retained the
+first attempt as evidence. The compact variant is replayed separately. Workspace
+reuse is tested across dimensions while prior factors remain independently usable.
+
+## Step 3 — plan
+
+For dense tails of at least 64 rows, factor a compact row-major block with
+partial row pivoting and blocked panel/trailing updates. Keep the block for
+forward/transpose solves instead of packing every numerical entry into sparse
+lists. Preserve sparse prefix interactions and conventional eta updates. Expand
+the block into sparse factors only when forced Forrest–Tomlin needs it.
+Keep the old dense path for small tails, singular fallback, and entry-cap cases
+where dense storage would exceed the configured cap. No BLAS/native dependency.
+
+Test: direct dense/mixed-prefix residuals, singular and entry-cap behavior,
+eta/FT updates and reoptimization, all frozen RHSs, full Rust/Python/oracle gates.
+Compare factor and triangular-solve times on the frozen matrices and full LPs.
