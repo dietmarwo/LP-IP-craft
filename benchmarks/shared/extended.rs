@@ -265,3 +265,45 @@ pub fn mixed(tag: usize) -> (Model, f64) {
         expected,
     )
 }
+
+/// Planted primal/dual LPs with genuine 4:1 or 1:4 aspect ratios.
+pub fn aspect(size: usize, wide: bool) -> (Model, f64) {
+    assert!(size >= 16);
+    let (n,m)=if wide {(4*size,size)} else {(size,4*size)};
+    let mut rows=vec![Vec::new();m];
+    if wide {
+        for j in 0..n {for k in 0..3 {rows[(j+k*k+3*k)%m].push((j,if k==0 {4.} else {1.}));}}
+    } else {
+        for (i,row) in rows.iter_mut().enumerate() {for k in 0..3 {row.push(((i+k*k+3*k)%n,if k==0 {4.} else {1.}));}}
+    }
+    let mut c=vec![0.;n];
+    let rhs=rows.iter().enumerate().map(|(i,row)| {for &(j,a) in row {c[j]+=a*(1+i%7) as f64;}row.iter().map(|e|e.1).sum()}).collect();
+    let expected=c.iter().sum();
+    (Model::new(ModelData {sense:Sense::Maximize,objective:c,objective_offset:0.,variables:Bounds::new(vec![0.;n],vec![2.;n]),kinds:vec![VariableKind::Continuous;n],matrix:matrix(n,&rows),rows:Bounds::new(vec![f64::NEG_INFINITY;m],rhs)}).unwrap(),expected)
+}
+
+/// Exact singleton bounds: planted optimum x=1, costs=1..7.
+pub fn singleton_lp(n:usize)->(Model,f64) {
+    assert!(n>0);
+    let mut rows=Vec::with_capacity(3*n);let mut lower=Vec::new();let mut upper=Vec::new();
+    for j in 0..n {
+        for (a,l,u) in [(2.,f64::NEG_INFINITY,2.),(-4.,-8.,f64::INFINITY),(1.,0.,3.)] {
+            rows.push(vec![(j,a)]);lower.push(l);upper.push(u);
+        }
+    }
+    let cost:Vec<_>=(0..n).map(|j|(1+j%7)as f64).collect();let expected=cost.iter().sum();
+    (Model::new(ModelData{sense:Sense::Maximize,objective:cost,objective_offset:0.,variables:Bounds::new(vec![0.;n],vec![10.;n]),kinds:vec![VariableKind::Continuous;n],matrix:matrix(n,&rows),rows:Bounds::new(lower,upper)}).unwrap(),expected)
+}
+
+/// Independent mixed blocks with an initially free integer x and y>=0.
+/// x+y<=5, -x+y<=3, x-y>=-2 imply finite boxes; max x+y/2=5.
+pub fn inferred_mip(blocks:usize)->(Model,f64) {
+    assert!(blocks>0);let n=2*blocks;let mut rows=Vec::new();let mut lower=Vec::new();let mut upper=Vec::new();
+    let mut vl=Vec::new();let mut vu=Vec::new();let mut cost=Vec::new();let mut kinds=Vec::new();
+    for b in 0..blocks {
+        let x=2*b;let y=x+1;
+        for (ax,ay,l,u) in [(1.,1.,f64::NEG_INFINITY,5.),(-1.,1.,f64::NEG_INFINITY,3.),(1.,-1.,-2.,f64::INFINITY)] {rows.push(vec![(x,ax),(y,ay)]);lower.push(l);upper.push(u);}
+        vl.extend([f64::NEG_INFINITY,0.]);vu.extend([f64::INFINITY;2]);cost.extend([1.,0.5]);kinds.extend([VariableKind::Integer,VariableKind::Continuous]);
+    }
+    (Model::new(ModelData{sense:Sense::Maximize,objective:cost,objective_offset:0.,variables:Bounds::new(vl,vu),kinds,matrix:matrix(n,&rows),rows:Bounds::new(lower,upper)}).unwrap(),5.*blocks as f64)
+}

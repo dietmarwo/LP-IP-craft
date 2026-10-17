@@ -1,0 +1,1353 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index dc79110..032c438 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -16,18 +16,18 @@ checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+ 
+ [[package]]
+ name = "lp-ip-craft"
+-version = "0.22.0"
++version = "0.23.0"
+ 
+ [[package]]
+ name = "lp-ip-craft-native"
+-version = "0.22.0"
++version = "0.23.0"
+ dependencies = [
+  "lp-ip-craft",
+ ]
+ 
+ [[package]]
+ name = "lp-ip-craft-python"
+-version = "0.22.0"
++version = "0.23.0"
+ dependencies = [
+  "lp-ip-craft",
+  "lp-ip-craft-native",
+diff --git a/Cargo.toml b/Cargo.toml
+index 01b3c9d..9875b3f 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -3,7 +3,7 @@ members = ["crates/core", "crates/native", "crates/python"]
+ default-members = ["crates/core", "crates/native"]
+ resolver = "3"
+ [workspace.package]
+-version = "0.22.0"
++version = "0.23.0"
+ edition = "2024"
+ rust-version = "1.85"
+ license = "MIT"
+diff --git a/benchmarks/Cargo.lock b/benchmarks/Cargo.lock
+index 8d27cbd..2ac10ce 100644
+--- a/benchmarks/Cargo.lock
++++ b/benchmarks/Cargo.lock
+@@ -10,11 +10,11 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+ 
+ [[package]]
+ name = "lp-ip-craft"
+-version = "0.22.0"
++version = "0.23.0"
+ 
+ [[package]]
+ name = "lp-ip-craft-native"
+-version = "0.22.0"
++version = "0.23.0"
+ dependencies = [
+  "lp-ip-craft",
+ ]
+diff --git a/benchmarks/native/Cargo.toml b/benchmarks/native/Cargo.toml
+index f0c52e1..c0bb3d0 100644
+--- a/benchmarks/native/Cargo.toml
++++ b/benchmarks/native/Cargo.toml
+@@ -4,7 +4,8 @@ version="0.1.0"
+ edition="2024"
+ publish=false
+ [features]
+-default=["backend_native","evolved"]
++default=["backend_native","evolved","search-diagnostics"]
++search-diagnostics=[]
+ evolved=[]
+ backend_native=[]
+ backend_highs=[]
+diff --git a/benchmarks/shared/main.rs b/benchmarks/shared/main.rs
+index 621d449..2d80a8c 100644
+--- a/benchmarks/shared/main.rs
++++ b/benchmarks/shared/main.rs
+@@ -179,7 +179,9 @@ fn main() {
+     for run in 0..=repeats {
+         #[cfg(feature = "backend_native")]
+         let mut solver = lp_ip_craft_native::NativeSolver::new(lp_ip_craft_native::NativeOptions {
+-            time_limit_seconds: Some(30.),
++            time_limit_seconds: Some(std::env::var("LPIP_TIME_LIMIT").map_or(30., |v| v.parse().unwrap())),
++            node_limit: Some(std::env::var("LPIP_NODE_LIMIT").map_or(100_000, |v| v.parse().unwrap())),
++            iteration_limit: Some(std::env::var("LPIP_ITERATION_LIMIT").map_or(1_000_000, |v| v.parse().unwrap())),
+             component_threads: workers,
+             decompose: !is_family && std::env::var_os("LPIP_BENCH_NO_DECOMPOSE").is_none(),
+             presolve: std::env::var("LPIP_PRESOLVE").map_or(true,|v|v!="off"),
+@@ -205,6 +207,8 @@ fn main() {
+         });
+         #[cfg(all(feature="backend_native",feature="evolved"))]
+         {
++            solver.settings.incumbent_heuristic = std::env::var("LPIP_HEURISTIC").map_or(true, |v| v != "off");
++            solver.settings.strong_branching |= std::env::var("LPIP_STRONG_BRANCHING").is_ok_and(|v| v == "on");
+             solver.settings.singleton_presolve = std::env::var("LPIP_SINGLETON").map_or(true, |v| v != "off");
+             solver.settings.root_propagation = std::env::var("LPIP_ROOT_PROPAGATION").map_or(true, |v| v != "off");
+             solver.settings.root_cuts = std::env::var_os("LPIP_ROOT_CUTS").is_some();
+@@ -213,11 +217,16 @@ fn main() {
+             solver.settings.devex = std::env::var_os("LPIP_DEVEX").is_some();
+             solver.settings.avoid_dominant_components = std::env::var("LPIP_COMPONENT_SPLIT").map_or(true, |v| v != "force");
+         }
++        #[cfg(all(feature="backend_native",feature="search-diagnostics"))]
++        {
++            solver.settings.mip_diagnostics = std::env::var_os("LPIP_MIP_DIAGNOSTICS").is_some();
++            solver.settings.mip_trace_limit = std::env::var("LPIP_MIP_TRACE_LIMIT").map_or(256, |v| v.parse().unwrap());
++        }
+         #[cfg(feature = "backend_highs")]
+         let mut solver = lp_ip_craft_highs::HighsSolver::new(lp_ip_craft_highs::HighsOptions {
+-            time_limit_seconds: Some(30.),
+-            node_limit: mip.then_some(100_000),
+-            iteration_limit: (!mip).then_some(1_000_000),
++            time_limit_seconds: Some(std::env::var("LPIP_TIME_LIMIT").map_or(30., |v| v.parse().unwrap())),
++            node_limit: mip.then(|| std::env::var("LPIP_NODE_LIMIT").map_or(100_000, |v| v.parse().unwrap())),
++            iteration_limit: (!mip).then(|| std::env::var("LPIP_ITERATION_LIMIT").map_or(1_000_000, |v| v.parse().unwrap())),
+             ..Default::default()
+         });
+         #[cfg(feature = "kernel-profile")]
+diff --git a/crates/native/src/components.rs b/crates/native/src/components.rs
+index 305197d..c12240d 100644
+--- a/crates/native/src/components.rs
++++ b/crates/native/src/components.rs
+@@ -156,6 +156,9 @@ fn quota(limit: Option<u64>, index: usize, count: usize) -> Option<u64> {
+ }
+ fn controls(settings: &NativeOptions, started: Instant) -> NativeOptions {
+     let mut c = settings.clone();
++    // A child trace is not a global tree trace. The aggregate reports its
++    // explicit scope instead of computing and silently discarding events.
++    c.mip_diagnostics = false;
+     c.decompose = false;
+     c.time_limit_seconds = settings
+         .time_limit_seconds
+@@ -373,6 +376,15 @@ pub(crate) fn solve_if_separable(
+             (settings.objective_lattice && incumbent::integer_lattice(model)).to_string(),
+         ),
+     ]);
++    if settings.mip_diagnostics && model.is_mip() {
++        for (key, value) in &mut report.effective_options {
++            if key == "mip_diagnostics" {
++                *value = "true".into();
++            }
++        }
++        report.effective_options.push(("diagnostics.mip_search".into(),
++            format!("{{\"schema_version\":1,\"scope\":\"component_aggregate\",\"components\":{},\"workers\":{},\"events\":[],\"note\":\"no global serial search trace; use decompose=false for diagnosis\"}}", parts.len(), workers)));
++    }
+     let mut out = SolveResult::empty(status, "", report);
+     out.nodes = nodes;
+     out.iterations = pivots;
+diff --git a/crates/native/src/diagnostics.rs b/crates/native/src/diagnostics.rs
+new file mode 100644
+index 0000000..2b3dcfe
+--- /dev/null
++++ b/crates/native/src/diagnostics.rs
+@@ -0,0 +1,278 @@
++//! Opt-in, bounded observations. Nothing here supplies search decisions.
++use lp_ip_craft::{Gap, Model, Sense, SolveResult, Status};
++use std::{fmt::Write, time::Instant};
++
++#[derive(Clone, Copy, Default)]
++pub(crate) struct PropagationStats {
++    pub eligible_rows: usize,
++    pub eligible_terms: usize,
++    pub rows_dequeued: u64,
++    pub terms_examined: u64,
++    pub slack_skips: u64,
++    pub bound_changes: u64,
++    pub work_limit_exits: u64,
++    pub infeasibilities: u64,
++}
++
++#[derive(Clone, Copy)]
++struct Milestone {
++    seconds: f64,
++    nodes: u64,
++    pivots: u64,
++    objective: f64,
++    proof: Option<f64>,
++}
++
++struct Event {
++    kind: &'static str,
++    source: &'static str,
++    at: Milestone,
++    tree_nodes: u64,
++    open_nodes: usize,
++    depth: usize,
++    certified: Option<f64>,
++    global_bound: Option<f64>,
++}
++
++pub(crate) struct SearchDiagnostics {
++    started: Instant,
++    sense: Sense,
++    limit: usize,
++    events: Vec<Event>,
++    dropped: u64,
++    first_candidate: Option<Milestone>,
++    first_certified: Option<Milestone>,
++    candidate: Option<f64>,
++    certified: Option<f64>,
++    global_bound: Option<f64>,
++    root_status: &'static str,
++    root_objective: Option<f64>,
++    root_bound: Option<f64>,
++    root_fractional: Option<usize>,
++    root_pivots: u64,
++    root_seconds: f64,
++    current_open: usize,
++    current_depth: usize,
++    pub tree_nodes: u64,
++    pub max_depth: usize,
++    pub max_open: usize,
++    pub node_lp_solves: u64,
++    pub node_lp_pivots: u64,
++    pub node_lp_seconds: f64,
++    pub inherited_prunes: u64,
++    pub solved_prunes: u64,
++    pub infeasible_lps: u64,
++    pub integral_leaves: u64,
++    pub heuristic_calls: u64,
++    pub rounding_attempts: u64,
++    pub accepted_candidates: u64,
++    pub candidate_improvements: u64,
++    pub certified_improvements: u64,
++    pub original_check_rejections: u64,
++}
++
++fn number(value: Option<f64>) -> String {
++    value
++        .filter(|v| v.is_finite())
++        .map_or_else(|| "null".into(), |v| v.to_string())
++}
++fn milestone(value: Option<Milestone>) -> String {
++    value.map_or_else(|| "null".into(), |v| format!(
++        "{{\"elapsed_seconds\":{},\"nodes\":{},\"pivots\":{},\"objective\":{},\"certified_objective_bound\":{}}}",
++        v.seconds, v.nodes, v.pivots, number(Some(v.objective)), number(v.proof)))
++}
++
++impl SearchDiagnostics {
++    pub fn new(model: &Model, started: Instant, limit: usize) -> Self {
++        Self {
++            started,
++            sense: model.sense(),
++            limit,
++            events: Vec::new(),
++            dropped: 0,
++            first_candidate: None,
++            first_certified: None,
++            candidate: None,
++            certified: None,
++            global_bound: None,
++            root_status: "not_solved",
++            root_objective: None,
++            root_bound: None,
++            root_fractional: None,
++            root_pivots: 0,
++            root_seconds: 0.,
++            current_open: 0,
++            current_depth: 0,
++            tree_nodes: 0,
++            max_depth: 0,
++            max_open: 0,
++            node_lp_solves: 0,
++            node_lp_pivots: 0,
++            node_lp_seconds: 0.,
++            inherited_prunes: 0,
++            solved_prunes: 0,
++            infeasible_lps: 0,
++            integral_leaves: 0,
++            heuristic_calls: 0,
++            rounding_attempts: 0,
++            accepted_candidates: 0,
++            candidate_improvements: 0,
++            certified_improvements: 0,
++            original_check_rejections: 0,
++        }
++    }
++    fn at(&self, nodes: u64, pivots: u64, objective: Option<f64>, proof: Option<f64>) -> Milestone {
++        Milestone {
++            seconds: self.started.elapsed().as_secs_f64(),
++            nodes,
++            pivots,
++            objective: objective.unwrap_or(f64::NAN),
++            proof,
++        }
++    }
++    fn event(&mut self, kind: &'static str, source: &'static str, at: Milestone) {
++        if self.events.len() < self.limit {
++            self.events.push(Event {
++                kind,
++                source,
++                at,
++                tree_nodes: self.tree_nodes,
++                open_nodes: self.current_open,
++                depth: self.current_depth,
++                certified: self.certified,
++                global_bound: self.global_bound,
++            });
++        } else {
++            self.dropped += 1;
++        }
++    }
++    pub fn enter_node(&mut self, depth: usize, open: usize) {
++        self.tree_nodes += 1;
++        self.current_depth = depth;
++        self.current_open = open;
++        self.max_depth = self.max_depth.max(depth);
++        self.max_open = self.max_open.max(open);
++    }
++    pub fn checkpoint(&mut self, nodes: u64, pivots: u64, bound: Option<f64>, open: usize) {
++        let changed = self.global_bound != bound;
++        self.global_bound = bound;
++        self.current_open = open;
++        self.max_open = self.max_open.max(open);
++        if changed || nodes == 0 || nodes.is_power_of_two() {
++            self.event(
++                "progress",
++                "frontier",
++                self.at(nodes, pivots, self.candidate, self.certified),
++            );
++        }
++    }
++    pub fn root_lp(&mut self, status: Status, pivots: u64, seconds: f64) {
++        self.root_status = status.as_str();
++        self.root_pivots = pivots;
++        self.root_seconds = seconds;
++    }
++    pub fn root_solution(
++        &mut self,
++        nodes: u64,
++        pivots: u64,
++        objective: f64,
++        bound: Option<f64>,
++        fractional: usize,
++    ) {
++        self.root_objective = Some(objective);
++        self.root_bound = bound;
++        self.root_fractional = Some(fractional);
++        self.event(
++            "root_relaxation",
++            "node_lp",
++            self.at(nodes, pivots, Some(objective), bound),
++        );
++    }
++    pub fn candidate(
++        &mut self,
++        objective: f64,
++        proof: Option<f64>,
++        source: &'static str,
++        nodes: u64,
++        pivots: u64,
++    ) {
++        self.accepted_candidates += 1;
++        let improves = self.candidate.is_none_or(|old| match self.sense {
++            Sense::Minimize => objective < old,
++            Sense::Maximize => objective > old,
++        });
++        if improves {
++            self.candidate = Some(objective);
++            self.candidate_improvements += 1;
++            let at = self.at(nodes, pivots, Some(objective), proof);
++            self.first_candidate.get_or_insert(at);
++            self.event("accepted_candidate", source, at);
++        }
++        if let Some(proof) = proof {
++            self.certified = Some(proof);
++            self.certified_improvements += 1;
++            let at = self.at(nodes, pivots, Some(objective), Some(proof));
++            self.first_certified.get_or_insert(at);
++            self.event("certified_incumbent", source, at);
++        }
++    }
++    pub fn finish(
++        mut self,
++        result: &mut SolveResult,
++        propagation: Option<PropagationStats>,
++        original: &Model,
++        search_model: &Model,
++    ) {
++        self.global_bound = result.best_bound;
++        let terminal = self.at(
++            result.nodes,
++            result.iterations,
++            result.evaluation.as_ref().map(|e| e.objective),
++            self.certified,
++        );
++        self.event("terminal", result.status.as_str(), terminal);
++        let p = propagation.unwrap_or_default();
++        let mut json = String::new();
++        write!(json, "{{\"schema_version\":1,\"scope\":\"serial_search\",\"time_origin\":\"after_root_preprocessing\",\"sense\":\"{}\",\"original_rows\":{},\"search_rows\":{},\"original_columns\":{},\"search_columns\":{},", if self.sense == Sense::Minimize { "minimize" } else { "maximize" }, original.m(), search_model.m(), original.n(), search_model.n()).unwrap();
++        write!(json, "\"root\":{{\"status\":\"{}\",\"lp_objective\":{},\"conservative_bound\":{},\"fractional_integers\":{},\"lp_pivots\":{},\"lp_seconds\":{}}},", self.root_status, number(self.root_objective), number(self.root_bound), self.root_fractional.map_or_else(|| "null".into(), |v| v.to_string()), self.root_pivots, self.root_seconds).unwrap();
++        write!(
++            json,
++            "\"first_accepted_candidate\":{},\"first_certified_incumbent\":{},",
++            milestone(self.first_candidate),
++            milestone(self.first_certified)
++        )
++        .unwrap();
++        write!(json, "\"totals\":{{\"tree_nodes_visited\":{},\"max_depth\":{},\"max_open_nodes\":{},\"node_lp_solves\":{},\"node_lp_pivots\":{},\"node_lp_seconds\":{},\"other_lp_pivots\":{},\"inherited_bound_prunes\":{},\"solved_bound_prunes\":{},\"infeasible_node_lps\":{},\"integral_leaves\":{},\"heuristic_calls\":{},\"rounding_attempts\":{},\"accepted_candidates\":{},\"candidate_improvements\":{},\"certified_improvements\":{},\"original_check_rejections\":{}}},", self.tree_nodes, self.max_depth, self.max_open, self.node_lp_solves, self.node_lp_pivots, self.node_lp_seconds, result.iterations.saturating_sub(self.node_lp_pivots), self.inherited_prunes, self.solved_prunes, self.infeasible_lps, self.integral_leaves, self.heuristic_calls, self.rounding_attempts, self.accepted_candidates, self.candidate_improvements, self.certified_improvements, self.original_check_rejections).unwrap();
++        write!(json, "\"propagation\":{{\"enabled\":{},\"eligible_rows\":{},\"eligible_terms\":{},\"ineligible_rows\":{},\"rows_dequeued\":{},\"terms_examined\":{},\"slack_skips\":{},\"bound_changes\":{},\"work_limit_exits\":{},\"infeasibilities\":{}}},", propagation.is_some(), p.eligible_rows, p.eligible_terms, search_model.m().saturating_sub(p.eligible_rows), p.rows_dequeued, p.terms_examined, p.slack_skips, p.bound_changes, p.work_limit_exits, p.infeasibilities).unwrap();
++        write!(json, "\"terminal\":{{\"status\":\"{}\",\"nodes\":{},\"pivots\":{},\"elapsed_seconds\":{},\"returned_objective\":{},\"best_bound\":{},\"certified_incumbent_bound\":{},{} }},", result.status.as_str(), result.nodes, result.iterations, terminal.seconds, number(result.evaluation.as_ref().map(|e| e.objective)), number(result.best_bound), number(self.certified), self.gap(self.certified, result.best_bound)).unwrap();
++        write!(
++            json,
++            "\"event_limit\":{},\"events_dropped\":{},\"truncated\":{},\"events\":[",
++            self.limit,
++            self.dropped,
++            self.dropped > 0
++        )
++        .unwrap();
++        for (i, event) in self.events.iter().enumerate() {
++            if i > 0 {
++                json.push(',');
++            }
++            write!(json, "{{\"kind\":\"{}\",\"source\":\"{}\",\"elapsed_seconds\":{},\"nodes\":{},\"pivots\":{},\"tree_nodes_visited\":{},\"open_nodes\":{},\"depth\":{},\"objective\":{},\"certified_incumbent_bound\":{},\"global_bound\":{},{} }}", event.kind, event.source, event.at.seconds, event.at.nodes, event.at.pivots, event.tree_nodes, event.open_nodes, event.depth, number(Some(event.at.objective)), number(event.certified), number(event.global_bound), self.gap(event.certified, event.global_bound)).unwrap();
++        }
++        json.push_str("]}");
++        result
++            .backend
++            .effective_options
++            .push(("diagnostics.mip_search".into(), json));
++    }
++    fn gap(&self, incumbent: Option<f64>, bound: Option<f64>) -> String {
++        let gap = incumbent
++            .zip(bound)
++            .map(|(i, b)| Gap::new(self.sense, i, b));
++        format!(
++            "\"absolute_gap\":{},\"relative_gap\":{}",
++            number(gap.map(|g| g.absolute)),
++            number(gap.map(|g| g.relative))
++        )
++    }
++}
+diff --git a/crates/native/src/ft.rs b/crates/native/src/ft.rs
+index 48f3019..faa4ae1 100644
+--- a/crates/native/src/ft.rs
++++ b/crates/native/src/ft.rs
+@@ -14,6 +14,7 @@ struct SparseReach {
+     cooldown: [usize; 2],
+ }
+ impl SparseReach {
++    #[allow(clippy::too_many_arguments)]
+     fn find(
+         &mut self,
+         v: &[f64],
+@@ -21,8 +22,14 @@ impl SparseReach {
+         graph: &[Vec<(usize, f64)>],
+         rank: &[usize],
+         unit: Option<usize>,
++        seeds: Option<&[(usize, f64)]>,
+         channel: usize,
+     ) -> bool {
++        let _timer = crate::profile::enter(if channel == 0 {
++            "reach_ft_ftran"
++        } else {
++            "reach_ft_btran"
++        });
+         if self.cooldown[channel] > 0 {
+             self.cooldown[channel] -= 1;
+             return false;
+@@ -35,8 +42,12 @@ impl SparseReach {
+         }
+         self.nodes.clear();
+         let limit = v.len() / 8;
+-        for at in 0..if unit.is_some() { 1 } else { v.len() } {
+-            let p = unit.unwrap_or(at);
++        for at in 0..if unit.is_some() {
++            1
++        } else {
++            seeds.map_or(v.len(), |s| s.len())
++        } {
++            let p = unit.unwrap_or_else(|| seeds.map_or(at, |s| s[at].0));
+             let r = row_of.map_or(p, |rows| rows[p]);
+             if v[r] != 0. {
+                 self.seen[p] = true;
+@@ -157,15 +168,34 @@ impl Ft {
+                 }
+             }
+         }
+-        let sparse = self
+-            .reach
+-            .find(v, Some(&self.row_of), &self.cols, &self.rank, None, 0);
++        let sparse = self.reach.find(
++            v,
++            Some(&self.row_of),
++            &self.cols,
++            &self.rank,
++            None,
++            capture.then_some(&self.spike),
++            0,
++        );
++        crate::profile::count(
++            if sparse {
++                "calls.ft_ftran_sparse"
++            } else {
++                "calls.ft_ftran_dense"
++            },
++            1,
++        );
+         let order = if sparse {
+-            out.fill(0.);
++            {
++                let _timer = crate::profile::enter("ftran_workspace_clear");
++                out.fill(0.);
++            }
++            crate::profile::count("entries.ftran_workspace_clear", out.len());
+             &self.reach.nodes
+         } else {
+             &self.order
+         };
++        let _upper = crate::profile::enter("ftran_ft_upper");
+         for &p in order.iter().rev() {
+             let rhs = v[self.row_of[p]];
+             let t = if rhs == 0. {
+@@ -183,7 +213,10 @@ impl Ft {
+                 }
+             }
+         }
++        drop(_upper);
++        let _timer = crate::profile::enter("ftran_output");
+         v.copy_from_slice(out);
++        crate::profile::count("entries.ftran_output", out.len());
+     }
+     pub fn column_support(&self) -> &[usize] {
+         &self.column_support
+@@ -193,7 +226,9 @@ impl Ft {
+             self.ep.clear();
+             self.ep_position = unit;
+         }
+-        self.sparse_btran = self.reach.find(v, None, &self.rows, &self.rank, unit, 1);
++        self.sparse_btran = self
++            .reach
++            .find(v, None, &self.rows, &self.rank, unit, None, 1);
+         let order = if self.sparse_btran {
+             out.fill(0.);
+             &self.reach.nodes
+diff --git a/crates/native/src/lib.rs b/crates/native/src/lib.rs
+index 5a8c9ae..df653ca 100644
+--- a/crates/native/src/lib.rs
++++ b/crates/native/src/lib.rs
+@@ -8,6 +8,7 @@ mod batch;
+ mod boxed;
+ mod components;
+ mod dense;
++mod diagnostics;
+ mod ft;
+ mod incumbent;
+ mod lp;
+@@ -132,6 +133,10 @@ pub struct NativeOptions {
+     pub adaptive_pricing: bool,
+     /// Replay validated numerical pivots for identical basis signatures.
+     pub factor_replay: bool,
++    /// Collect bounded observational MIP search diagnostics in backend metadata.
++    pub mip_diagnostics: bool,
++    /// Maximum retained search events (0 means summaries only, at most 4096).
++    pub mip_trace_limit: usize,
+ }
+ impl Default for NativeOptions {
+     fn default() -> Self {
+@@ -167,12 +172,19 @@ impl Default for NativeOptions {
+             devex: false,
+             adaptive_pricing: true,
+             factor_replay: false,
++            mip_diagnostics: false,
++            mip_trace_limit: 256,
+         }
+     }
+ }
+ impl NativeOptions {
+     /// Validate settings before cancellation or numerical work.
+     pub fn validate(&self) -> Result<()> {
++        if self.mip_trace_limit > 4096 {
++            return Err(Error::InvalidInput(
++                "mip_trace_limit must be at most 4096".into(),
++            ));
++        }
+         if self
+             .time_limit_seconds
+             .is_some_and(|v| !v.is_finite() || v < 0.0)
+@@ -295,28 +307,52 @@ fn accepted(
+         && r.duality_gap <= settings.dual_tolerance
+ }
+ 
+-struct Incumbents {
++struct Incumbents<'a> {
+     best: f64,
+     upper: f64,
+     certified: Option<(Vec<f64>, lp_ip_craft::Evaluation)>,
++    trace: Option<diagnostics::SearchDiagnostics>,
++    original_model: &'a Model,
++    pivots: u64,
+ }
+ fn consider(
+     model: &Model,
+     x: Vec<f64>,
+     options: &Options,
+     result: &mut SolveResult,
+-    pool: &mut Incumbents,
++    pool: &mut Incumbents<'_>,
++    source: &'static str,
+ ) -> Result<bool> {
+     let e = check::evaluate(model, &x, &options.tolerances)?;
+     if !e.feasible_candidate {
+         return Ok(false);
+     }
++    let previous_upper = pool.upper;
+     if let Some(upper) = incumbent::upper(model, &x) {
+         if upper < pool.upper {
+             pool.upper = upper;
+             pool.certified = Some((x.clone(), e.clone()));
+         }
+     }
++    if let Some(trace) = &mut pool.trace {
++        // Root reductions do not change columns. Check the user's model too;
++        // a diagnostic must not confuse reduced-model and original acceptance.
++        if let Ok(original) = check::evaluate(pool.original_model, &x, &options.tolerances) {
++            if original.feasible_candidate {
++                trace.candidate(
++                    original.objective,
++                    (pool.upper < previous_upper).then(|| oriented(model, pool.upper)),
++                    source,
++                    result.nodes,
++                    pool.pivots,
++                );
++            } else {
++                trace.original_check_rejections += 1;
++            }
++        } else {
++            trace.original_check_rejections += 1;
++        }
++    }
+     let obj = oriented(model, e.objective);
+     if obj < pool.best {
+         pool.best = obj;
+@@ -345,7 +381,7 @@ fn certify(
+     settings: &NativeOptions,
+     keep: &[bool],
+     certifier: &mut Certifier,
+-    pool: &mut Incumbents,
++    pool: &mut Incumbents<'_>,
+     result: &mut SolveResult,
+     budget: &mut Budget<'_>,
+ ) -> Result<()> {
+@@ -385,7 +421,8 @@ fn certify(
+         point[j] = rounded[j];
+     }
+     let before = pool.upper;
+-    consider(model, point, options, result, pool)?;
++    pool.pivots = budget.pivots;
++    consider(model, point, options, result, pool, "certification")?;
+     if pool.upper < before {
+         certifier.certified += 1;
+     }
+@@ -398,10 +435,13 @@ fn heuristic(
+     x: &[f64],
+     options: &Options,
+     result: &mut SolveResult,
+-    pool: &mut Incumbents,
++    pool: &mut Incumbents<'_>,
+     budget: &Budget<'_>,
+ ) -> Result<u64> {
+     let mut found = 0;
++    if let Some(trace) = &mut pool.trace {
++        trace.heuristic_calls += 1;
++    }
+     let mut order: Vec<_> = (0..model.n())
+         .filter(|&j| model.kinds()[j].is_integral())
+         .collect();
+@@ -416,6 +456,9 @@ fn heuristic(
+             break;
+         }
+         let mut point = x.to_vec();
++        if let Some(trace) = &mut pool.trace {
++            trace.rounding_attempts += 1;
++        }
+         for &j in &order {
+             point[j] = match mode {
+                 0 => point[j].round(),
+@@ -426,7 +469,7 @@ fn heuristic(
+                 .max(node_bounds.lower[j].ceil())
+                 .min(node_bounds.upper[j].floor());
+         }
+-        if !consider(model, point.clone(), options, result, pool)? {
++        if !consider(model, point.clone(), options, result, pool, "rounding")? {
+             continue;
+         }
+         found += 1;
+@@ -442,7 +485,7 @@ fn heuristic(
+             point[j] += if c < 0.0 { 1.0 } else { -1.0 };
+             if point[j] < node_bounds.lower[j]
+                 || point[j] > node_bounds.upper[j]
+-                || !consider(model, point.clone(), options, result, pool)?
++                || !consider(model, point.clone(), options, result, pool, "unit_move")?
+             {
+                 point[j] = old;
+             } else {
+@@ -532,6 +575,27 @@ struct Open {
+     serial: u64,
+     node: Node,
+ }
++
++/// Observational lower bound in internally minimized objective units. The
++/// heap puts every missing bound first; no scan or estimate is needed.
++fn diagnostic_frontier_bound(
++    closed: f64,
++    all_closed_known: bool,
++    open: &std::collections::BinaryHeap<Open>,
++    current: Option<Option<f64>>,
++) -> Option<f64> {
++    if !all_closed_known {
++        return None;
++    }
++    let mut bound = closed;
++    if let Some(node) = open.peek() {
++        bound = bound.min(node.node.bound?);
++    }
++    if let Some(node_bound) = current {
++        bound = bound.min(node_bound?);
++    }
++    bound.is_finite().then_some(bound)
++}
+ impl PartialEq for Open {
+     fn eq(&self, other: &Self) -> bool {
+         self.cmp(other).is_eq()
+@@ -611,6 +675,7 @@ impl NativeSolver {
+         options: &Options,
+         start: Option<&WarmStart>,
+         cancel: &CancellationToken,
++        diagnostic_original: &Model,
+     ) -> Result<SolveResult> {
+         options.validate()?;
+         self.settings.validate()?;
+@@ -701,6 +766,11 @@ impl NativeSolver {
+             best: f64::INFINITY,
+             upper: f64::INFINITY,
+             certified: None,
++            trace: (settings.mip_diagnostics && model.is_mip()).then(|| {
++                diagnostics::SearchDiagnostics::new(model, call_started, settings.mip_trace_limit)
++            }),
++            original_model: diagnostic_original,
++            pivots: 0,
+         };
+         let lattice = settings.objective_lattice && incumbent::integer_lattice(model);
+         let mut counters = Counters::default();
+@@ -712,10 +782,14 @@ impl NativeSolver {
+                     options,
+                     &mut result,
+                     &mut pool,
++                    "start",
+                 )?;
+             }
+         }
+         let mut domain = propagate::Domain::new(model, settings.presolve);
++        if pool.trace.is_some() && settings.presolve {
++            domain.enable_statistics();
++        }
+         let root = model.variables();
+         let mut node_box = NodeBox {
+             bounds: root.clone(),
+@@ -745,6 +819,20 @@ impl NativeSolver {
+         let mut lp: Option<Lp> = None;
+         let (mut removed_rows, mut removed_columns) = (0usize, 0usize);
+         loop {
++            if let Some(trace) = &mut pool.trace {
++                trace.checkpoint(
++                    result.nodes,
++                    budget.pivots,
++                    diagnostic_frontier_bound(
++                        closed_bound,
++                        all_bounds,
++                        &open,
++                        dive.as_ref().map(|n| n.bound),
++                    )
++                    .map(|b| oriented(model, b)),
++                    open.len() + usize::from(dive.is_some()),
++                );
++            }
+             let node = match dive.take() {
+                 Some(node) => node,
+                 None => match open.pop() {
+@@ -772,10 +860,17 @@ impl NativeSolver {
+                 break;
+             }
+             if node.bound.is_some_and(|b| b >= pool.upper) {
++                if let Some(trace) = &mut pool.trace {
++                    trace.enter_node(node.depth, open.len() + 1);
++                    trace.inherited_prunes += 1;
++                }
+                 closed_bound = closed_bound.min(node.bound.unwrap());
+                 counters.pruned_nodes += 1;
+                 continue;
+             }
++            if let Some(trace) = &mut pool.trace {
++                trace.enter_node(node.depth, open.len() + 1);
++            }
+             let conversion = Instant::now();
+             let fresh = lp.is_none();
+             let lp = match &mut lp {
+@@ -824,6 +919,7 @@ impl NativeSolver {
+             };
+             result.backend.conversion_seconds += conversion.elapsed().as_secs_f64();
+             let solve = Instant::now();
++            let before_pivots = budget.pivots;
+             if warm {
+                 counters.warm_nodes += 1;
+             } else {
+@@ -855,12 +951,27 @@ impl NativeSolver {
+                     checked = false;
+                     lp.reset_to_slack();
+                     s = lp.solve(&mut budget, true)?;
++                    if let Some(trace) = &mut pool.trace {
++                        trace.node_lp_solves += 1;
++                    }
+                 }
+             }
+             if s == Status::Infeasible && !lp.infeasibility_verified() {
+                 counters.unverified_infeasible += 1;
+             }
+-            result.backend.solve_seconds += solve.elapsed().as_secs_f64();
++            let node_seconds = solve.elapsed().as_secs_f64();
++            result.backend.solve_seconds += node_seconds;
++            if let Some(trace) = &mut pool.trace {
++                trace.node_lp_solves += 1;
++                trace.node_lp_pivots += budget.pivots - before_pivots;
++                trace.node_lp_seconds += node_seconds;
++                if node.depth == 0 {
++                    trace.root_lp(s, budget.pivots - before_pivots, node_seconds);
++                }
++                if s == Status::Infeasible {
++                    trace.infeasible_lps += 1;
++                }
++            }
+             if model.is_mip() {
+                 result.nodes += 1;
+             }
+@@ -927,6 +1038,31 @@ impl NativeSolver {
+                 model,
+                 model.objective().iter().zip(&x).map(|(c, v)| c * v).sum(),
+             );
++            pool.pivots = budget.pivots;
++            if let Some(trace) = &mut pool.trace {
++                trace.checkpoint(
++                    result.nodes,
++                    budget.pivots,
++                    diagnostic_frontier_bound(closed_bound, all_bounds, &open, Some(bound))
++                        .map(|b| oriented(model, b)),
++                    open.len() + 1,
++                );
++                if node.depth == 0 {
++                    let fractional = (0..model.n())
++                        .filter(|&j| {
++                            model.kinds()[j].is_integral()
++                                && (x[j] - x[j].round()).abs() > options.tolerances.integrality
++                        })
++                        .count();
++                    trace.root_solution(
++                        result.nodes,
++                        budget.pivots,
++                        model.objective_offset() + oriented(model, objective),
++                        bound.map(|b| oriented(model, b)),
++                        fractional,
++                    );
++                }
++            }
+             if let Some(origin) = node.origin {
+                 pseudocosts.record(origin, objective);
+             }
+@@ -956,6 +1092,9 @@ impl NativeSolver {
+                 &mut budget,
+             )?;
+             if bound.is_some_and(|b| b >= pool.upper) {
++                if let Some(trace) = &mut pool.trace {
++                    trace.solved_prunes += 1;
++                }
+                 closed_bound = closed_bound.min(bound.unwrap());
+                 counters.pruned_nodes += 1;
+                 result.backend.check_seconds += checks.elapsed().as_secs_f64();
+@@ -1052,13 +1191,24 @@ impl NativeSolver {
+                 }
+                 dive = next;
+             } else {
++                pool.pivots = budget.pivots;
++                if let Some(trace) = &mut pool.trace {
++                    trace.integral_leaves += 1;
++                }
+                 let mut point = x;
+                 for (j, v) in point.iter_mut().enumerate() {
+                     if model.kinds()[j].is_integral() {
+                         *v = v.round();
+                     }
+                 }
+-                if !consider(model, point, options, &mut result, &mut pool)? {
++                if !consider(
++                    model,
++                    point,
++                    options,
++                    &mut result,
++                    &mut pool,
++                    "integral_leaf",
++                )? {
+                     status = Status::NumericalFailure;
+                     all_bounds = false;
+                     break;
+@@ -1167,6 +1317,9 @@ impl NativeSolver {
+         }
+         result.status = status;
+         result.iterations = budget.pivots;
++        if let Some(trace) = pool.trace.take() {
++            trace.finish(&mut result, domain.statistics(), diagnostic_original, model);
++        }
+         result.message = format!(
+             "Native dual simplex numerical solve: {} (not an exact certificate)",
+             status.as_str()
+@@ -1496,6 +1649,8 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
+         ("devex", s.devex.to_string()),
+         ("adaptive_pricing", s.adaptive_pricing.to_string()),
+         ("factor_replay", s.factor_replay.to_string()),
++        ("mip_diagnostics", s.mip_diagnostics.to_string()),
++        ("mip_trace_limit", s.mip_trace_limit.to_string()),
+         ("component_threads", s.component_threads.to_string()),
+         (
+             "component_parallel_min_entries",
+diff --git a/crates/native/src/lu.rs b/crates/native/src/lu.rs
+index 6aa1e37..2d05a19 100644
+--- a/crates/native/src/lu.rs
++++ b/crates/native/src/lu.rs
+@@ -177,6 +177,11 @@ impl Reach {
+         channel: usize,
+         seeds: Option<&[usize]>,
+     ) -> bool {
++        let _timer = crate::profile::enter(if channel < 2 {
++            "reach_ftran"
++        } else {
++            "reach_btran"
++        });
+         if self.cooldown[channel] > 0 {
+             self.cooldown[channel] -= 1;
+             return false;
+@@ -900,7 +905,16 @@ impl Lu {
+     }
+     pub fn ftran_entering_indexed(&mut self, v: &mut [f64], indices: &mut Vec<usize>) {
+         self.ftran_entering(v);
++        let _timer = crate::profile::enter("ftran_support_export");
+         indices.clear();
++        // FT already records exactly the nonzero final positions. Without
++        // trailing conventional etas there is no support union to maintain.
++        if self.dense.is_none() && self.etas.is_empty() {
++            if let Some(ft) = &self.ft {
++                indices.extend_from_slice(ft.column_support());
++                return;
++            }
++        }
+         if self.result_sparse {
+             indices.extend(self.result_index.iter().copied().filter(|&i| v[i] != 0.));
+         } else {
+@@ -913,11 +927,13 @@ impl Lu {
+     }
+     fn ftran_impl(&mut self, v: &mut [f64], capture: bool) {
+         let _triangular = crate::profile::enter("ftran_triangular");
++        let _support = crate::profile::enter("ftran_support");
+         for &i in &self.result_index {
+             self.result_marked[i] = false;
+         }
+         self.result_index.clear();
+         self.result_sparse = false;
++        drop(_support);
+         if self.dense.is_some() {
+             self.work_sparse = false;
+             self.ftran_dense(v);
+@@ -954,7 +970,8 @@ impl Lu {
+             if let Some(ft) = &mut self.ft {
+                 self.work_sparse = false;
+                 ft.ftran(v, w, capture);
+-                if capture {
++                if capture && !self.etas.is_empty() {
++                    let _timer = crate::profile::enter("ftran_support");
+                     self.result_sparse = true;
+                     self.result_index.extend_from_slice(ft.column_support());
+                     for &p in &self.result_index {
+@@ -966,6 +983,7 @@ impl Lu {
+                     .reach
+                     .find(v, &self.u_cols, Some(&self.row_position), &self.row_step, 1)
+                 {
++                    let _clear = crate::profile::enter("ftran_workspace_clear");
+                     if self.work_sparse {
+                         for &p in &self.work_index {
+                             w[p] = 0.;
+@@ -974,6 +992,8 @@ impl Lu {
+                         w.fill(0.);
+                     }
+                     self.work_index.clear();
++                    drop(_clear);
++                    let _upper = crate::profile::enter("ftran_upper");
+                     for &i in self.reach.nodes.iter().rev() {
+                         let k = self.row_step[i];
+                         let p = self.pcol[k];
+@@ -992,14 +1012,17 @@ impl Lu {
+                             }
+                         }
+                     }
++                    drop(_upper);
+                     // Reach covers every old RHS entry and every triangular
+                     // write. Clear row identities before scattering positions.
++                    let _output = crate::profile::enter("ftran_output");
+                     for &i in &self.reach.nodes {
+                         v[i] = 0.;
+                     }
+                     for &p in &self.work_index {
+                         v[p] = w[p];
+                     }
++                    drop(_output);
+                     self.work_sparse = true;
+                     if capture {
+                         self.result_sparse = true;
+@@ -1010,6 +1033,7 @@ impl Lu {
+                     }
+                 } else {
+                     self.work_sparse = false;
++                    let _upper = crate::profile::enter("ftran_upper");
+                     for k in (0..self.m).rev() {
+                         let p = self.pcol[k];
+                         let rhs = v[self.prow[k]];
+@@ -1028,6 +1052,7 @@ impl Lu {
+                     }
+                 }
+                 if !self.work_sparse {
++                    let _timer = crate::profile::enter("ftran_output");
+                     v.copy_from_slice(w);
+                 }
+             }
+@@ -1455,6 +1480,63 @@ mod tests {
+         assert!(sparse_calls > 10, "sparse branch must be exercised");
+     }
+ 
++    #[test]
++    fn ft_indexed_output_handles_zero_rhs_cancellation_and_trailing_eta() {
++        let m = 256;
++        let mut columns: Vec<_> = (0..m).map(|p| vec![((p * 7 + 3) % m, 2.)]).collect();
++        let mut lu = factor(&columns, usize::MAX).unwrap();
++        lu.enable_ft();
++        let mut indices = Vec::new();
++        for step in 0..16 {
++            // Contaminate the shared workspace in the other orientation.
++            let mut transpose = vec![1.; m];
++            lu.btran(&mut transpose);
++            let expected: Vec<_> = (0..m)
++                .map(|j| {
++                    if step % 4 == 0 {
++                        0.
++                    } else if step % 4 == 1 {
++                        (j % 7) as f64 - 3.
++                    } else if j == step || j == step + 1 {
++                        1.
++                    } else {
++                        0.
++                    }
++                })
++                .collect();
++            let mut rhs = vec![0.; m];
++            for (p, col) in columns.iter().enumerate() {
++                for &(i, a) in col {
++                    rhs[i] += a * expected[p];
++                }
++            }
++            lu.ftran_entering_indexed(&mut rhs, &mut indices);
++            assert_eq!(indices.len(), rhs.iter().filter(|&&v| v != 0.).count());
++            assert!(indices.iter().all(|&i| rhs[i] != 0.));
++            assert!(
++                rhs.iter()
++                    .zip(&expected)
++                    .all(|(a, b)| (a - b).abs() < 1e-10)
++            );
++            if step == 4 || step == 8 {
++                let p = step;
++                let new = vec![((p * 7 + 3) % m, 3.), (((p + 1) * 7 + 3) % m, -0.5)];
++                let mut alpha = vec![0.; m];
++                for &(i, a) in &new {
++                    alpha[i] = a;
++                }
++                lu.ftran_entering_indexed(&mut alpha, &mut indices);
++                if step == 8 {
++                    lu.force_refactor = true;
++                }
++                let accepted = lu.update_sparse(p, &alpha, indices.iter().copied());
++                assert_eq!(accepted, step == 4);
++                columns[p] = new;
++            }
++        }
++        assert!(!lu.etas.is_empty());
++    }
++
+     #[test]
+     fn ft_accepts_general_sparse_lower_factor_without_materializing_dense_tails() {
+         let m = 256;
+diff --git a/crates/native/src/profile.rs b/crates/native/src/profile.rs
+index 1b4fc28..02537a1 100644
+--- a/crates/native/src/profile.rs
++++ b/crates/native/src/profile.rs
+@@ -52,6 +52,17 @@ mod enabled {
+     pub fn snapshot() -> Vec<(&'static str, u64, u64)> {
+         DATA.with(|d| d.borrow().totals.clone())
+     }
++    /// Untimed work counter, reported in the snapshot's count column.
++    pub fn count(name: &'static str, amount: usize) {
++        DATA.with(|d| {
++            let mut d = d.borrow_mut();
++            if let Some(entry) = d.totals.iter_mut().find(|e| e.0 == name) {
++                entry.2 += amount as u64;
++            } else {
++                d.totals.push((name, 0, amount as u64));
++            }
++        });
++    }
+ }
+ #[cfg(feature = "kernel-profile")]
+ pub use enabled::*;
+@@ -62,3 +73,6 @@ pub(crate) struct Guard;
+ pub(crate) fn enter(_: &'static str) -> Guard {
+     Guard
+ }
++#[cfg(not(feature = "kernel-profile"))]
++#[inline(always)]
++pub(crate) fn count(_: &'static str, _: usize) {}
+diff --git a/crates/native/src/propagate.rs b/crates/native/src/propagate.rs
+index 271c311..f6d18e2 100644
+--- a/crates/native/src/propagate.rs
++++ b/crates/native/src/propagate.rs
+@@ -1,5 +1,6 @@
+ //! Conservative integer-domain propagation with incremental exact activities.
+ use crate::Budget;
++use crate::diagnostics::PropagationStats;
+ use lp_ip_craft::{Bounds, Model};
+ use std::collections::VecDeque;
+ 
+@@ -24,6 +25,7 @@ pub(crate) struct Domain {
+     marked: Vec<bool>,
+     first: bool,
+     work_limit: usize,
++    statistics: Option<PropagationStats>,
+ }
+ fn floor_div(a: i128, b: i128) -> i128 {
+     debug_assert!(b > 0);
+@@ -64,6 +66,7 @@ impl Domain {
+             marked: vec![false; n],
+             first: true,
+             work_limit: 4096,
++            statistics: None,
+         };
+         if !enabled || !model.is_mip() {
+             return domain;
+@@ -128,6 +131,16 @@ impl Domain {
+             .max(4096);
+         domain
+     }
++    pub fn enable_statistics(&mut self) {
++        self.statistics = Some(PropagationStats {
++            eligible_rows: self.rows.len(),
++            eligible_terms: self.rows.iter().map(|r| r.terms.len()).sum(),
++            ..Default::default()
++        });
++    }
++    pub fn statistics(&self) -> Option<PropagationStats> {
++        self.statistics
++    }
+     fn enqueue(&mut self, row: usize) {
+         if !self.queued[row] {
+             self.queued[row] = true;
+@@ -161,12 +174,18 @@ impl Domain {
+         for &j in &self.integers {
+             let (l, u) = (bounds.lower[j].ceil(), bounds.upper[j].floor());
+             if l > u {
++                if let Some(stats) = &mut self.statistics {
++                    stats.infeasibilities += 1;
++                }
+                 return false;
+             }
+             if l != bounds.lower[j] || u != bounds.upper[j] {
+                 bounds.lower[j] = l;
+                 bounds.upper[j] = u;
+                 changed.push(j);
++                if let Some(stats) = &mut self.statistics {
++                    stats.bound_changes += 1;
++                }
+             }
+         }
+         if self.rows.is_empty() {
+@@ -199,10 +218,19 @@ impl Domain {
+         while let Some(i) = self.pending.pop_front() {
+             self.queued[i] = false;
+             if work >= self.work_limit || budget.stop().is_some() {
++                if let Some(stats) = &mut self.statistics {
++                    stats.work_limit_exits += u64::from(work >= self.work_limit);
++                }
+                 return true;
+             }
++            if let Some(stats) = &mut self.statistics {
++                stats.rows_dequeued += 1;
++            }
+             let row = &self.rows[i];
+             if row.lower.is_some_and(|l| row.max < l) || row.upper.is_some_and(|u| row.min > u) {
++                if let Some(stats) = &mut self.statistics {
++                    stats.infeasibilities += 1;
++                }
+                 return false;
+             }
+             // Root domain widths are conservative upper bounds at every child.
+@@ -210,11 +238,20 @@ impl Domain {
+             if row.upper.is_none_or(|b| b - row.min >= row.max_width)
+                 && row.lower.is_none_or(|b| row.max - b >= row.max_width)
+             {
++                if let Some(stats) = &mut self.statistics {
++                    stats.slack_skips += 1;
++                }
+                 continue;
+             }
+             for k in 0..self.rows[i].terms.len() {
+                 work = work.saturating_add(1);
++                if let Some(stats) = &mut self.statistics {
++                    stats.terms_examined += 1;
++                }
+                 if work % 1024 == 0 && (work >= self.work_limit || budget.stop().is_some()) {
++                    if let Some(stats) = &mut self.statistics {
++                        stats.work_limit_exits += u64::from(work >= self.work_limit);
++                    }
+                     return true;
+                 }
+                 let row = &self.rows[i];
+@@ -240,12 +277,18 @@ impl Domain {
+                     }
+                 }
+                 if lo > hi {
++                    if let Some(stats) = &mut self.statistics {
++                        stats.infeasibilities += 1;
++                    }
+                     return false;
+                 }
+                 if lo != l || hi != u {
+                     bounds.lower[j] = lo as f64;
+                     bounds.upper[j] = hi as f64;
+                     changed.push(j);
++                    if let Some(stats) = &mut self.statistics {
++                        stats.bound_changes += 1;
++                    }
+                     self.last_changed.push(j);
+                     self.synchronize(j, lo, hi);
+                 }
+diff --git a/crates/native/src/root.rs b/crates/native/src/root.rs
+index 2b8cfdc..af4b64f 100644
+--- a/crates/native/src/root.rs
++++ b/crates/native/src/root.rs
+@@ -179,7 +179,7 @@ pub(crate) fn solve(
+         || solver.settings.iteration_limit == Some(0)
+         || solver.settings.node_limit == Some(0)
+     {
+-        return solver.solve_internal(model, options, start, cancel);
++        return solver.solve_internal(model, options, start, cancel, model);
+     }
+     let began = Instant::now();
+     let reduction = if solver.settings.singleton_presolve {
+@@ -230,8 +230,19 @@ pub(crate) fn solve(
+     if let Some(t) = &mut settings.time_limit_seconds {
+         *t = (*t - conversion).max(0.);
+     }
+-    let mut result =
+-        NativeSolver::new(settings).solve_internal(&reduced.model, options, start, cancel)?;
++    let mut result = NativeSolver::new(settings).solve_internal(
++        &reduced.model,
++        options,
++        start,
++        cancel,
++        model,
++    )?;
++    if solver.settings.mip_diagnostics && model.is_mip() {
++        result.backend.effective_options.push((
++            "diagnostics.mip_search.preprocessing_seconds".into(),
++            conversion.to_string(),
++        ));
++    }
+     let checks = Instant::now();
+     result
+         .backend
+@@ -255,6 +266,12 @@ pub(crate) fn solve(
+             result.message = "root postsolve rejected by original-model checks".into();
+             result.best_bound = None;
+         }
++        if solver.settings.mip_diagnostics && model.is_mip() {
++            result.backend.effective_options.push((
++                "diagnostics.mip_search.final_original_check".into(),
++                valid.to_string(),
++            ));
++        }
+     }
+     for (key, value) in effective_options(&solver.settings) {
+         if let Some(v) = result
+@@ -391,7 +408,13 @@ fn original_after_preprocessing(
+     if let Some(t) = &mut settings.time_limit_seconds {
+         *t = (*t - conversion).max(0.);
+     }
+-    let mut r = NativeSolver::new(settings).solve_internal(model, options, start, cancel)?;
++    let mut r = NativeSolver::new(settings).solve_internal(model, options, start, cancel, model)?;
++    if solver.settings.mip_diagnostics && model.is_mip() {
++        r.backend.effective_options.push((
++            "diagnostics.mip_search.preprocessing_seconds".into(),
++            conversion.to_string(),
++        ));
++    }
+     for (k, v) in effective_options(&solver.settings) {
+         if let Some(p) = r.backend.effective_options.iter_mut().find(|p| p.0 == k) {
+             p.1 = v;
+diff --git a/crates/python/src/lib.rs b/crates/python/src/lib.rs
+index 1d4e053..22114c7 100644
+--- a/crates/python/src/lib.rs
++++ b/crates/python/src/lib.rs
+@@ -387,6 +387,8 @@ fn native_settings(
+             "strong_branching" => settings.strong_branching = field(&value, &key)?,
+             "reduced_cost_fixing" => settings.reduced_cost_fixing = field(&value, &key)?,
+             "factor_replay" => settings.factor_replay = field(&value, &key)?,
++            "mip_diagnostics" => settings.mip_diagnostics = field(&value, &key)?,
++            "mip_trace_limit" => settings.mip_trace_limit = field(&value, &key)?,
+             "adaptive_pricing" => settings.adaptive_pricing = field(&value, &key)?,
+             "devex" => settings.devex = field(&value, &key)?,
+             "avoid_dominant_components" => {
+diff --git a/pyproject.toml b/pyproject.toml
+index a475f08..20a84a1 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -4,7 +4,7 @@ build-backend = "maturin"
+ 
+ [project]
+ name = "lp-ip-craft"
+-version = "0.22.0"
++version = "0.23.0"
+ description = "LP and mixed-integer LP in Rust with a native Rust solver and Python bindings"
+ readme = "README.md"
+ license = "MIT"
+diff --git a/python/lp_ip_craft/__init__.py b/python/lp_ip_craft/__init__.py
+index 00f89cd..d605a3b 100644
+--- a/python/lp_ip_craft/__init__.py
++++ b/python/lp_ip_craft/__init__.py
+@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
+ from ._native import solve_native as _solve_native
+ from ._native import solve_batch_native as _solve_batch_native
+ 
+-__version__ = "0.22.0"
++__version__ = "0.23.0"
+ 
+ __all__ = [
+     "BACKENDS",
+@@ -110,6 +110,8 @@ class NativeOptions:
+     factor_pivot_search: int = 4
+     factor_ordering: Literal["auto", "natural", "min_degree"] = "auto"
+     factor_replay: bool = False
++    mip_diagnostics: bool = False
++    mip_trace_limit: int = 256
+     adaptive_pricing: bool = True
+     devex: bool = False
+     avoid_dominant_components: bool = True

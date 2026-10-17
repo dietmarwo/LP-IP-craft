@@ -108,18 +108,11 @@ impl DenseTail {
         let w = &mut self.work;
         for i in 0..n {
             let row = &self.data[i * n..(i + 1) * n];
-            let mut v = rhs[self.rows[i]];
-            for (&l, &x) in row[..i].iter().zip(&w[..i]) {
-                v -= l * x;
-            }
-            w[i] = v;
+            w[i] = subtract_dot(rhs[self.rows[i]], &row[..i], &w[..i]);
         }
         for i in (0..n).rev() {
             let row = &self.data[i * n..(i + 1) * n];
-            let mut v = w[i];
-            for (&u, &x) in row[i + 1..].iter().zip(&w[i + 1..]) {
-                v -= u * x;
-            }
+            let v = subtract_dot(w[i], &row[i + 1..], &w[i + 1..]);
             w[i] = v / row[i];
             out[self.cols[i]] = w[i];
         }
@@ -146,4 +139,32 @@ impl DenseTail {
             out[self.rows[i]] = t;
         }
     }
+}
+
+// Independent accumulators shorten the dependency chain of each triangular
+// row. This permits vector arithmetic without reassociation/fast-math flags.
+// Short rows keep the scalar path to avoid setup and reduction overhead.
+#[inline]
+fn subtract_dot(mut value: f64, a: &[f64], x: &[f64]) -> f64 {
+    debug_assert_eq!(a.len(), x.len());
+    if a.len() < 32 {
+        for (&a, &x) in a.iter().zip(x) {
+            value -= a * x;
+        }
+        return value;
+    }
+    let mut sums = [0.; 4];
+    let mut ac = a.chunks_exact(4);
+    let mut xc = x.chunks_exact(4);
+    for (a, x) in ac.by_ref().zip(xc.by_ref()) {
+        sums[0] += a[0] * x[0];
+        sums[1] += a[1] * x[1];
+        sums[2] += a[2] * x[2];
+        sums[3] += a[3] * x[3];
+    }
+    value -= (sums[0] + sums[1]) + (sums[2] + sums[3]);
+    for (&a, &x) in ac.remainder().iter().zip(xc.remainder()) {
+        value -= a * x;
+    }
+    value
 }

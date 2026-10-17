@@ -1,0 +1,2811 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 8d0cc6a..dc79110 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -16,18 +16,18 @@ checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+ 
+ [[package]]
+ name = "lp-ip-craft"
+-version = "0.21.0"
++version = "0.22.0"
+ 
+ [[package]]
+ name = "lp-ip-craft-native"
+-version = "0.21.0"
++version = "0.22.0"
+ dependencies = [
+  "lp-ip-craft",
+ ]
+ 
+ [[package]]
+ name = "lp-ip-craft-python"
+-version = "0.21.0"
++version = "0.22.0"
+ dependencies = [
+  "lp-ip-craft",
+  "lp-ip-craft-native",
+diff --git a/Cargo.toml b/Cargo.toml
+index 3f8ca2b..01b3c9d 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -3,7 +3,7 @@ members = ["crates/core", "crates/native", "crates/python"]
+ default-members = ["crates/core", "crates/native"]
+ resolver = "3"
+ [workspace.package]
+-version = "0.21.0"
++version = "0.22.0"
+ edition = "2024"
+ rust-version = "1.85"
+ license = "MIT"
+diff --git a/README.md b/README.md
+index a9302cd..93cac66 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-> Native 0.21: fixes phase-one classification and progress restarts on 25fv47, speeds wide-packing forward solves, and caches certified domain bounds. See [the three-stage plan](docs/robustness-wide-cert/PLAN.md) and [measurements and validation](docs/robustness-wide-cert/RESULTS.md).
++> Native 0.22: sparse-support propagation, broader guarded FT updates, selectable replay/Devex/column pricing, reversible singleton presolve, sound MIP root bounds, exact root cover cuts and ordered Rust/Python batch solving. See [the implementation plan](docs/highs-lessons-implementation/PLAN.md) and [results](docs/highs-lessons-implementation/RESULTS.md).
+ 
+ > Native 0.20: faster packing basis arithmetic and exact block pricing, incremental integer propagation, certified reduced-cost fixing, and broader public/seeded coverage. See [the staged plan](docs/packing-mip/PLAN.md) and [full results](docs/packing-mip/RESULTS.md), including remaining failures and regressions.
+ 
+@@ -10,7 +10,7 @@
+ 
+ # LP-IP-craft — native Rust LP/MIP solver
+ 
+-Version **0.21.0** extends the 0.16 architecture, which replaced both 0.15
++Version **0.22.0** extends the 0.16 architecture, which replaced both 0.15
+ linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
+ simplex on a sparse LU factorization**, and replaces depth-first search with
+ best-bound search, diving and pseudocost branching. The optimization engine
+@@ -163,3 +163,32 @@ calculation. `strong_branching` defaults to false: optional bounded root probes
+ can guide branching, and all probe nodes/pivots consume the global limits.
+ Public finite-bound restrictions and known numerical failures are documented
+ alongside the measured gains and regressions.
++
++## Independent-job batches (0.22)
++
++```python
++from lp_ip_craft import NativeOptions, solve_batch
++results = solve_batch(models, workers=4,
++                      backend_options=NativeOptions(time_limit_seconds=30.0))
++for result in results:
++    if isinstance(result, Exception):
++        print(result)  # one failed job does not discard the others
++    else:
++        print(result.status, result.evaluation)
++```
++
++`models` is an iterable of immutable `Model` objects. Results keep input order;
++limits apply per job. `workers` is 1–16; each worker owns its numerical state,
++and component threading is disabled inside the batch. The interpreter is
++released. A shared `Cancellation` stops running and queued jobs at cooperative
++checkpoints. There are no warm starts in this batch API. Rust callers use
++`NativeSolver::solve_batch(&[&Model], &Options, workers, &CancellationToken)`.
++
++New native controls are `singleton_presolve`, `root_propagation`, `root_cuts`,
++`factor_replay`, `adaptive_pricing`, `devex`, and `avoid_dominant_components`.
++Replay, approximate Devex weights and root cover cuts default to false. Root
++inference can make an initially unbounded MIP box admissible when constraints
++prove finite bounds; unresolved infinities and magnitudes beyond 2^53-1 still
++return `Unsupported`. Presolve reconstructs singleton LP duals and checks them
++against the original model. Root cuts are restricted to verified positive
++integer binary covers, inserted before factorization; no dynamic local cuts.
+diff --git a/benchmarks/audit_highs_lessons.py b/benchmarks/audit_highs_lessons.py
+new file mode 100644
+index 0000000..0a2e77d
+--- /dev/null
++++ b/benchmarks/audit_highs_lessons.py
+@@ -0,0 +1,43 @@
++"""Validate 0.22 evidence against unchanged frozen adjudications."""
++import hashlib,json,re
++from pathlib import Path
++root=Path(__file__).resolve().parent.parent
++data=root/'docs/highs-lessons-implementation/data';old=root/'docs/performance-ten/data'
++def read(p):return json.loads(p.read_text())
++raw=(old/'oracle-inputs.json').read_bytes();inputs={r['case_id']:r for r in json.loads(raw)['records']};adj={r['case_id']:r for r in read(old/'oracle-adjudication.json')['records']}
++out={'dataset_sha256':hashlib.sha256(raw).hexdigest(),'adjudication_sha256':hashlib.sha256((old/'oracle-adjudication.json').read_bytes()).hexdigest(),'oracle_runs':[]}
++for name,count in [('default',6330),('ft',6330),('no-fix',6330),('refactor1',1200),('workers4',180),('devex',6330),('root-cuts',6330),('factor-replay',6330),('row-pricing',6330)]:
++ d=read(data/f'oracle-{name}.json');assert d['dataset_sha256']==out['dataset_sha256'];assert len(d['records'])==len({r['case_id']for r in d['records']})==count
++ failures=[]
++ for r in d['records']:
++  original=inputs[r['case_id']];a=adj.get(r['case_id'],{});expected=a.get('adjudicated_status',original['expected_status']);ref=a.get('reference',original['reference'])
++  issues=[s for s in r.get('problems',[]) if s!='status mismatch']
++  if r['status']!=expected:issues.append('status mismatch')
++  if r['status']=='optimal' and ref is not None and abs(r['objective']-ref)>1e-6*(1+abs(ref)):issues.append('objective mismatch')
++  if issues:failures.append(dict(case_id=r['case_id'],issues=issues))
++ out['oracle_runs'].append(dict(file=name,cases=count,raw_flags=sum(bool(r.get('problems'))for r in d['records']),failures=failures))
++out['unsafe_finite_bounds']=read(data/'bounds.json')['unsafe_finite_bounds'];assert out['unsafe_finite_bounds']==0
++out['rust_checks']=sum(map(int,re.findall(r'test result: ok\. (\d+) passed',(data/'final-rust-tests.txt').read_text())))
++out['python_checks']=int(re.search(r'(\d+) passed',(data/'final-python-tests.txt').read_text()).group(1))
++assert 'error:' not in (data/'final-clippy.txt').read_text() and 'Finished' in (data/'final-clippy.txt').read_text()
++assert all(not r['failures']for r in out['oracle_runs']),out['oracle_runs']
++out['oracle_cases']=sum(r['cases']for r in out['oracle_runs']);out['benchmarks']=[]
++expected={'standard':(372,93),'extended':(192,48),'holdout':(144,36),'aspect':(48,12),'large':(9,3),'replay':(84,42),'batch':(15,5),'public':(120,30),'fresh':(84,21),'weight-policies':(32,8),'cut-policies':(40,10),'root-coverage':(48,12),'profiles':(24,8)}
++for name,(records,summaries) in expected.items():
++ p=data/f'final-{name}.json'
++ if p.exists():
++  d=read(p);assert len(d['records'])==records and len(d['summary'])==summaries,(name,len(d['records']),len(d.get('summary',[])))
++for p in sorted(data.glob('final-*.json')):
++ if p.stem in ['final-batch','final-replay','final-profiles']:continue
++ d=read(p)
++ if 'summary' not in d:continue
++ failures=[{k:r.get(k)for k in ['backend','fixture','size','accepted','statuses','processes','errors']}for r in d['summary']if r.get('accepted')!=r.get('measured_solves',r.get('processes',3)) or r.get('process_errors',r.get('errors',0))]
++ out['benchmarks'].append(dict(file=p.name,summaries=len(d['summary']),failures=failures))
++ if p.name=='final-public.json':
++  actual={(r['backend'],Path(r['fixture'][5:]).stem)for r in failures}
++  assert actual=={('baseline','egout'),('baseline','flugpl'),('baseline','bell5'),('native','bell5')},actual
++ elif p.name=='final-root-coverage.json':assert all(r['backend']=='baseline'and r['fixture']=='inferred-mip'for r in failures),failures
++ elif p.name not in ['final-public.json','final-profiles.json']:assert not failures,(p.name,failures)
++if (data/'final-replay.json').exists():
++ r=read(data/'final-replay.json');assert len(r['records'])==84;assert all(all(run['accepted']for run in row['runs'])for row in r['records']);out['basis_replay_records']=len(r['records']);out['max_backward_error']=max(row['backward_error']for row in r['summary']);assert out['max_backward_error']<1e-9
++(data/'audit.json').write_text(json.dumps(out,indent=2)+'\n');print(json.dumps(out,indent=2))
+diff --git a/benchmarks/batch_throughput.py b/benchmarks/batch_throughput.py
+new file mode 100644
+index 0000000..a238bb0
+--- /dev/null
++++ b/benchmarks/batch_throughput.py
+@@ -0,0 +1,31 @@
++"""Independent-job throughput; construction and independent checks excluded."""
++import argparse,json,time,statistics,platform,os,hashlib
++from pathlib import Path
++import lp_ip_craft as lp
++p=argparse.ArgumentParser();p.add_argument('--output',required=True);p.add_argument('--size',type=int,default=256);p.add_argument('--jobs',type=int,default=32);a=p.parse_args()
++n=a.size;rows=[{}for _ in range(n)];cost=[0.]*n
++for j in range(n):
++ for offset in [0,1,7,19,43,71,103,139,181]:
++  i=(j+offset)%n;v=1.+((j*13+i*7)%5);rows[i][j]=v;cost[j]+=v
++ptr=[0];ind=[];val=[];rhs=[]
++for row in rows:
++ for j,v in sorted(row.items()):ind.append(j);val.append(v)
++ ptr.append(len(ind));rhs.append(sum(row.values()))
++spec=dict(objective=cost,sense='maximize',lower=[0.]*n,upper=[2.]*n,row_lower=[-float('inf')]*n,row_upper=rhs,indptr=ptr,indices=ind,values=val)
++m=lp.Model(**spec);settings=lp.NativeOptions(decompose=False,time_limit_seconds=30.)
++out=dict(version=lp.__version__,protocol='32 independent jobs, one discarded warmup per worker count, 3 rotated measured rounds; one numerical thread/private state, shared host. Wall time includes pool and result serialization, excludes model construction and external validation.',platform=platform.platform(),affinity=sorted(os.sched_getaffinity(0)),model_sha256=hashlib.sha256(json.dumps(spec,sort_keys=True).encode()).hexdigest(),jobs=a.jobs,records=[])
++for round in range(4):
++ counts=[1,2,4,8,16];counts=counts[round:]+counts[:round]
++ for workers in counts:
++  t=time.perf_counter();r=lp.solve_batch([m]*a.jobs,workers=workers,backend_options=settings);elapsed=time.perf_counter()-t
++  assert all(isinstance(s,lp.SolveResult) and s.status=='optimal' for s in r)
++  for result in r:
++   assert abs(result.evaluation.objective-sum(cost))<1e-6
++   k=lp.lp_residuals(m,result.candidate,result.duals)
++   assert k.primal<1e-7 and k.stationarity<1e-6 and k.dual_sign<1e-6 and k.duality_gap<1e-7
++  if round:out['records'].append(dict(round=round,workers=workers,seconds=elapsed,iterations=[s.iterations for s in r]))
++  print(round,workers,elapsed,flush=True)
++out['summary']=[dict(workers=w,median_seconds=statistics.median(r['seconds'] for r in out['records'] if r['workers']==w)) for w in [1,2,4,8,16]]
++base=out['summary'][0]['median_seconds']
++for r in out['summary']:r['speedup']=base/r['median_seconds'];r['jobs_per_second']=a.jobs/r['median_seconds']
++Path(a.output).write_text(json.dumps(out,indent=2)+'\n')
+diff --git a/benchmarks/build_packing_references.py b/benchmarks/build_packing_references.py
+index 0012874..7aaea25 100644
+--- a/benchmarks/build_packing_references.py
++++ b/benchmarks/build_packing_references.py
+@@ -9,7 +9,7 @@ from pathlib import Path
+ p=argparse.ArgumentParser();p.add_argument('--baseline-repo',type=Path,required=True);p.add_argument('--highs-repo',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--only-highs',action='store_true');a=p.parse_args()
+ base=Path(__file__).resolve().parent;a.output.mkdir(parents=True,exist_ok=True)
+ baseline19 = 'version = "0.19.0"' in (a.baseline_repo/'Cargo.toml').read_text()
+-assert baseline19 or 'version = "0.20.0"' in (a.baseline_repo/'Cargo.toml').read_text()
++assert baseline19 or any(f'version = "{v}"' in (a.baseline_repo/'Cargo.toml').read_text() for v in ["0.20.0","0.21.0"])
+ root=a.output.resolve();(root/'shared').mkdir(exist_ok=True)
+ hashes={}
+ for f in ['main.rs','fixtures.rs','extended.rs','imports.rs']:
+@@ -30,6 +30,7 @@ default=["backend_{backend}"]
+ backend_native=[]
+ backend_highs=[]
+ kernel-profile=[]
++evolved=[]
+ [dependencies]
+ lp-ip-craft={{path={json.dumps(str(repo.resolve()/'crates/core'))}}}
+ lp-ip-craft-{backend}={{path={json.dumps(str(repo.resolve()/('crates/'+backend)))}}}
+@@ -38,6 +39,7 @@ serde_json="1"
+ name="packing-{label}"
+ path="../shared/{entry}"
+ ''')
++for label in ['baseline','highs']:
+     if a.only_highs and label != 'highs':continue
+     subprocess.run(['cargo','build','--release','--manifest-path',str(root/'Cargo.toml'),'-p','packing-'+label],check=True)
+ (root/'harness-sha256.json').write_text(json.dumps(hashes,indent=2)+'\n')
+diff --git a/benchmarks/configure_highs_reference.py b/benchmarks/configure_highs_reference.py
+new file mode 100644
+index 0000000..8722480
+--- /dev/null
++++ b/benchmarks/configure_highs_reference.py
+@@ -0,0 +1,32 @@
++"""Benchmark-only controls; never adds HiGHS to the production workspace."""
++from pathlib import Path
++import argparse,hashlib,json
++p=argparse.ArgumentParser();p.add_argument('repo',type=Path);a=p.parse_args()
++f=a.repo/'crates/highs/src/lib.rs';s=f.read_text();before=hashlib.sha256(s.encode()).hexdigest()
++if '// LPIP_REFERENCE_CONTROLS' not in s:
++ needle='        set(&mut native, &mut report, "threads", 1_i32)?;'
++ insert='''
++        // LPIP_REFERENCE_CONTROLS: isolated benchmark options, not production.
++        if let Ok(presolve)=std::env::var("LPIP_PRESOLVE") {
++            set(&mut native,&mut report,"presolve",presolve.as_str())?;
++        }
++        if !model.is_mip() {
++            if let Ok(solver)=std::env::var("LPIP_HIGHS_SOLVER") {
++                set(&mut native,&mut report,"solver",solver.as_str())?;
++                if solver=="simplex" {
++                    set(&mut native,&mut report,"simplex_strategy",1_i32)?;
++                    set(&mut native,&mut report,"parallel","off")?;
++                }
++            }
++        }
++'''
++ assert needle in s;s=s.replace(needle,needle+insert)
++ needle='        result.iterations = u64::try_from(solved.simplex_iteration_count()).unwrap_or(0)'
++ assert needle in s
++ s=s.replace(needle,'''        result.backend.effective_options.extend([
++            ("diagnostics.simplex_iterations".into(),solved.simplex_iteration_count().to_string()),
++            ("diagnostics.ipm_iterations".into(),solved.ipm_iteration_count().to_string()),
++        ]);
++'''+needle)
++ f.write_text(s)
++print(json.dumps({'source':str(f),'before_sha256':before,'after_sha256':hashlib.sha256(f.read_bytes()).hexdigest()}))
+diff --git a/benchmarks/native/Cargo.toml b/benchmarks/native/Cargo.toml
+index 7b866a2..f0c52e1 100644
+--- a/benchmarks/native/Cargo.toml
++++ b/benchmarks/native/Cargo.toml
+@@ -4,7 +4,8 @@ version="0.1.0"
+ edition="2024"
+ publish=false
+ [features]
+-default=["backend_native"]
++default=["backend_native","evolved"]
++evolved=[]
+ backend_native=[]
+ backend_highs=[]
+ kernel-profile=["lp-ip-craft-native/kernel-profile"]
+diff --git a/benchmarks/oracle_worker.py b/benchmarks/oracle_worker.py
+index 1499adb..63821d5 100644
+--- a/benchmarks/oracle_worker.py
++++ b/benchmarks/oracle_worker.py
+@@ -8,7 +8,7 @@ import time
+ import lp_ip_craft as lp
+ 
+ p=argparse.ArgumentParser();p.add_argument('dataset');p.add_argument('backend',choices=['native','highs']);p.add_argument('output')
+-p.add_argument('--variant',choices=['default','dantzig','refactor1','refactor8','workers4','ft','eta','ordering','fixed128','fixed256'],default='default')
++p.add_argument('--variant',choices=['default','dantzig','refactor1','refactor8','workers4','ft','eta','ordering','fixed128','fixed256','devex','root-cuts','factor-replay','row-pricing'],default='default')
+ p.add_argument('--no-fixing',action='store_true');p.add_argument('--basis-update',choices=['auto','eta','forrest_tomlin']);p.add_argument('--suite',choices=['random','exact','components']);p.add_argument('--seed',type=int);a=p.parse_args()
+ data=Path(a.dataset).read_bytes();dataset=json.loads(data)
+ records=[]
+@@ -18,7 +18,7 @@ for entry in dataset['records']:
+     model=lp.Model(**entry['model'])
+     mip=any(k!='continuous' for k in entry['model']['kinds'])
+     if a.backend=='native':
+-        settings=lp.NativeOptions(reduced_cost_fixing=not a.no_fixing,basis_update=a.basis_update or ("forrest_tomlin" if a.variant=="ft" else "eta" if a.variant=="eta" else "auto"),
++        settings=lp.NativeOptions(devex=a.variant=='devex',root_cuts=a.variant=='root-cuts',factor_replay=a.variant=='factor-replay',adaptive_pricing=a.variant!='row-pricing',reduced_cost_fixing=not a.no_fixing,basis_update=a.basis_update or ("forrest_tomlin" if a.variant=="ft" else "eta" if a.variant=="eta" else "auto"),
+                                   factor_ordering="min_degree" if a.variant=="ordering" else "auto",
+                                   adaptive_refactor=a.variant not in ["fixed128","fixed256"],time_limit_seconds=30.,component_threads=4 if a.variant=='workers4' else 1,
+                                   steepest_edge=a.variant!='dantzig',refactor_interval=1 if a.variant=='refactor1' else 8 if a.variant=='refactor8' else 128 if a.variant=="fixed128" else 256 if a.variant=="fixed256" else lp.NativeOptions().refactor_interval,
+diff --git a/benchmarks/report_highs_lessons.py b/benchmarks/report_highs_lessons.py
+new file mode 100644
+index 0000000..2b716c4
+--- /dev/null
++++ b/benchmarks/report_highs_lessons.py
+@@ -0,0 +1,180 @@
++"""Generate the 0.22 report from retained measurements and validation."""
++import json
++from pathlib import Path
++root=Path(__file__).resolve().parent.parent;folder=root/'docs/highs-lessons-implementation';data=folder/'data'
++def read(name):return json.loads((data/(name+'.json')).read_text())
++def rows(suite):return read('final-'+suite)['summary']
++def find(suite,fixture,size,backend):return next(r for r in rows(suite)if r['backend']==backend and (suite=='large'or (r['fixture']==fixture and r['size']==size)))
++def ms(r):return f"{r.get('median_ms',r.get('median_seconds',0)*1000):,.3f}"
++def times(suite,fixture,size):return ' | '.join(ms(find(suite,fixture,size,b))for b in ['baseline','native','highs'])
++audit=read('audit');batch=rows('batch');public=rows('public');replay=read('final-replay')
++text='''# LP-IP-craft 0.22: executed HiGHS-lessons plan
++
++The ten-stage plan has been implemented and tested. Production numerics remain
++owned safe Rust with no HiGHS, BLAS, C/C++ or external numerical dependency.
++HiGHS 1.15.0 is an isolated comparison backend, never linked into the release.
++Baseline numerical source: 0.21.0, commit
++`5e5665e2bda9d0e6ca71b68d4dccf059cd925320`.
++
++The strongest gains are on degree-nine packing, singleton-heavy presolve,
++25fv47, and independent-job throughput. Improvements are workload dependent;
++ordinary packing and several small jobs have retained regressions. Real MIP
++search remains substantially weaker than HiGHS.
++
++## Executed work
++
++| Stage | Implementation | Validation / default decision |
++|---|---|---|
++| 1. Attribute the gap | Matched serial-dual/presolve controls, engine iterations, genuine 4:1 and 1:4 aspect fixtures | Same fingerprints, planted objectives and original-model KKT; do not confuse square `packing-wide` with a wide matrix |
++| 2. Carry sparse support | Indexed FTRAN output through triangular solves and eta updates; touched work clearing/scattering | Alternating orientations, dense/sparse RHS, cancellation and updates; dense-factor fallback retains a contiguous scan |
++| 3. Broaden FT | Bounded general-L eligibility with observed update-work and fill gates | Both-orientation residuals, dense-tail rejection and auto/eta/forced-FT controls; dense tails stay outside auto FT |
++| 4. Pivot replay | Exact assembled-basis signature plus numerical per-pivot validation and normal-search fallback | Identical/changed/singular/capped bases tested; opt-in, not reuse across arbitrary related MIP bases |
++| 5. Pricing | Compare row work with column-file work for dense BTRAN support | Row/column alpha equivalence including logical columns; sparse row path retained; cheap eligibility checks precede work estimation |
++| 6. Pivot efficiency | Optional approximate Devex weights, bounded resets; phase-one/degeneracy/weight counters; avoid dominant-component decomposition | Exact DSE remains default; Devex can reduce work or increase pivots; 25fv47 benefits mainly from monolithic solving plus root reductions |
++| 7. Presolve/postsolve | Exact-quotient singleton reductions with typed bound-owner history and original-row dual reconstruction | Both senses, negative coefficients, competing owners, subnormals, inexact quotients, zero budgets; original-model KKT after postsolve |
++| 8. Root bounds | Outward activity propagation for mixed MIPs, explicit infinities and directed division, before finite-box admission | Dyadic feasible-point enumeration, overflow/free domains, both senses; never invent a big-M |
++| 9. Root covers | At most eight exact positive-integer binary cover cuts before any basis/cache exists | Independent witness rescan and exhaustive binary feasible-point/optimality checks; cuts are immutable and global; opt-in |
++| 10. Job parallelism | Ordered Rust/Python batch pool, 1–16 workers, private solver state, shared cancellation | Empty/invalid/mixed-error/cancelled jobs and sequential equivalence; nested component workers disabled |
++
++The full plan and decisions made before editing each subsystem are in
++[PLAN.md](PLAN.md). Code is in `crates/native/src/{lu,lp,root,batch}.rs`, with
++Python conversion/bindings and regression tests alongside it.
++
++## Matched single-instance measurements
++
++Milliseconds below are medians of three fresh-process rounds, after one
++discarded round. Each process also warms its solve once. Order rotates/reverses;
++models/fingerprints, limits and independent checks match. One numerical thread;
++standard-suite component-worker controls are separately labelled. This is a
++shared host, not a dedicated benchmarking machine. Tiny differences below a
++millisecond are especially sensitive to overhead and noise. Table batches are
++separate: do not combine their timings as an ablation study.
++
++| Fixture | 0.21 ms | 0.22 ms | HiGHS ms |
++|---|---:|---:|---:|
++'''
++for suite,fixture,size,label in [('extended','packing-wide',256,'Degree-nine square packing 256'),('extended','packing-wide',1024,'Degree-nine square packing 1024'),('extended','packing',4096,'Ordinary packing 4096'),('standard','network',2048,'Network 2048'),('extended','irregular',1024,'Irregular 1024'),('large','irregular',4096,'Irregular 4096'),('aspect','aspect-wide',512,'True wide: 512 rows, 2048 columns'),('aspect','aspect-tall',512,'True tall: 2048 rows, 512 columns'),('root-coverage','singleton-lp',2048,'Singleton LP: 2048 columns, 6144 rows')]:
++ text+=f'| {label} | {times(suite,fixture,size)} |\n'
++text+='''
++The singleton fixture is deliberately reduction-heavy: its independent planted
++optimum is x=1. It demonstrates presolve effectiveness, not general LP dominance.
++The inferred-domain fixture starts with free integer x and y>=0; three rows
++prove a finite box and optimum 5 per block. Original 0.21 reports Unsupported;
++0.22 and HiGHS solve it. All generated fixture checks use original units.
++
++## Public-model capability and search strength
++
++All seven public LPs solve and pass the independent checks. Three previously
++unsupported public MIPs now pass finite-domain admission after sound inference.
++Two solve, while bell5 reaches the unchanged 100,000-node cap.
++
++| Model | 0.21 | 0.22 ms / nodes | HiGHS ms / nodes |
++|---|---|---:|---:|
++'''
++for name in ['25fv47','e226','israel','etamacro','egout','flugpl','bell5']:
++ group={r['backend']:r for r in public if Path(r['fixture'][5:]).stem==name};b,n,h=[group[k]for k in ['baseline','native','highs']]
++ before=ms(b)+' ms'if b['accepted']==3 else 'Unsupported'
++ native=f"{ms(n)} / {int(n['nodes']):,}"+(' (node cap)'if n['accepted']<3 else '')
++ text+=f"| {name} | {before} | {native} | {ms(h)} / {int(h['nodes']):,} |\n"
++text+='''
++On 25fv47, compare pivot counts in the raw data: the original decomposed
++0.21 solve takes 6662 pivots; final native/HiGHS counts are recorded alongside
++all timing samples in `data/final-public.json`. A stage-one monolithic
++0.21 control already took 3093 pivots. Therefore most of this iteration reduction
++comes from the component/presolve strategy; it is not evidence that new FT or
++pricing alone closed the algorithmic gap. HiGHS remains faster on this LP.
++
++Egout/flugpl now reveal the next MIP problem directly: far more search nodes.
++LP-kernel speed alone will not close that difference. Bell5 is explicitly a
++failed solve under the common cap, not a claimed optimal result.
++
++## Policy tradeoffs
++
++Exact DSE remains the default. The optional weight policy avoids extra exact
++edge-weight work, but can pay for it with additional pivots.
++
++| Fixture | DSE ms / pivots | Devex-style ms / pivots |
++|---|---:|---:|
++'''
++for name,size in [('packing-wide',1024),('irregular',1024),('aspect-tall',512),('json=docs/packing-mip/corpus/25fv47.json',0)]:
++ a=find('weight-policies',name,size,'dse');b=find('weight-policies',name,size,'devex');text+=f"| {Path(name[5:]).stem if name.startswith('json=')else name} {size or ''} | {ms(a)} / {int(a['iterations'])} | {ms(b)} / {int(b['iterations'])} |\n"
++text+='''
++Root cover cuts are also opt-in. They help the long-row-112 case, but make
++long-row-64 worse and add overhead without reducing nodes on the sampled
++multi-knapsacks. This first implementation does not select covers using a solved
++LP violation vector, lift them, or provide general MIR/GMI separation.
++
++| Fixture | Cuts off ms / nodes | Cuts on ms / nodes |
++|---|---:|---:|
++'''
++for name,size in [('long-row-mip',64),('long-row-mip',112),('multi-knapsack',18),('multi-knapsack',5018)]:
++ a=find('cut-policies',name,size,'default');b=find('cut-policies',name,size,'cuts');text+=f"| {name} {size} | {ms(a)} / {int(a['nodes'])} | {ms(b)} / {int(b['nodes'])} |\n"
++text+='''
++Pivot replay remains off by default: the cache is useful only for a repeated
++identical assembled basis, with each numerical pivot checked afresh. Related
++node bases do not automatically hit it. The implementation always performs
++numerical elimination and retains normal Markowitz fallback.
++
++## Independent-job throughput
++
++32 copies of a planted 256-variable degree-nine packing model, one numerical
++thread/private state per job, three measured rounds. Model construction and
++external validation are excluded; pool creation and result conversion remain
++in wall time. These are concurrent independent solves, not a speedup of one LP.
++
++| Workers | Batch seconds | Jobs/second | Speedup vs one worker |
++|---:|---:|---:|---:|
++'''
++for r in batch:text+=f"| {r['workers']} | {r['median_seconds']:.3f} | {r['jobs_per_second']:.1f} | {r['speedup']:.2f}× |\n"
++text+='''
++Use `solve_batch(models, workers=4, backend_options=NativeOptions(...))` in
++Python, or `NativeSolver::solve_batch` in Rust. Results preserve input order;
++a failed job produces its own error without discarding successful jobs. Limits
++are per job. Shared cancellation affects running and queued jobs. No starts are
++supplied by this first batch API.
++
++## Correctness and provenance
++
++'''
++text+=f'''- **{audit['rust_checks']} Rust checks** and **{audit['python_checks']} Python tests** pass; formatting and strict all-target/all-feature Clippy pass.
++- **{audit['oracle_cases']:,} frozen oracle runs** pass after unchanged adjudications: default/FT/no-fixing, refactor-every-pivot exact cases, component workers, Devex, root cuts, replay and row-only pricing.
++- The original 19 disputed oracle expectations remain raw flags in each full pass; no adjudication or tolerance was changed to hide them.
++- **400 exact bound-audit models**, zero unsafe finite bounds; existing prepared-bound exact-state tests remain enabled.
++- **84 frozen basis replay observations**, worst backward error **{audit['max_backward_error']:.3g}**. Factorization and solve timing are separate in the raw data.
++- Standard, extended, old holdout, genuinely fresh seeds, true aspect-ratio, large, public and root-capability comparisons retain failures and regressions. Binary/model/corpus fingerprints are recorded.
++
++'''
++text+='''See [data/audit.json](data/audit.json) and the raw files in [data](data).
++`summarize_standard.py` deterministically reconstructs standard summaries from
++the retained raw records. The early Devex-labelled trial did not set Devex;
++that file is explicitly retained as `rejected-harness-*`. Corrected policy runs
++assert effective options. Replay was already wired and was rechecked too.
++
++The final density experiments are retained in `density-fix-comparison.json`
++and `ft-density-comparison.json`. Neither gave a consistent controlled packing
++improvement without regressions, so both were reverted. The accepted production
++code is the same numerical implementation used by the final benchmark files.
++
++## Remaining work
++
++1. **General MIP search strength.** LP-directed/lifted cuts, stronger mixed-row
++propagation, reliable branching, conflict/clique reasoning and better incumbent
++heuristics are needed for public MIPs. This release supplies only restricted
++root covers and root inference, not the HiGHS branch-and-cut architecture.
++2. **Broad-support forward solves.** Sparse support propagation helps suitable
++bases, but ordinary large packing still exposes costly triangular solves and
++vector traversal. Dense tails and bounded fallback paths remain; not every
++whole-vector loop is removed. Compare profile categories carefully: the new
++`edge_weights` timer moves work previously included in `pivot_other`.
++3. **General presolve and application coverage.** Singleton postsolve is a
++sound first reversible reduction; doubleton/general substitutions, parallel
++rows/columns and general dual maps remain future work. Synthetic families and
++ten public models do not replace a captured application workload.
++
++MIPs still need finite bounds of magnitude <=2^53-1 **after** justified root
++inference. Unresolved infinities remain Unsupported. Parallel simplex, PAMI,
++shared-tree MIP, custom work stealing, IPM and PDLP are not implemented here.
++The next tuning pass should use a captured application instance when available.
++'''
++(folder/'RESULTS.md').write_text(text)
++print('wrote',len(text.split()),'words')
+diff --git a/benchmarks/run_highs_lessons_gates.py b/benchmarks/run_highs_lessons_gates.py
+new file mode 100644
+index 0000000..b760917
+--- /dev/null
++++ b/benchmarks/run_highs_lessons_gates.py
+@@ -0,0 +1,12 @@
++"""Retained 0.22 numerical gates; never edits frozen inputs/adjudications."""
++import subprocess,sys
++from pathlib import Path
++root=Path(__file__).resolve().parent.parent
++out=root/'docs/highs-lessons-implementation/data'
++inputs=root/'docs/performance-ten/data/oracle-inputs.json'
++cases=[('default',[]),('ft',['--variant','ft']),('no-fix',['--no-fixing']),('refactor1',['--variant','refactor1','--suite','exact']),('workers4',['--variant','workers4','--suite','components']),('devex',['--variant','devex']),('root-cuts',['--variant','root-cuts']),('factor-replay',['--variant','factor-replay']),('row-pricing',['--variant','row-pricing'])]
++for name,args in cases:
++ print('START',name,flush=True)
++ subprocess.run([sys.executable,str(root/'benchmarks/oracle_worker.py'),str(inputs),'native',str(out/f'oracle-{name}.json'),*args],check=True,stdout=(out/f'oracle-{name}.log').open('w'))
++ print('DONE',name,flush=True)
++subprocess.run([sys.executable,str(root/'benchmarks/check_bounds.py'),str(root),'native',str(out/'bounds.json')],check=True,stdout=(out/'bounds.log').open('w'))
+diff --git a/benchmarks/shared/extended.rs b/benchmarks/shared/extended.rs
+index 47c3c79..1b79e6c 100644
+--- a/benchmarks/shared/extended.rs
++++ b/benchmarks/shared/extended.rs
+@@ -265,3 +265,45 @@ pub fn mixed(tag: usize) -> (Model, f64) {
+         expected,
+     )
+ }
++
++/// Planted primal/dual LPs with genuine 4:1 or 1:4 aspect ratios.
++pub fn aspect(size: usize, wide: bool) -> (Model, f64) {
++    assert!(size >= 16);
++    let (n,m)=if wide {(4*size,size)} else {(size,4*size)};
++    let mut rows=vec![Vec::new();m];
++    if wide {
++        for j in 0..n {for k in 0..3 {rows[(j+k*k+3*k)%m].push((j,if k==0 {4.} else {1.}));}}
++    } else {
++        for (i,row) in rows.iter_mut().enumerate() {for k in 0..3 {row.push(((i+k*k+3*k)%n,if k==0 {4.} else {1.}));}}
++    }
++    let mut c=vec![0.;n];
++    let rhs=rows.iter().enumerate().map(|(i,row)| {for &(j,a) in row {c[j]+=a*(1+i%7) as f64;}row.iter().map(|e|e.1).sum()}).collect();
++    let expected=c.iter().sum();
++    (Model::new(ModelData {sense:Sense::Maximize,objective:c,objective_offset:0.,variables:Bounds::new(vec![0.;n],vec![2.;n]),kinds:vec![VariableKind::Continuous;n],matrix:matrix(n,&rows),rows:Bounds::new(vec![f64::NEG_INFINITY;m],rhs)}).unwrap(),expected)
++}
++
++/// Exact singleton bounds: planted optimum x=1, costs=1..7.
++pub fn singleton_lp(n:usize)->(Model,f64) {
++    assert!(n>0);
++    let mut rows=Vec::with_capacity(3*n);let mut lower=Vec::new();let mut upper=Vec::new();
++    for j in 0..n {
++        for (a,l,u) in [(2.,f64::NEG_INFINITY,2.),(-4.,-8.,f64::INFINITY),(1.,0.,3.)] {
++            rows.push(vec![(j,a)]);lower.push(l);upper.push(u);
++        }
++    }
++    let cost:Vec<_>=(0..n).map(|j|(1+j%7)as f64).collect();let expected=cost.iter().sum();
++    (Model::new(ModelData{sense:Sense::Maximize,objective:cost,objective_offset:0.,variables:Bounds::new(vec![0.;n],vec![10.;n]),kinds:vec![VariableKind::Continuous;n],matrix:matrix(n,&rows),rows:Bounds::new(lower,upper)}).unwrap(),expected)
++}
++
++/// Independent mixed blocks with an initially free integer x and y>=0.
++/// x+y<=5, -x+y<=3, x-y>=-2 imply finite boxes; max x+y/2=5.
++pub fn inferred_mip(blocks:usize)->(Model,f64) {
++    assert!(blocks>0);let n=2*blocks;let mut rows=Vec::new();let mut lower=Vec::new();let mut upper=Vec::new();
++    let mut vl=Vec::new();let mut vu=Vec::new();let mut cost=Vec::new();let mut kinds=Vec::new();
++    for b in 0..blocks {
++        let x=2*b;let y=x+1;
++        for (ax,ay,l,u) in [(1.,1.,f64::NEG_INFINITY,5.),(-1.,1.,f64::NEG_INFINITY,3.),(1.,-1.,-2.,f64::INFINITY)] {rows.push(vec![(x,ax),(y,ay)]);lower.push(l);upper.push(u);}
++        vl.extend([f64::NEG_INFINITY,0.]);vu.extend([f64::INFINITY;2]);cost.extend([1.,0.5]);kinds.extend([VariableKind::Integer,VariableKind::Continuous]);
++    }
++    (Model::new(ModelData{sense:Sense::Maximize,objective:cost,objective_offset:0.,variables:Bounds::new(vl,vu),kinds,matrix:matrix(n,&rows),rows:Bounds::new(lower,upper)}).unwrap(),5.*blocks as f64)
++}
+diff --git a/benchmarks/shared/main.rs b/benchmarks/shared/main.rs
+index 056359c..621d449 100644
+--- a/benchmarks/shared/main.rs
++++ b/benchmarks/shared/main.rs
+@@ -114,9 +114,16 @@ fn main() {
+             | "multi-knapsack"
+             | "graph-mip"
+             | "mixed-overload"
++            | "aspect-wide"
++            | "aspect-tall"
++            | "singleton-lp"
++            | "inferred-mip"
+     );
+     let began = Instant::now();
+     let (model, expected) = match name {
++        "singleton-lp" => {let(m,e)=extended::singleton_lp(size);(m,Some(e))},
++        "inferred-mip" => {let(m,e)=extended::inferred_mip(size);(m,Some(e))},
++        "aspect-wide" | "aspect-tall" => {let (m,e)=extended::aspect(size,name=="aspect-wide");(m,Some(e))},
+         "mixed-overload" => {
+             let (m, e) = extended::mixed(size);
+             (m, Some(e))
+@@ -174,7 +181,8 @@ fn main() {
+         let mut solver = lp_ip_craft_native::NativeSolver::new(lp_ip_craft_native::NativeOptions {
+             time_limit_seconds: Some(30.),
+             component_threads: workers,
+-            decompose: !is_family,
++            decompose: !is_family && std::env::var_os("LPIP_BENCH_NO_DECOMPOSE").is_none(),
++            presolve: std::env::var("LPIP_PRESOLVE").map_or(true,|v|v!="off"),
+             node_reoptimization: warm,
+             reduced_cost_fixing: args.get(12).is_none_or(|s| s != "no_fix"),
+             strong_branching: args.get(11).is_some_and(|s| s == "strong"),
+@@ -195,6 +203,16 @@ fn main() {
+             },
+             ..Default::default()
+         });
++        #[cfg(all(feature="backend_native",feature="evolved"))]
++        {
++            solver.settings.singleton_presolve = std::env::var("LPIP_SINGLETON").map_or(true, |v| v != "off");
++            solver.settings.root_propagation = std::env::var("LPIP_ROOT_PROPAGATION").map_or(true, |v| v != "off");
++            solver.settings.root_cuts = std::env::var_os("LPIP_ROOT_CUTS").is_some();
++            solver.settings.factor_replay = std::env::var_os("LPIP_FACTOR_REPLAY").is_some();
++            solver.settings.adaptive_pricing = std::env::var("LPIP_PRICING").map_or(true, |v| v != "row");
++            solver.settings.devex = std::env::var_os("LPIP_DEVEX").is_some();
++            solver.settings.avoid_dominant_components = std::env::var("LPIP_COMPONENT_SPLIT").map_or(true, |v| v != "force");
++        }
+         #[cfg(feature = "backend_highs")]
+         let mut solver = lp_ip_craft_highs::HighsSolver::new(lp_ip_craft_highs::HighsOptions {
+             time_limit_seconds: Some(30.),
+diff --git a/benchmarks/summarize_standard.py b/benchmarks/summarize_standard.py
+new file mode 100644
+index 0000000..192ad93
+--- /dev/null
++++ b/benchmarks/summarize_standard.py
+@@ -0,0 +1,17 @@
++"""Reconstruct summaries solely from retained matched standard raw records."""
++import argparse,json,statistics
++from pathlib import Path
++p=argparse.ArgumentParser();p.add_argument('file');a=p.parse_args();path=Path(a.file);d=json.loads(path.read_text());groups={}
++for r in d['records']:
++ if r['round']>0:groups.setdefault((r['backend'],r['fixture'],r['size'],r['warm'],r['worker_cap'],r['suite']),[]).append(r)
++d['summary']=[]
++for key,records in groups.items():
++ backend,fixture,size,warm,workers,suite=key;runs=[s for r in records for s in r.get('runs',[])if s['run']>0];errors=sum('process_error'in r for r in records)
++ row=dict(backend=backend,fixture=fixture,size=size,warm=warm,workers=workers,suite=suite,processes=len(records),measured_solves=len(runs),accepted=sum(s['accepted']for s in runs),process_errors=errors,statuses={s['status']:sum(t['status']==s['status']for t in runs)for s in runs})
++ if runs:row.update(median_ms=1000*statistics.median(s['seconds']for s in runs),range_ms=[1000*min(s['seconds']for s in runs),1000*max(s['seconds']for s in runs)],iterations=statistics.median(s.get('iterations',0)for s in runs),nodes=statistics.median(s.get('nodes',0)for s in runs),objectives=sorted({s['checks']['objective']for s in runs if s.get('checks')}))
++ d['summary'].append(row)
++d['objective_mismatches']=[]
++for fixture,size in {(r['fixture'],r['size'])for r in d['summary']}:
++ objs=[v for r in d['summary']if r['fixture']==fixture and r['size']==size and r['accepted']==r['measured_solves']and not r['process_errors']for v in r.get('objectives',[])]
++ if objs and max(objs)-min(objs)>1e-6*(1+max(map(abs,objs))):d['objective_mismatches'].append(dict(fixture=fixture,size=size,objectives=objs))
++path.write_text(json.dumps(d,indent=2)+'\n');print(len(d['summary']),'summaries',len(d['objective_mismatches']),'objective mismatches')
+diff --git a/crates/native/src/active.rs b/crates/native/src/active.rs
+index 65f9859..e49d401 100644
+--- a/crates/native/src/active.rs
++++ b/crates/native/src/active.rs
+@@ -68,6 +68,8 @@ pub(crate) struct FactorWorkspace {
+     pub pivot_col: Vec<(usize, f64)>,
+     pub row_slots: Vec<(u32, u32)>,
+     pub input: Vec<(usize, f64)>,
++    pub basis_signature: u64,
++    pub pivot_cache: Vec<(usize, usize)>,
+     pub order_cache: crate::ordering::OrderCache,
+ }
+ #[cfg(test)]
+diff --git a/crates/native/src/batch.rs b/crates/native/src/batch.rs
+new file mode 100644
+index 0000000..fe602b9
+--- /dev/null
++++ b/crates/native/src/batch.rs
+@@ -0,0 +1,74 @@
++//! Independent-job parallelism; no shared basis, tree or numerical workspace.
++use crate::*;
++use std::sync::{
++    Mutex,
++    atomic::{AtomicUsize, Ordering},
++};
++impl NativeSolver {
++    /// Solve independent models in input order using 1..=16 workers. Each job
++    /// has its own limits and result/error. A shared cancellation token affects
++    /// running and queued jobs. Component workers are disabled inside the pool.
++    /// No warm starts are supplied by this API. Models are borrowed, not copied.
++    pub fn solve_batch(
++        &self,
++        models: &[&Model],
++        options: &Options,
++        workers: usize,
++        cancel: &CancellationToken,
++    ) -> Result<Vec<Result<SolveResult>>> {
++        self.settings.validate()?;
++        options.validate()?;
++        if !(1..=16).contains(&workers) {
++            return Err(Error::InvalidInput(
++                "batch workers must be in 1..=16".into(),
++            ));
++        }
++        let mut settings = self.settings.clone();
++        settings.component_threads = 1;
++        let workers = workers.min(models.len());
++        if workers <= 1 {
++            let mut solver = NativeSolver::new(settings);
++            return Ok(models
++                .iter()
++                .map(|model| solver.solve(model, options, None, cancel))
++                .collect());
++        }
++        let next = AtomicUsize::new(0);
++        let out: Mutex<Vec<Option<Result<SolveResult>>>> =
++            Mutex::new((0..models.len()).map(|_| None).collect());
++        std::thread::scope(|scope| -> Result<()> {
++            let mut handles = Vec::new();
++            for _ in 0..workers {
++                let (settings, next, out) = (settings.clone(), &next, &out);
++                let handle = std::thread::Builder::new()
++                    .name("lpip-batch".into())
++                    .spawn_scoped(scope, move || -> Result<()> {
++                        let mut solver = NativeSolver::new(settings);
++                        loop {
++                            let i = next.fetch_add(1, Ordering::Relaxed);
++                            if i >= models.len() {
++                                break;
++                            }
++                            let r = solver.solve(models[i], options, None, cancel);
++                            out.lock().map_err(|_| {
++                                Error::Backend("batch result lock poisoned".into())
++                            })?[i] = Some(r);
++                        }
++                        Ok(())
++                    })
++                    .map_err(|e| Error::Backend(format!("batch worker creation: {e}")))?;
++                handles.push(handle);
++            }
++            for h in handles {
++                h.join()
++                    .map_err(|_| Error::Backend("batch worker panicked".into()))??;
++            }
++            Ok(())
++        })?;
++        out.into_inner()
++            .map_err(|_| Error::Backend("batch result lock poisoned".into()))?
++            .into_iter()
++            .map(|r| r.ok_or_else(|| Error::Backend("batch result missing".into())))
++            .collect()
++    }
++}
+diff --git a/crates/native/src/components.rs b/crates/native/src/components.rs
+index fc0b04c..305197d 100644
+--- a/crates/native/src/components.rs
++++ b/crates/native/src/components.rs
+@@ -20,6 +20,7 @@ fn split(
+     model: &Model,
+     start: Option<&WarmStart>,
+     cancel: &CancellationToken,
++    avoid_dominant: bool,
+ ) -> Result<Option<Vec<Part>>> {
+     let mut parent: Vec<_> = (0..model.n()).collect();
+     let mut ranks = vec![0; model.n()];
+@@ -81,6 +82,14 @@ fn split(
+     if columns.len() < 2 || columns.iter().all(|c| c.len() == 1) {
+         return Ok(None);
+     }
++    if avoid_dominant
++        && model.n() >= 512
++        && columns
++            .iter()
++            .any(|c| c.len().saturating_mul(10) >= model.n().saturating_mul(9))
++    {
++        return Ok(None);
++    }
+     let mut rows = vec![Vec::new(); columns.len()];
+     for i in 0..model.m() {
+         if !restricted(i) {
+@@ -259,7 +268,7 @@ pub(crate) fn solve_if_separable(
+     cancel: &CancellationToken,
+     started: Instant,
+ ) -> Result<Option<SolveResult>> {
+-    let Some(parts) = split(model, start, cancel)? else {
++    let Some(parts) = split(model, start, cancel, settings.avoid_dominant_components)? else {
+         return Ok(None);
+     };
+     let conversion = started.elapsed().as_secs_f64();
+diff --git a/crates/native/src/lib.rs b/crates/native/src/lib.rs
+index 6e883d3..5a8c9ae 100644
+--- a/crates/native/src/lib.rs
++++ b/crates/native/src/lib.rs
+@@ -4,6 +4,7 @@
+ //! checked results.
+ #![forbid(unsafe_code)]
+ mod active;
++mod batch;
+ mod boxed;
+ mod components;
+ mod dense;
+@@ -17,6 +18,7 @@ pub mod profile;
+ mod propagate;
+ #[cfg(feature = "basis-replay")]
+ pub mod replay;
++mod root;
+ 
+ use lp::{Basis, Lp};
+ use lp_ip_craft::{
+@@ -116,6 +118,20 @@ pub struct NativeOptions {
+     /// Solve components serially unless their average size (nonzeros plus
+     /// rows plus columns) reaches this value; zero forces workers.
+     pub component_parallel_min_entries: usize,
++    /// Add bounded exact binary cover cuts before building LP caches.
++    pub root_cuts: bool,
++    /// Infer sound mixed MIP root bounds before finite-domain admission.
++    pub root_propagation: bool,
++    /// Remove exactly reversible singleton rows before factorization.
++    pub singleton_presolve: bool,
++    /// Keep large near-monolithic models in a single numerical solve.
++    pub avoid_dominant_components: bool,
++    /// Use bounded Devex-style approximate weights instead of exact DSE maintenance.
++    pub devex: bool,
++    /// Choose column pricing for dense BTRAN support when estimated work is lower.
++    pub adaptive_pricing: bool,
++    /// Replay validated numerical pivots for identical basis signatures.
++    pub factor_replay: bool,
+ }
+ impl Default for NativeOptions {
+     fn default() -> Self {
+@@ -144,6 +160,13 @@ impl Default for NativeOptions {
+             decomposition_min_variables: 32,
+             component_threads: 16,
+             component_parallel_min_entries: 2048,
++            root_cuts: false,
++            root_propagation: true,
++            singleton_presolve: true,
++            avoid_dominant_components: true,
++            devex: false,
++            adaptive_pricing: true,
++            factor_replay: false,
+         }
+     }
+ }
+@@ -581,8 +604,8 @@ struct Counters {
+     reduced_cost_fixings: u64,
+ }
+ 
+-impl LpIpSolver for NativeSolver {
+-    fn solve(
++impl NativeSolver {
++    fn solve_internal(
+         &mut self,
+         model: &Model,
+         options: &Options,
+@@ -1097,6 +1120,12 @@ impl LpIpSolver for NativeSolver {
+             [
+                 ("factor_peak_entries", stats.peak_entries as u64),
+                 ("refactorizations", stats.refactors),
++                ("phase_one_pivots", stats.phase_one_pivots),
++                ("degenerate_pivots", stats.degenerate_pivots),
++                ("weight_resets", stats.weight_resets),
++                ("row_pricings", stats.row_pricings),
++                ("column_pricings", stats.column_pricings),
++                ("replayed_pivots", stats.replayed_pivots),
+                 ("basis_updates", stats.updates),
+                 ("forrest_tomlin_updates", stats.ft_updates),
+                 ("bound_flips", stats.bound_flips),
+@@ -1431,6 +1460,9 @@ fn controls(model: &Model, options: &Options, settings: &NativeOptions) -> lp::C
+         factor_pivot_search: settings.factor_pivot_search,
+         factor_ordering: settings.factor_ordering,
+         max_factor_entries: settings.max_factor_entries,
++        factor_replay: settings.factor_replay,
++        adaptive_pricing: settings.adaptive_pricing,
++        devex: settings.devex,
+         steepest_edge: settings.steepest_edge,
+         feasibility: options.tolerances.feasibility,
+         dual: settings.dual_tolerance * objective_scale(model),
+@@ -1454,6 +1486,16 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
+         ("factor_pivot_search", s.factor_pivot_search.to_string()),
+         ("factor_ordering", s.factor_ordering.as_str().to_string()),
+         ("steepest_edge", s.steepest_edge.to_string()),
++        ("root_cuts", s.root_cuts.to_string()),
++        ("root_propagation", s.root_propagation.to_string()),
++        ("singleton_presolve", s.singleton_presolve.to_string()),
++        (
++            "avoid_dominant_components",
++            s.avoid_dominant_components.to_string(),
++        ),
++        ("devex", s.devex.to_string()),
++        ("adaptive_pricing", s.adaptive_pricing.to_string()),
++        ("factor_replay", s.factor_replay.to_string()),
+         ("component_threads", s.component_threads.to_string()),
+         (
+             "component_parallel_min_entries",
+@@ -1485,3 +1527,15 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
+     .map(|(k, v)| (k.to_string(), v))
+     .collect()
+ }
++
++impl LpIpSolver for NativeSolver {
++    fn solve(
++        &mut self,
++        model: &Model,
++        options: &Options,
++        start: Option<&WarmStart>,
++        cancel: &CancellationToken,
++    ) -> Result<SolveResult> {
++        root::solve(self, model, options, start, cancel)
++    }
++}
+diff --git a/crates/native/src/lp.rs b/crates/native/src/lp.rs
+index dd76d41..aabfcf5 100644
+--- a/crates/native/src/lp.rs
++++ b/crates/native/src/lp.rs
+@@ -52,6 +52,9 @@ pub(crate) struct Controls {
+     pub factor_pivot_search: usize,
+     pub factor_ordering: crate::FactorOrdering,
+     pub max_factor_entries: usize,
++    pub factor_replay: bool,
++    pub adaptive_pricing: bool,
++    pub devex: bool,
+     pub steepest_edge: bool,
+     /// Primal tolerance target in original units.
+     pub feasibility: f64,
+@@ -64,6 +67,12 @@ pub(crate) struct Controls {
+ pub(crate) struct Stats {
+     pub peak_entries: usize,
+     pub refactors: u64,
++    pub phase_one_pivots: u64,
++    pub degenerate_pivots: u64,
++    pub weight_resets: u64,
++    pub row_pricings: u64,
++    pub column_pricings: u64,
++    pub replayed_pivots: u64,
+     pub updates: u64,
+     pub ft_updates: u64,
+     pub bound_flips: u64,
+@@ -758,6 +767,7 @@ impl Lp {
+                 self.controls.max_factor_entries,
+                 &mut self.factor_workspace,
+                 crate::lu::FactorOptions {
++                    replay: self.controls.factor_replay,
+                     search: self.controls.factor_pivot_search,
+                     ordered,
+                 },
+@@ -788,6 +798,7 @@ impl Lp {
+                     {
+                         lu.enable_ft();
+                     }
++                    self.stats.replayed_pivots += lu.replayed_pivots() as u64;
+                     self.stats.refactors += 1;
+                     self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
+                     self.lu = Some(lu);
+@@ -992,7 +1003,7 @@ impl Lp {
+         self.rho[r] = 1.0;
+         let lu = self.lu.as_mut().expect("factorized basis");
+         lu.btran_unit_indexed(r, &mut self.rho, &mut self.rho_index);
+-        if self.controls.steepest_edge {
++        if self.controls.steepest_edge && !self.controls.devex {
+             self.price_dirty[r / PRICE_BLOCK] = true;
+             self.weight[r] = self
+                 .rho_index
+@@ -1002,6 +1013,46 @@ impl Lp {
+                 .max(MIN_WEIGHT);
+         }
+         let n = self.n;
++        if self.controls.adaptive_pricing
++            && n >= 128
++            && self.rho_index.len() > self.m / 8
++            && self
++                .rho_index
++                .iter()
++                .filter(|&&k| self.rho[k].abs() > DROP)
++                .map(|&k| self.row_start[k + 1] - self.row_start[k])
++                .sum::<usize>()
++                > self.col_value.len() / 2
++        {
++            let _column = crate::profile::enter("pricing_column");
++            self.stats.column_pricings += 1;
++            for j in 0..n {
++                if self.state[j] == State::Basic {
++                    continue;
++                }
++                let mut value = 0.;
++                for e in self.col_start[j]..self.col_start[j + 1] {
++                    let rho = self.rho[self.col_index[e]];
++                    if rho.abs() > DROP {
++                        value += rho * self.col_value[e];
++                    }
++                }
++                if value != 0. {
++                    self.alpha[j] = value;
++                    self.marked[j] = true;
++                    self.touched.push(j);
++                }
++            }
++            for &k in &self.rho_index {
++                if self.rho[k].abs() > DROP && self.state[n + k] != State::Basic {
++                    self.alpha[n + k] = -self.rho[k];
++                    self.marked[n + k] = true;
++                    self.touched.push(n + k);
++                }
++            }
++            return;
++        }
++        self.stats.row_pricings += 1;
+         for &k in &self.rho_index {
+             let v = self.rho[k];
+             if v.abs() <= DROP {
+@@ -1202,19 +1253,43 @@ impl Lp {
+         self.d[p] = -t;
+         self.d[q] = 0.0;
+         if self.controls.steepest_edge {
+-            self.tau.copy_from_slice(&self.rho);
+-            let lu = self.lu.as_mut().expect("factorized basis");
+-            lu.ftran(&mut self.tau);
+-            let (wr, ar) = (self.weight[r], self.column[r]);
+-            for &i in &self.column_index {
+-                let v = self.column[i];
+-                if i != r && v != 0.0 {
+-                    let ratio = v / ar;
+-                    self.weight[i] =
+-                        (self.weight[i] + ratio * (ratio * wr - 2.0 * self.tau[i])).max(MIN_WEIGHT);
++            let _weights = crate::profile::enter("edge_weights");
++            if self.controls.devex {
++                let ar = self.column[r];
++                let wr = self.weight[r].max(1.);
++                let next = (wr / (ar * ar)).max(1.);
++                for &i in &self.column_index {
++                    if i != r {
++                        self.weight[i] = self.weight[i].max(self.column[i] * self.column[i] * next);
++                    }
+                 }
++                self.weight[r] = next;
++                if self.stats.updates % ((2 * m).max(256) as u64) == 0
++                    || self
++                        .column_index
++                        .iter()
++                        .any(|&i| !self.weight[i].is_finite())
++                {
++                    self.weight.fill(1.);
++                    self.price_dirty.fill(true);
++                    self.stats.weight_resets += 1;
++                }
++            } else {
++                self.tau.copy_from_slice(&self.rho);
++                let lu = self.lu.as_mut().expect("factorized basis");
++                lu.ftran(&mut self.tau);
++                let (wr, ar) = (self.weight[r], self.column[r]);
++                for &i in &self.column_index {
++                    let v = self.column[i];
++                    if i != r && v != 0.0 {
++                        let ratio = v / ar;
++                        self.weight[i] = (self.weight[i]
++                            + ratio * (ratio * wr - 2.0 * self.tau[i]))
++                            .max(MIN_WEIGHT);
++                    }
++                }
++                self.weight[r] = (wr / (ar * ar)).max(MIN_WEIGHT);
+             }
+-            self.weight[r] = (wr / (ar * ar)).max(MIN_WEIGHT);
+         }
+         let lu = self.lu.as_mut().expect("factorized basis");
+         lu.update_sparse(r, &self.column, self.column_index.iter().copied());
+@@ -1371,6 +1446,7 @@ impl Lp {
+                     return Ok(Outcome::Failure);
+                 }
+             }
++            self.stats.degenerate_pivots += u64::from(theta == 0.);
+             streak = if theta == 0.0 { streak + 1 } else { 0 };
+             self.pivot(r, q, theta, s, to_upper);
+             budget.pivots += 1;
+@@ -1407,7 +1483,9 @@ impl Lp {
+             }
+         }
+         self.compute_primal();
++        let before = *iterations;
+         let mut outcome = self.phase_two(budget, iterations)?;
++        self.stats.phase_one_pivots += *iterations - before;
+         self.trace("phase1_auxiliary_finished", *iterations);
+         // Optimality for perturbed costs cannot establish dual infeasibility
+         // of the original objective. Retry it before classifying the LP.
+@@ -1661,6 +1739,9 @@ mod tests {
+             factor_pivot_search: 4,
+             factor_ordering: crate::FactorOrdering::Auto,
+             max_factor_entries: usize::MAX,
++            factor_replay: false,
++            adaptive_pricing: true,
++            devex: false,
+             steepest_edge: true,
+             feasibility: 1e-7,
+             dual: 1e-7,
+@@ -1687,6 +1768,52 @@ mod tests {
+         (status, lp)
+     }
+ 
++    #[test]
++    fn column_and_row_prices_match_on_dense_btran_with_logical_columns() {
++        let m = 128;
++        let n = 2 * m;
++        let a: Vec<f64> = (0..m * n)
++            .map(|e| if e / n == e % n { 4. } else { 0.125 })
++            .collect();
++        let model = Model::new(ModelData {
++            sense: Sense::Minimize,
++            objective: vec![1.; n],
++            objective_offset: 0.,
++            variables: Bounds::new(vec![0.; n], vec![2.; n]),
++            kinds: vec![VariableKind::Continuous; n],
++            matrix: CsrMatrix::from_dense(m, n, &a).unwrap(),
++            rows: Bounds::new(vec![f64::NEG_INFINITY; m], vec![10.; m]),
++        })
++        .unwrap();
++        let mut settings = controls();
++        settings.basis_update = crate::BasisUpdate::Eta;
++        let mut lps: Vec<Lp> = [false, true]
++            .into_iter()
++            .map(|column| {
++                let mut c = settings;
++                c.adaptive_pricing = column;
++                let mut lp = Lp::new(&model, &vec![true; m], &vec![true; n], c).unwrap();
++                for i in 0..m {
++                    lp.basic[i] = i;
++                    lp.state[i] = State::Basic;
++                    lp.state[n + i] = State::Upper;
++                }
++                lp.refactor().unwrap();
++                lp
++            })
++            .collect();
++        for r in [0, 17, 127] {
++            for lp in &mut lps {
++                lp.compute_row(r);
++            }
++            for (a, b) in lps[0].alpha.iter().zip(&lps[1].alpha) {
++                assert!((a - b).abs() < 1e-12);
++            }
++        }
++        assert!(lps[0].stats.row_pricings > 0);
++        assert!(lps[1].stats.column_pricings > 0);
++    }
++
+     #[test]
+     fn cached_pricing_matches_full_scan_after_sparse_changes_and_reset() {
+         let m = 1025;
+diff --git a/crates/native/src/lu.rs b/crates/native/src/lu.rs
+index c327479..6aa1e37 100644
+--- a/crates/native/src/lu.rs
++++ b/crates/native/src/lu.rs
+@@ -25,12 +25,14 @@ const ABS_PIVOT: f64 = 1e-11;
+ pub(crate) struct FactorOptions {
+     pub search: usize,
+     pub ordered: bool,
++    pub replay: bool,
+ }
+ impl Default for FactorOptions {
+     fn default() -> Self {
+         Self {
+             search: 4,
+             ordered: false,
++            replay: false,
+         }
+     }
+ }
+@@ -238,6 +240,11 @@ pub(crate) struct Lu {
+     eta_index: Vec<usize>,
+     eta_value: Vec<f64>,
+     work: Vec<f64>,
++    work_index: Vec<usize>,
++    work_sparse: bool,
++    result_index: Vec<usize>,
++    result_marked: Vec<bool>,
++    result_sparse: bool,
+     row_step: Vec<usize>,
+     col_step: Vec<usize>,
+     row_position: Vec<usize>,
+@@ -252,6 +259,7 @@ pub(crate) struct Lu {
+     eta_work: u64,
+     dense: Option<crate::dense::DenseTail>,
+     dense_dimension: usize,
++    replayed_pivots: usize,
+ }
+ 
+ impl Lu {
+@@ -289,20 +297,41 @@ impl Lu {
+             row_slots,
+             input,
+             order_cache,
++            basis_signature,
++            pivot_cache,
+         } = workspace;
+         if m > u32::MAX as usize {
+             return Err(FactorError::TooLarge);
+         }
+         a.reset(m);
++        let mut signature = 0xcbf29ce484222325u64;
++        let mut hash = |word: u64| {
++            signature ^= word;
++            signature = signature.wrapping_mul(0x100000001b3);
++        };
++        if options.replay {
++            hash(m as u64);
++            hash(options.search as u64);
++            hash(u64::from(options.ordered));
++        }
+         for p in 0..m {
+             input.clear();
+             column(p, input);
++            if options.replay {
++                hash(p as u64);
++                hash(input.len() as u64);
++            }
+             for &(i, v) in input.iter() {
++                if options.replay {
++                    hash(i as u64);
++                    hash(v.to_bits());
++                }
+                 if v != 0. {
+                     a.insert(p, i, v);
+                 }
+             }
+         }
++        let replay = options.replay && *basis_signature == signature;
+         let mut colb = Buckets::new(m, m);
+         let mut rowb = Buckets::new(m, m);
+         let mut active = 0usize;
+@@ -345,6 +374,11 @@ impl Lu {
+             eta_index: Vec::new(),
+             eta_value: Vec::new(),
+             work: vec![0.0; m],
++            work_index: Vec::new(),
++            work_sparse: false,
++            result_index: Vec::new(),
++            result_marked: vec![false; m],
++            result_sparse: false,
+             row_step: vec![0; m],
+             col_step: vec![0; m],
+             row_position: vec![0; m],
+@@ -358,6 +392,7 @@ impl Lu {
+             eta_work: 0,
+             dense: None,
+             dense_dimension: 0,
++            replayed_pivots: 0,
+             reach: Reach {
+                 seen: vec![false; m],
+                 nodes: Vec::new(),
+@@ -373,14 +408,37 @@ impl Lu {
+                 break;
+             }
+             let _search = crate::profile::enter("factor_pivot_search");
+-            let candidate = find_pivot(
+-                a,
+-                &colb,
+-                &rowb,
+-                m,
+-                options.search,
+-                options.ordered.then_some(order_cache.rank.as_slice()),
+-            );
++            let cached = if replay {
++                pivot_cache.get(lu.prow.len()).copied().filter(|&(r, p)| {
++                    r < m && p < m && !row_done[r] && !col_done[p] && {
++                        let max = a.column_max(p);
++                        a.cols[p]
++                            .iter()
++                            .find(|e| e.row as usize == r)
++                            .is_some_and(|e| {
++                                e.value.is_finite()
++                                    && e.value.abs() > ABS_PIVOT
++                                    && max.is_finite()
++                                    && e.value.abs() >= THRESHOLD * max
++                            })
++                    }
++                })
++            } else {
++                None
++            };
++            if cached.is_some() {
++                lu.replayed_pivots += 1;
++            }
++            let candidate = cached.or_else(|| {
++                find_pivot(
++                    a,
++                    &colb,
++                    &rowb,
++                    m,
++                    options.search,
++                    options.ordered.then_some(order_cache.rank.as_slice()),
++                )
++            });
+             drop(_search);
+             let Some((r, p)) = candidate else {
+                 singular = true;
+@@ -481,9 +539,18 @@ impl Lu {
+             lu.col_step[lu.pcol[k]] = k;
+             lu.row_position[lu.prow[k]] = lu.pcol[k];
+         }
++        if options.replay {
++            *basis_signature = signature;
++            pivot_cache.clear();
++            pivot_cache.extend(lu.prow.iter().copied().zip(lu.pcol.iter().copied()));
++        }
+         Ok(lu)
+     }
+ 
++    pub fn replayed_pivots(&self) -> usize {
++        self.replayed_pivots
++    }
++
+     fn push_pivot(
+         &mut self,
+         r: usize,
+@@ -656,8 +723,8 @@ impl Lu {
+     pub fn ft_suitable(&self) -> bool {
+         self.dense.is_none()
+             && self.m >= 128
+-            && self.l.value.len() <= self.m / 8
+-            && self.entries() <= 16 * self.m
++            && self.l.value.len() <= 4 * self.m
++            && self.entries() <= 32 * self.m
+     }
+     pub fn average_update_nnz(&self) -> usize {
+         self.update_nnz / self.updates().max(1)
+@@ -834,18 +901,25 @@ impl Lu {
+     pub fn ftran_entering_indexed(&mut self, v: &mut [f64], indices: &mut Vec<usize>) {
+         self.ftran_entering(v);
+         indices.clear();
+-        match &self.ft {
+-            Some(ft) if self.etas.is_empty() => indices.extend_from_slice(ft.column_support()),
+-            _ => indices.extend(
++        if self.result_sparse {
++            indices.extend(self.result_index.iter().copied().filter(|&i| v[i] != 0.));
++        } else {
++            indices.extend(
+                 v.iter()
+                     .enumerate()
+                     .filter_map(|(i, &x)| (x != 0.).then_some(i)),
+-            ),
++            );
+         }
+     }
+     fn ftran_impl(&mut self, v: &mut [f64], capture: bool) {
+         let _triangular = crate::profile::enter("ftran_triangular");
++        for &i in &self.result_index {
++            self.result_marked[i] = false;
++        }
++        self.result_index.clear();
++        self.result_sparse = false;
+         if self.dense.is_some() {
++            self.work_sparse = false;
+             self.ftran_dense(v);
+         } else {
+             let _lower = crate::profile::enter("ftran_lower");
+@@ -878,13 +952,28 @@ impl Lu {
+             drop(_lower);
+             let w = &mut self.work;
+             if let Some(ft) = &mut self.ft {
++                self.work_sparse = false;
+                 ft.ftran(v, w, capture);
++                if capture {
++                    self.result_sparse = true;
++                    self.result_index.extend_from_slice(ft.column_support());
++                    for &p in &self.result_index {
++                        self.result_marked[p] = true;
++                    }
++                }
+             } else {
+                 if self
+                     .reach
+                     .find(v, &self.u_cols, Some(&self.row_position), &self.row_step, 1)
+                 {
+-                    w.fill(0.);
++                    if self.work_sparse {
++                        for &p in &self.work_index {
++                            w[p] = 0.;
++                        }
++                    } else {
++                        w.fill(0.);
++                    }
++                    self.work_index.clear();
+                     for &i in self.reach.nodes.iter().rev() {
+                         let k = self.row_step[i];
+                         let p = self.pcol[k];
+@@ -895,6 +984,7 @@ impl Lu {
+                             rhs * self.diag_inv[k]
+                         };
+                         w[p] = t;
++                        self.work_index.push(p);
+                         if t != 0. {
+                             let (index, value) = self.u_cols.get(p);
+                             for (&r, &u) in index.iter().zip(value) {
+@@ -902,7 +992,24 @@ impl Lu {
+                             }
+                         }
+                     }
++                    // Reach covers every old RHS entry and every triangular
++                    // write. Clear row identities before scattering positions.
++                    for &i in &self.reach.nodes {
++                        v[i] = 0.;
++                    }
++                    for &p in &self.work_index {
++                        v[p] = w[p];
++                    }
++                    self.work_sparse = true;
++                    if capture {
++                        self.result_sparse = true;
++                        self.result_index.extend_from_slice(&self.work_index);
++                        for &p in &self.result_index {
++                            self.result_marked[p] = true;
++                        }
++                    }
+                 } else {
++                    self.work_sparse = false;
+                     for k in (0..self.m).rev() {
+                         let p = self.pcol[k];
+                         let rhs = v[self.prow[k]];
+@@ -920,7 +1027,9 @@ impl Lu {
+                         }
+                     }
+                 }
+-                v.copy_from_slice(w);
++                if !self.work_sparse {
++                    v.copy_from_slice(w);
++                }
+             }
+         }
+         drop(_triangular);
+@@ -929,6 +1038,14 @@ impl Lu {
+             let t = v[eta.position] / eta.pivot;
+             v[eta.position] = t;
+             if t != 0.0 {
++                if capture && self.result_sparse {
++                    for &i in &self.eta_index[eta.start..eta.end] {
++                        if !self.result_marked[i] {
++                            self.result_marked[i] = true;
++                            self.result_index.push(i);
++                        }
++                    }
++                }
+                 self.eta_work = self
+                     .eta_work
+                     .saturating_add((eta.end - eta.start + 1) as u64);
+@@ -976,6 +1093,8 @@ impl Lu {
+     }
+ 
+     fn btran_masked(&mut self, v: &mut [f64], mut support: u64, unit: bool) {
++        // BTRAN uses row identities and may expand support through L.
++        self.work_sparse = false;
+         let _eta = crate::profile::enter("btran_eta");
+         for eta in self.etas.iter().rev() {
+             if support & eta.support == 0 {
+@@ -1278,6 +1397,151 @@ mod tests {
+             .collect()
+     }
+ 
++    #[test]
++    fn indexed_forward_support_survives_cancellation_updates_and_btran_reuse() {
++        let m = 256;
++        let mut cols: Vec<Vec<(usize, f64)>> = (0..m)
++            .map(|p| vec![(p, 2.), ((p / 4 * 4 + (p + 1) % 4), 0.125)])
++            .collect();
++        let mut lu = factor(&cols, 100000).unwrap();
++        let mut sparse_calls = 0;
++        for step in 0..80 {
++            let mut rhs = vec![0.; m];
++            if step % 5 == 0 {
++                for (i, v) in rhs.iter_mut().enumerate() {
++                    *v = (i % 7) as f64 - 3.;
++                }
++            } else {
++                rhs[(step * 7) % m] = 1.;
++                rhs[(step * 7 + 1) % m] = -0.125;
++            }
++            let original = rhs.clone();
++            let mut indices = Vec::new();
++            lu.ftran_entering_indexed(&mut rhs, &mut indices);
++            sparse_calls += usize::from(lu.result_sparse);
++            let mut seen = vec![false; m];
++            for &i in &indices {
++                assert!(!seen[i]);
++                seen[i] = true;
++            }
++            assert!((0..m).all(|i| rhs[i] == 0. || seen[i]));
++            let mut back = vec![0.; m];
++            for (p, col) in cols.iter().enumerate() {
++                for &(i, a) in col {
++                    back[i] += a * rhs[p];
++                }
++            }
++            assert!(
++                back.iter()
++                    .zip(&original)
++                    .all(|(a, b)| (a - b).abs() < 1e-9)
++            );
++            if step % 3 == 0 {
++                let mut y = original.clone();
++                lu.btran(&mut y);
++            }
++            if step % 7 == 0 {
++                let p = step % m;
++                let new = vec![(p, 2.5), ((p / 4 * 4 + (p + 1) % 4), 0.1)];
++                let mut alpha = vec![0.; m];
++                for &(i, a) in &new {
++                    alpha[i] = a;
++                }
++                lu.ftran_entering_indexed(&mut alpha, &mut indices);
++                lu.update_sparse(p, &alpha, indices.into_iter());
++                cols[p] = new;
++            }
++        }
++        assert!(sparse_calls > 10, "sparse branch must be exercised");
++    }
++
++    #[test]
++    fn ft_accepts_general_sparse_lower_factor_without_materializing_dense_tails() {
++        let m = 256;
++        let columns: Vec<Vec<(usize, f64)>> = (0..m)
++            .map(|p| {
++                let mut c = vec![(p, 4.)];
++                for d in 1..=2 {
++                    c.push(((p + d) % m, 0.125));
++                }
++                c
++            })
++            .collect();
++        let mut lu = factor(&columns, 100000).unwrap();
++        assert!(lu.l.value.len() > m / 8);
++        assert!(lu.ft_suitable());
++        lu.enable_ft();
++        assert!(residual(&columns, &mut lu) < 1e-10);
++        let dense = random_columns(160, 341, 100);
++        let lu = factor(&dense, 100000).unwrap();
++        assert!(lu.dense.is_some());
++        assert!(!lu.ft_suitable());
++    }
++
++    #[test]
++    fn numerical_pivot_replay_checks_identity_changes_singularity_and_caps() {
++        let mut ws = FactorWorkspace::default();
++        let m = 128;
++        let mut cols: Vec<Vec<(usize, f64)>> = (0..m)
++            .map(|p| vec![(p, 4.), ((p + 1) % m, 0.125)])
++            .collect();
++        let options = FactorOptions {
++            replay: true,
++            ..Default::default()
++        };
++        let first = Lu::factor_with_workspace(
++            m,
++            |p, out| out.extend_from_slice(&cols[p]),
++            100000,
++            &mut ws,
++            options,
++        )
++        .unwrap();
++        assert_eq!(first.replayed_pivots(), 0);
++        let mut next = Lu::factor_with_workspace(
++            m,
++            |p, out| out.extend_from_slice(&cols[p]),
++            100000,
++            &mut ws,
++            options,
++        )
++        .unwrap();
++        assert!(next.replayed_pivots() > 100);
++        assert!(residual(&cols, &mut next) < 1e-10);
++        cols[0][0].1 = 4.25;
++        let mut changed = Lu::factor_with_workspace(
++            m,
++            |p, out| out.extend_from_slice(&cols[p]),
++            100000,
++            &mut ws,
++            options,
++        )
++        .unwrap();
++        assert_eq!(changed.replayed_pivots(), 0);
++        assert!(residual(&cols, &mut changed) < 1e-10);
++        cols[0].clear();
++        assert!(matches!(
++            Lu::factor_with_workspace(
++                m,
++                |p, out| out.extend_from_slice(&cols[p]),
++                100000,
++                &mut ws,
++                options
++            ),
++            Err(FactorError::Singular { .. })
++        ));
++        assert!(matches!(
++            Lu::factor_with_workspace(
++                m,
++                |p, out| out.extend_from_slice(&cols[p]),
++                1,
++                &mut ws,
++                options
++            ),
++            Err(FactorError::TooLarge)
++        ));
++    }
++
+     #[test]
+     fn blocked_tail_singularity_and_tight_cap_use_valid_legacy_fallback() {
+         let m = 97;
+diff --git a/crates/native/src/replay.rs b/crates/native/src/replay.rs
+index faceeb1..53a80ef 100644
+--- a/crates/native/src/replay.rs
++++ b/crates/native/src/replay.rs
+@@ -171,7 +171,11 @@ pub fn run_with_options(
+         |p, out| out.extend_from_slice(&case.columns[p]),
+         cap,
+         &mut workspace,
+-        crate::lu::FactorOptions { search, ordered },
++        crate::lu::FactorOptions {
++            search,
++            ordered,
++            ..Default::default()
++        },
+     )
+     .map_err(|e| format!("{e:?}"))?;
+     let factor_seconds = start.elapsed().as_secs_f64();
+diff --git a/crates/native/src/root.rs b/crates/native/src/root.rs
+new file mode 100644
+index 0000000..2b8cfdc
+--- /dev/null
++++ b/crates/native/src/root.rs
+@@ -0,0 +1,899 @@
++//! Root transformations. Matrix shape is frozen before the numerical engine.
++use crate::*;
++use lp_ip_craft::CsrMatrix;
++
++#[derive(Clone, Copy, Debug, PartialEq)]
++enum Side {
++    Lower,
++    Upper,
++}
++#[derive(Clone, Copy, Debug)]
++struct BoundOwner {
++    row: usize,
++    col: usize,
++    a: f64,
++    side: Side,
++}
++struct Reduction {
++    model: Model,
++    rows: Vec<usize>,
++    owners: Vec<BoundOwner>,
++}
++
++// Prove a*q=b in real arithmetic, including subnormal operands. Multiplication
++// of two 53-bit significands fits u128; no rounded-product equality shortcut.
++pub(crate) fn exact_product(a: f64, q: f64, b: f64) -> bool {
++    fn parts(v: f64) -> (bool, u128, i32) {
++        let bits = v.to_bits();
++        let e = ((bits >> 52) & 2047) as i32;
++        let mant = (bits & ((1u64 << 52) - 1)) | if e == 0 { 0 } else { 1u64 << 52 };
++        (
++            bits >> 63 != 0,
++            mant as u128,
++            if e == 0 { -1074 } else { e - 1075 },
++        )
++    }
++    if !a.is_finite() || !q.is_finite() || !b.is_finite() {
++        return false;
++    }
++    if a == 0. || q == 0. {
++        return b == 0.;
++    }
++    if b == 0. {
++        return false;
++    }
++    let (sa, ma, ea) = parts(a);
++    let (sq, mq, eq) = parts(q);
++    let (sb, mb, eb) = parts(b);
++    let product = ma * mq;
++    let shift = product.trailing_zeros();
++    let bs = mb.trailing_zeros();
++    sa ^ sq == sb && product >> shift == mb >> bs && ea + eq + shift as i32 == eb + bs as i32
++}
++
++fn singleton(model: &Model) -> Result<Option<Reduction>> {
++    let mut bounds = model.variables().clone();
++    let mut rows = Vec::with_capacity(model.m());
++    let mut owners = Vec::new();
++    let mut removed = 0;
++    let a = model.matrix();
++    for i in 0..model.m() {
++        let mut entries =
++            (a.pattern.indptr[i]..a.pattern.indptr[i + 1]).filter(|&k| a.values[k] != 0.);
++        let k = entries.next();
++        let single = k.is_some() && entries.next().is_none();
++        if !single {
++            rows.push(i);
++            continue;
++        }
++        let k = k.unwrap();
++        let c = a.values[k];
++        let j = a.pattern.indices[k];
++        let l = model.rows().lower[i];
++        let u = model.rows().upper[i];
++        if [l, u]
++            .iter()
++            .any(|&b| b.is_finite() && !exact_product(c, b / c, b))
++        {
++            rows.push(i);
++            continue;
++        }
++        let (lo, hi) = if c > 0. {
++            (l / c, u / c)
++        } else {
++            (u / c, l / c)
++        };
++        if lo > bounds.upper[j] || hi < bounds.lower[j] {
++            return Ok(None);
++        }
++        if lo > bounds.lower[j] {
++            bounds.lower[j] = lo;
++            owners.push(BoundOwner {
++                row: i,
++                col: j,
++                a: c,
++                side: Side::Lower,
++            });
++        }
++        if hi < bounds.upper[j] {
++            bounds.upper[j] = hi;
++            owners.push(BoundOwner {
++                row: i,
++                col: j,
++                a: c,
++                side: Side::Upper,
++            });
++        }
++        removed += 1;
++    }
++    if removed == 0 {
++        return Ok(None);
++    }
++    let mut data = model.data().clone();
++    data.variables = bounds;
++    let mut ptr = vec![0];
++    let mut indices = Vec::new();
++    let mut values = Vec::new();
++    for &i in &rows {
++        let r = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
++        indices.extend_from_slice(&a.pattern.indices[r.clone()]);
++        values.extend_from_slice(&a.values[r]);
++        ptr.push(indices.len());
++    }
++    data.matrix = CsrMatrix::new(rows.len(), model.n(), ptr, indices, values);
++    data.rows = Bounds::new(
++        rows.iter().map(|&i| model.rows().lower[i]).collect(),
++        rows.iter().map(|&i| model.rows().upper[i]).collect(),
++    );
++    Ok(Some(Reduction {
++        model: Model::new(data)?,
++        rows,
++        owners,
++    }))
++}
++
++fn restore(original: &Model, reduced: &Reduction, duals: &mut Duals) {
++    let mut y = vec![0.; original.m()];
++    for (&i, &v) in reduced.rows.iter().zip(&duals.row_duals) {
++        y[i] = v;
++    }
++    let mut z = duals.reduced_costs.clone();
++    for h in reduced.owners.iter().rev() {
++        let s = oriented(original, z[h.col]);
++        if (s > 0. && h.side == Side::Lower) || (s < 0. && h.side == Side::Upper) {
++            y[h.row] += z[h.col] / h.a;
++            z[h.col] = 0.;
++        }
++    }
++    original.matrix().multiply_transpose(&y, &mut z);
++    for (v, &c) in z.iter_mut().zip(original.objective()) {
++        *v = c - *v;
++    }
++    duals.row_duals = y;
++    duals.reduced_costs = z;
++}
++
++pub(crate) fn solve(
++    solver: &mut NativeSolver,
++    model: &Model,
++    options: &Options,
++    start: Option<&WarmStart>,
++    cancel: &CancellationToken,
++) -> Result<SolveResult> {
++    options.validate()?;
++    solver.settings.validate()?;
++    if let Some(s) = start {
++        if s.primal.len() != model.n() || s.primal.iter().any(|v| !v.is_finite()) {
++            return Err(Error::InvalidInput(
++                "start must contain n finite values".into(),
++            ));
++        }
++    }
++    if !presolve::supported_arithmetic()
++        || !solver.settings.presolve
++        || (!solver.settings.singleton_presolve
++            && !solver.settings.root_propagation
++            && !solver.settings.root_cuts)
++        || cancel.is_cancelled()
++        || solver.settings.time_limit_seconds == Some(0.)
++        || solver.settings.iteration_limit == Some(0)
++        || solver.settings.node_limit == Some(0)
++    {
++        return solver.solve_internal(model, options, start, cancel);
++    }
++    let began = Instant::now();
++    let reduction = if solver.settings.singleton_presolve {
++        singleton(model)?
++    } else {
++        None
++    };
++    if reduction.is_none() && !model.is_mip() {
++        return original_after_preprocessing(solver, model, options, start, cancel, began);
++    }
++    let mut reduced = reduction.unwrap_or_else(|| Reduction {
++        model: model.clone(),
++        rows: (0..model.m()).collect(),
++        owners: Vec::new(),
++    });
++    let inferred = if solver.settings.root_propagation && model.is_mip() {
++        infer_bounds(
++            &mut reduced.model,
++            cancel,
++            began,
++            solver.settings.time_limit_seconds,
++        )?
++    } else {
++        0
++    };
++    let removed_rows = model.m() - reduced.model.m();
++    let cuts = if solver.settings.root_cuts && model.is_mip() {
++        cover_cuts(&mut reduced.model)?
++    } else {
++        0
++    };
++    if reduced.model == *model {
++        return original_after_preprocessing(solver, model, options, start, cancel, began);
++    }
++
++    if let Some(s) = start {
++        if check::evaluate(model, &s.primal, &options.tolerances)?.feasible_candidate
++            && !check::evaluate(&reduced.model, &s.primal, &options.tolerances)?.feasible_candidate
++        {
++            return original_after_preprocessing(solver, model, options, start, cancel, began);
++        }
++    }
++    let conversion = began.elapsed().as_secs_f64();
++    let mut settings = solver.settings.clone();
++    settings.singleton_presolve = false;
++    settings.root_propagation = false;
++    settings.root_cuts = false;
++    if let Some(t) = &mut settings.time_limit_seconds {
++        *t = (*t - conversion).max(0.);
++    }
++    let mut result =
++        NativeSolver::new(settings).solve_internal(&reduced.model, options, start, cancel)?;
++    let checks = Instant::now();
++    result
++        .backend
++        .effective_options
++        .push(("root_cover_cuts".into(), cuts.to_string()));
++    result
++        .backend
++        .effective_options
++        .push(("root_inferred_bounds".into(), inferred.to_string()));
++    if let Some(x) = &result.candidate {
++        result.evaluation = Some(check::evaluate(model, x, &options.tolerances)?);
++        let mut valid = result.evaluation.as_ref().unwrap().feasible_candidate;
++        if let Some(d) = &mut result.duals {
++            restore(model, &reduced, d);
++            valid &= accepted(model, model.variables(), x, d, options, &solver.settings);
++            result.best_bound =
++                safe_dual_bound_with_bounds(model, model.variables(), &d.row_duals)?.bound;
++        }
++        if !valid {
++            result.status = Status::NumericalFailure;
++            result.message = "root postsolve rejected by original-model checks".into();
++            result.best_bound = None;
++        }
++    }
++    for (key, value) in effective_options(&solver.settings) {
++        if let Some(v) = result
++            .backend
++            .effective_options
++            .iter_mut()
++            .find(|(k, _)| k == &key)
++        {
++            v.1 = value;
++        }
++    }
++    result
++        .backend
++        .effective_options
++        .push(("singleton_removed_rows".into(), removed_rows.to_string()));
++    result.backend.conversion_seconds += conversion;
++    result.backend.check_seconds += checks.elapsed().as_secs_f64();
++    result.backend.total_seconds = began.elapsed().as_secs_f64();
++    result.backend.time_budget_exceeded = solver
++        .settings
++        .time_limit_seconds
++        .is_some_and(|t| result.backend.total_seconds > t);
++    Ok(result)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use lp_ip_craft::{ModelData, VariableKind};
++    #[test]
++    fn product_proof_includes_subnormal_and_rejects_rounded_equality() {
++        for (a, q, b) in [
++            (2., 0.5, 1.),
++            (-4., 0.25, -1.),
++            (f64::from_bits(1), 2., f64::from_bits(2)),
++            (1e200, 1e-200, 1.),
++        ] {
++            if a == 1e200 {
++                assert!(!exact_product(a, q, b));
++            } else {
++                assert!(exact_product(a, q, b));
++            }
++        }
++        assert_eq!(3. * (1. / 3.), 1.);
++        assert!(!exact_product(3., 1. / 3., 1.));
++        assert!(!exact_product(f64::MAX, 2., f64::INFINITY));
++        assert!(!exact_product(f64::from_bits(1), 0.5, 0.));
++    }
++    fn fixture(sense: Sense, integral: bool) -> Model {
++        Model::new(ModelData {
++            sense,
++            objective: vec![if sense == Sense::Minimize { -1. } else { 1. }, 0.25],
++            objective_offset: 3.,
++            variables: Bounds::new(vec![0., 0.], vec![10., 10.]),
++            kinds: vec![
++                if integral {
++                    VariableKind::Integer
++                } else {
++                    VariableKind::Continuous
++                };
++                2
++            ],
++            matrix: CsrMatrix::from_dense(5, 2, &[2., 0., -4., 0., 1., 0., 0., -2., 1., 1.])
++                .unwrap(),
++            rows: Bounds::new(
++                vec![f64::NEG_INFINITY, -16., 1., -4., f64::NEG_INFINITY],
++                vec![6., f64::INFINITY, 3., 0., 4.],
++            ),
++        })
++        .unwrap()
++    }
++    #[test]
++    fn singleton_postsolve_restores_both_senses_and_bound_owners() {
++        for sense in [Sense::Minimize, Sense::Maximize] {
++            for integer in [false, true] {
++                let m = fixture(sense, integer);
++                let red = singleton(&m).unwrap().unwrap();
++                assert_eq!(red.model.m(), 1);
++                let r = NativeSolver::default()
++                    .solve(&m, &Options::default(), None, &CancellationToken::default())
++                    .unwrap();
++                assert_eq!(r.status, Status::Optimal, "{r:?}");
++                assert!(r.evaluation.as_ref().unwrap().feasible_candidate);
++                if !integer {
++                    assert!(
++                        check::lp_residuals(
++                            &m,
++                            r.candidate.as_ref().unwrap(),
++                            r.duals.as_ref().unwrap()
++                        )
++                        .unwrap()
++                        .max()
++                            < 1e-7
++                    );
++                }
++            }
++        }
++    }
++    #[test]
++    fn inexact_singleton_is_kept_and_zero_budgets_bypass() {
++        let mut d = fixture(Sense::Minimize, false).into_data();
++        d.matrix.values[0] = 3.;
++        d.rows.upper[0] = 1.;
++        let m = Model::new(d).unwrap();
++        let red = singleton(&m).unwrap().unwrap();
++        assert!(red.rows.contains(&0));
++        let r = NativeSolver::new(NativeOptions {
++            iteration_limit: Some(0),
++            ..Default::default()
++        })
++        .solve(&m, &Options::default(), None, &CancellationToken::default())
++        .unwrap();
++        assert_eq!(r.status, Status::IterationLimit);
++        assert!(
++            !r.backend
++                .effective_options
++                .iter()
++                .any(|(k, _)| k == "singleton_removed_rows")
++        );
++    }
++}
++
++// Even an unproductive presolve scan consumes the whole-call wall budget.
++fn original_after_preprocessing(
++    solver: &NativeSolver,
++    model: &Model,
++    options: &Options,
++    start: Option<&WarmStart>,
++    cancel: &CancellationToken,
++    began: Instant,
++) -> Result<SolveResult> {
++    let conversion = began.elapsed().as_secs_f64();
++    let mut settings = solver.settings.clone();
++    if let Some(t) = &mut settings.time_limit_seconds {
++        *t = (*t - conversion).max(0.);
++    }
++    let mut r = NativeSolver::new(settings).solve_internal(model, options, start, cancel)?;
++    for (k, v) in effective_options(&solver.settings) {
++        if let Some(p) = r.backend.effective_options.iter_mut().find(|p| p.0 == k) {
++            p.1 = v;
++        }
++    }
++    r.backend.conversion_seconds += conversion;
++    r.backend.total_seconds = began.elapsed().as_secs_f64();
++    r.backend.time_budget_exceeded = solver
++        .settings
++        .time_limit_seconds
++        .is_some_and(|t| r.backend.total_seconds > t);
++    Ok(r)
++}
++
++fn down(v: f64) -> f64 {
++    if v == 0. {
++        -f64::from_bits(1)
++    } else if v > 0. {
++        f64::from_bits(v.to_bits() - 1)
++    } else {
++        f64::from_bits(v.to_bits() + 1)
++    }
++}
++fn up(v: f64) -> f64 {
++    -down(-v)
++}
++fn quotient(a: f64, b: f64, lower: bool) -> Option<f64> {
++    let q = b / a;
++    if !q.is_finite() {
++        return None;
++    }
++    let v = if exact_product(a, q, b) {
++        q
++    } else if lower {
++        down(q)
++    } else {
++        up(q)
++    };
++    v.is_finite().then_some(v)
++}
++// At most four sweeps. Totals are from a wider snapshot of the row box, so
++// subsequent tightenings within the sweep cannot invalidate another inference.
++fn infer_bounds(
++    model: &mut Model,
++    cancel: &CancellationToken,
++    began: Instant,
++    limit: Option<f64>,
++) -> Result<usize> {
++    let mut bounds = model.variables().clone();
++    let mut changed = 0usize;
++    let a = model.matrix();
++    for _ in 0..4 {
++        let before = changed;
++        for i in 0..model.m() {
++            if i % 128 == 0
++                && (cancel.is_cancelled()
++                    || limit.is_some_and(|t| began.elapsed().as_secs_f64() >= t))
++            {
++                break;
++            }
++            let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
++            // Existing exact node propagation already covers finite pure integer rows.
++            if range.clone().all(|k| {
++                let j = a.pattern.indices[k];
++                model.kinds()[j].is_integral()
++                    && a.values[k].fract() == 0.
++                    && bounds.lower[j].is_finite()
++                    && bounds.upper[j].is_finite()
++            }) {
++                continue;
++            }
++            let mut terms = Vec::with_capacity(range.len());
++            let (mut ni, mut xi) = (0, 0);
++            let mut unsafe_row = false;
++            for k in range.clone() {
++                let j = a.pattern.indices[k];
++                let c = a.values[k];
++                if c == 0. {
++                    terms.push((Some((0., 0.)), Some((0., 0.))));
++                    continue;
++                }
++                let (l, u) = if c > 0. {
++                    (bounds.lower[j], bounds.upper[j])
++                } else {
++                    (bounds.upper[j], bounds.lower[j])
++                };
++                let min = if l.is_finite() {
++                    incumbent::dot(std::iter::once((c, l)), 0.)
++                } else {
++                    ni += 1;
++                    None
++                };
++                let max = if u.is_finite() {
++                    incumbent::dot(std::iter::once((c, u)), 0.)
++                } else {
++                    xi += 1;
++                    None
++                };
++                unsafe_row |= (l.is_finite() && min.is_none()) || (u.is_finite() && max.is_none());
++                terms.push((min, max));
++            }
++            if unsafe_row {
++                continue;
++            }
++            let totalmin = incumbent::dot(terms.iter().filter_map(|t| t.0.map(|v| (1., v.0))), 0.);
++            let totalmax = incumbent::dot(terms.iter().filter_map(|t| t.1.map(|v| (1., v.1))), 0.);
++            let (Some(totalmin), Some(totalmax)) = (totalmin, totalmax) else {
++                continue;
++            };
++            for (pos, k) in range.enumerate() {
++                let c = a.values[k];
++                if c == 0. {
++                    continue;
++                }
++                let j = a.pattern.indices[k];
++                let (mn, mx) = terms[pos];
++                let restmin = if ni == 1 && mn.is_none() {
++                    Some(totalmin.0)
++                } else if ni == 0 {
++                    incumbent::dot(std::iter::once((-1., mn.unwrap().1)), totalmin.0).map(|v| v.0)
++                } else {
++                    None
++                };
++                let restmax = if xi == 1 && mx.is_none() {
++                    Some(totalmax.1)
++                } else if xi == 0 {
++                    incumbent::dot(std::iter::once((-1., mx.unwrap().0)), totalmax.1).map(|v| v.1)
++                } else {
++                    None
++                };
++                let mut lo = bounds.lower[j];
++                let mut hi = bounds.upper[j];
++                if let Some(rest) = restmin {
++                    let b = model.rows().upper[i];
++                    if b.is_finite() {
++                        if let Some((_, rhs)) = incumbent::dot(std::iter::once((-1., rest)), b) {
++                            if let Some(v) = quotient(c, rhs, c < 0.) {
++                                if c > 0. {
++                                    hi = hi.min(v);
++                                } else {
++                                    lo = lo.max(v);
++                                }
++                            }
++                        }
++                    }
++                }
++                if let Some(rest) = restmax {
++                    let b = model.rows().lower[i];
++                    if b.is_finite() {
++                        if let Some((rhs, _)) = incumbent::dot(std::iter::once((-1., rest)), b) {
++                            if let Some(v) = quotient(c, rhs, c > 0.) {
++                                if c > 0. {
++                                    lo = lo.max(v);
++                                } else {
++                                    hi = hi.min(v);
++                                }
++                            }
++                        }
++                    }
++                }
++                if model.kinds()[j].is_integral() {
++                    lo = lo.ceil();
++                    hi = hi.floor();
++                }
++                if lo > hi {
++                    return Ok(0);
++                } // leave infeasibility classification to the engine
++                if lo > bounds.lower[j] {
++                    bounds.lower[j] = lo;
++                    changed += 1;
++                }
++                if hi < bounds.upper[j] {
++                    bounds.upper[j] = hi;
++                    changed += 1;
++                }
++            }
++        }
++        if changed == before {
++            break;
++        }
++    }
++    if changed > 0 {
++        let mut d = model.data().clone();
++        d.variables = bounds;
++        *model = Model::new(d)?;
++    }
++    Ok(changed)
++}
++
++#[cfg(test)]
++mod propagation_tests {
++    use super::*;
++    use lp_ip_craft::{ModelData, VariableKind};
++    #[test]
++    fn mixed_infinite_root_domains_are_inferred_before_admission() {
++        for sense in [Sense::Minimize, Sense::Maximize] {
++            let m = Model::new(ModelData {
++                sense,
++                objective: vec![1., 0.5],
++                objective_offset: 0.,
++                variables: Bounds::new(vec![f64::NEG_INFINITY, 0.], vec![f64::INFINITY; 2]),
++                kinds: vec![VariableKind::Integer, VariableKind::Continuous],
++                matrix: CsrMatrix::from_dense(3, 2, &[1., 1., -1., 1., 1., -1.]).unwrap(),
++                rows: Bounds::new(
++                    vec![f64::NEG_INFINITY, f64::NEG_INFINITY, -2.],
++                    vec![5., 3., f64::INFINITY],
++                ),
++            })
++            .unwrap();
++            let mut inferred = m.clone();
++            assert!(
++                infer_bounds(
++                    &mut inferred,
++                    &CancellationToken::default(),
++                    Instant::now(),
++                    None
++                )
++                .unwrap()
++                    > 0
++            );
++            assert!(
++                inferred
++                    .variables()
++                    .lower
++                    .iter()
++                    .chain(&inferred.variables().upper)
++                    .all(|v| v.is_finite())
++            );
++            let r = NativeSolver::default()
++                .solve(&m, &Options::default(), None, &CancellationToken::default())
++                .unwrap();
++            assert_eq!(r.status, Status::Optimal, "{r:?}");
++            assert!(r.evaluation.unwrap().feasible_candidate);
++            assert!(
++                NativeSolver::new(NativeOptions {
++                    root_propagation: false,
++                    ..Default::default()
++                })
++                .solve(&m, &Options::default(), None, &CancellationToken::default())
++                .is_err()
++            );
++        }
++    }
++    #[test]
++    fn outward_inferences_preserve_exhaustive_dyadic_points() {
++        for seed in 1..80usize {
++            let c = (seed % 7 + 1) as f64 / 4.;
++            let d = -((seed % 5 + 1) as f64) / 8.;
++            let m = Model::new(ModelData {
++                sense: Sense::Minimize,
++                objective: vec![1., 0.],
++                objective_offset: 0.,
++                variables: Bounds::new(vec![-4.; 2], vec![4.; 2]),
++                kinds: vec![VariableKind::Integer, VariableKind::Continuous],
++                matrix: CsrMatrix::from_dense(1, 2, &[c, d]).unwrap(),
++                rows: Bounds::new(vec![-1.25], vec![2.75]),
++            })
++            .unwrap();
++            let mut inferred = m.clone();
++            infer_bounds(
++                &mut inferred,
++                &CancellationToken::default(),
++                Instant::now(),
++                None,
++            )
++            .unwrap();
++            for x in -4..=4 {
++                for yi in -32..=32 {
++                    let y = yi as f64 / 8.;
++                    let activity = c * x as f64 + d * y;
++                    if (-1.25..=2.75).contains(&activity) {
++                        assert!(
++                            inferred.variables().lower[0] <= x as f64
++                                && inferred.variables().upper[0] >= x as f64
++                        );
++                        assert!(
++                            inferred.variables().lower[1] <= y
++                                && inferred.variables().upper[1] >= y
++                        );
++                    }
++                }
++            }
++        }
++    }
++    #[test]
++    fn unresolved_free_domains_and_overflow_do_not_get_invented_bounds() {
++        let m = Model::new(ModelData {
++            sense: Sense::Minimize,
++            objective: vec![1.; 2],
++            objective_offset: 0.,
++            variables: Bounds::free(2),
++            kinds: vec![VariableKind::Integer; 2],
++            matrix: CsrMatrix::from_dense(1, 2, &[1., -1.]).unwrap(),
++            rows: Bounds::fixed(vec![0.]),
++        })
++        .unwrap();
++        let mut copy = m.clone();
++        assert_eq!(
++            infer_bounds(
++                &mut copy,
++                &CancellationToken::default(),
++                Instant::now(),
++                None
++            )
++            .unwrap(),
++            0
++        );
++        assert_eq!(m, copy);
++        assert!(quotient(1e-300, 1e300, true).is_none());
++    }
++}
++
++#[derive(Clone, Debug)]
++struct Cover {
++    row: usize,
++    cols: Vec<usize>,
++}
++fn verify_cover(m: &Model, cover: &Cover) -> bool {
++    if cover.row >= m.m() || cover.cols.len() < 2 || cover.cols.windows(2).any(|p| p[0] >= p[1]) {
++        return false;
++    }
++    let b = m.rows().upper[cover.row];
++    if !b.is_finite() || !(0. ..=2_147_483_647.).contains(&b) {
++        return false;
++    }
++    let a = m.matrix();
++    let mut sum = 0i128;
++    let mut found = 0;
++    for k in a.pattern.indptr[cover.row]..a.pattern.indptr[cover.row + 1] {
++        let c = a.values[k];
++        let j = a.pattern.indices[k];
++        if c == 0. {
++            continue;
++        }
++        if !m.kinds()[j].is_integral()
++            || m.variables().lower[j] < 0.
++            || m.variables().upper[j] > 1.
++            || c.fract() != 0.
++            || !(1. ..=2_147_483_647.).contains(&c)
++        {
++            return false;
++        }
++        if cover.cols.binary_search(&j).is_ok() {
++            sum += c as i128;
++            found += 1;
++        }
++    }
++    found == cover.cols.len() && sum > b.floor() as i128
++}
++fn cover_cuts(model: &mut Model) -> Result<usize> {
++    let a = model.matrix();
++    let mut covers = Vec::<Cover>::new();
++    let mut seen = std::collections::BTreeSet::new();
++    let mut work = 0;
++    for i in 0..model.m() {
++        let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
++        if !(3..=512).contains(&range.len()) {
++            continue;
++        }
++        work += range.len();
++        if work > 100_000 || covers.len() >= 8 {
++            break;
++        }
++        let all: Vec<_> = range
++            .clone()
++            .filter(|&k| a.values[k] != 0.)
++            .map(|k| a.pattern.indices[k])
++            .collect();
++        if !verify_cover(model, &Cover { row: i, cols: all }) {
++            continue;
++        }
++        let weights: Vec<_> = range
++            .filter(|&k| a.values[k] != 0.)
++            .map(|k| (a.pattern.indices[k], a.values[k] as i128))
++            .collect();
++        for order in 0..3 {
++            let mut sorted = weights.clone();
++            sorted.sort_by(|&(j, w), &(k, v)| match order {
++                0 => (oriented(model, model.objective()[j]) / w as f64)
++                    .total_cmp(&(oriented(model, model.objective()[k]) / v as f64))
++                    .then(j.cmp(&k)),
++                1 => v.cmp(&w).then(j.cmp(&k)),
++                _ => w.cmp(&v).then(j.cmp(&k)),
++            });
++            let capacity = model.rows().upper[i].floor() as i128;
++            let mut sum = 0i128;
++            let mut chosen = Vec::new();
++            for pair in sorted {
++                sum += pair.1;
++                chosen.push(pair);
++                if sum > capacity {
++                    break;
++                }
++            }
++            for pos in (0..chosen.len()).rev() {
++                if sum - chosen[pos].1 > capacity {
++                    sum -= chosen.remove(pos).1;
++                }
++            }
++            let mut cols: Vec<_> = chosen.iter().map(|t| t.0).collect();
++            cols.sort_unstable();
++            let witness = Cover { row: i, cols };
++            if verify_cover(model, &witness) && seen.insert(witness.cols.clone()) {
++                covers.push(witness);
++            }
++            if covers.len() >= 8 {
++                break;
++            }
++        }
++    }
++    if covers.is_empty() {
++        return Ok(0);
++    }
++    let mut data = model.data().clone();
++    for c in &covers {
++        data.matrix.pattern.indices.extend_from_slice(&c.cols);
++        data.matrix
++            .values
++            .extend(std::iter::repeat_n(1., c.cols.len()));
++        data.matrix.pattern.indptr.push(data.matrix.values.len());
++        data.matrix.pattern.rows += 1;
++        data.rows.lower.push(f64::NEG_INFINITY);
++        data.rows.upper.push((c.cols.len() - 1) as f64);
++    }
++    *model = Model::new(data)?;
++    Ok(covers.len())
++}
++
++#[cfg(test)]
++mod cut_tests {
++    use super::*;
++    use lp_ip_craft::{ModelData, VariableKind};
++    #[test]
++    fn exact_cover_witnesses_and_exhaustive_both_sense_optima() {
++        for seed in 0..24 {
++            for sense in [Sense::Minimize, Sense::Maximize] {
++                let n = 8;
++                let coeff: Vec<_> = (0..n)
++                    .map(|j| ((j * 7 + seed * 3) % 13 + 2) as f64)
++                    .collect();
++                let cap = coeff.iter().sum::<f64>() * 0.5;
++                let m = Model::new(ModelData {
++                    sense,
++                    objective: (0..n)
++                        .map(|j| {
++                            ((j * 11 + seed) % 17 + 1) as f64
++                                * if sense == Sense::Minimize { -1. } else { 1. }
++                        })
++                        .collect(),
++                    objective_offset: 2.,
++                    variables: Bounds::new(vec![0.; n], vec![1.; n]),
++                    kinds: vec![VariableKind::Binary; n],
++                    matrix: CsrMatrix::from_dense(1, n, &coeff).unwrap(),
++                    rows: Bounds::new(vec![f64::NEG_INFINITY], vec![cap]),
++                })
++                .unwrap();
++                let mut cut = m.clone();
++                assert!(cover_cuts(&mut cut).unwrap() > 0);
++                let mut best = f64::INFINITY;
++                for mask in 0..1usize << n {
++                    let x: Vec<_> = (0..n).map(|j| ((mask >> j) & 1) as f64).collect();
++                    if check::evaluate(&m, &x, &Options::default().tolerances)
++                        .unwrap()
++                        .feasible_candidate
++                    {
++                        assert!(
++                            check::evaluate(&cut, &x, &Options::default().tolerances)
++                                .unwrap()
++                                .feasible_candidate
++                        );
++                        let obj = m.objective_offset()
++                            + m.objective()
++                                .iter()
++                                .zip(&x)
++                                .map(|(a, b)| a * b)
++                                .sum::<f64>();
++                        best = best.min(oriented(&m, obj));
++                    }
++                }
++                let r = NativeSolver::new(NativeOptions {
++                    root_cuts: true,
++                    ..Default::default()
++                })
++                .solve(&m, &Options::default(), None, &CancellationToken::default())
++                .unwrap();
++                assert_eq!(r.status, Status::Optimal, "{r:?}");
++                assert!((oriented(&m, r.evaluation.unwrap().objective) - best).abs() < 1e-7);
++                assert!(!verify_cover(
++                    &m,
++                    &Cover {
++                        row: 0,
++                        cols: vec![0, 0]
++                    }
++                ));
++                assert!(!verify_cover(
++                    &m,
++                    &Cover {
++                        row: 0,
++                        cols: vec![0, 999]
++                    }
++                ));
++            }
++        }
++    }
++}
+diff --git a/crates/native/tests/batch.rs b/crates/native/tests/batch.rs
+new file mode 100644
+index 0000000..0d44006
+--- /dev/null
++++ b/crates/native/tests/batch.rs
+@@ -0,0 +1,79 @@
++use lp_ip_craft::*;
++use lp_ip_craft_native::*;
++fn model(free: bool) -> Model {
++    Model::new(ModelData {
++        sense: Sense::Maximize,
++        objective: vec![1.],
++        objective_offset: 2.,
++        variables: if free {
++            Bounds::free(1)
++        } else {
++            Bounds::new(vec![0.], vec![7.])
++        },
++        kinds: vec![if free {
++            VariableKind::Integer
++        } else {
++            VariableKind::Continuous
++        }],
++        matrix: CsrMatrix::new(0, 1, vec![0], vec![], vec![]),
++        rows: Bounds::free(0),
++    })
++    .unwrap()
++}
++#[test]
++fn ordered_batch_matches_serial_at_all_worker_counts_and_keeps_job_errors() {
++    let (good, bad) = (model(false), model(true));
++    let models = vec![
++        &good, &bad, &good, &good, &bad, &good, &good, &good, &good, &good, &good, &good, &good,
++        &good, &good, &good, &good,
++    ];
++    let solver = NativeSolver::default();
++    for workers in [1, 2, 4, 8, 16] {
++        let results = solver
++            .solve_batch(
++                &models,
++                &Options::default(),
++                workers,
++                &CancellationToken::default(),
++            )
++            .unwrap();
++        assert_eq!(results.len(), models.len());
++        for (i, r) in results.into_iter().enumerate() {
++            if i == 1 || i == 4 {
++                assert!(matches!(r, Err(Error::Unsupported(_))));
++            } else {
++                let r = r.unwrap();
++                assert_eq!(r.status, Status::Optimal);
++                assert_eq!(r.evaluation.unwrap().objective, 9.);
++            }
++        }
++    }
++}
++#[test]
++fn batch_empty_invalid_and_cancelled() {
++    let solver = NativeSolver::default();
++    let token = CancellationToken::default();
++    let options = Options::default();
++    assert!(
++        solver
++            .solve_batch(&[], &options, 16, &token)
++            .unwrap()
++            .is_empty()
++    );
++    for n in [0, 17, usize::MAX] {
++        assert!(matches!(
++            solver.solve_batch(&[], &options, n, &token),
++            Err(Error::InvalidInput(_))
++        ));
++    }
++    let m = model(false);
++    token.cancel();
++    let jobs = vec![&m; 20];
++    assert!(
++        solver
++            .solve_batch(&jobs, &options, 4, &token)
++            .unwrap()
++            .into_iter()
++            .all(|r| r.unwrap().status == Status::Cancelled)
++    );
++}
+diff --git a/crates/native/tests/simplex.rs b/crates/native/tests/simplex.rs
+index 50fc069..5510dba 100644
+--- a/crates/native/tests/simplex.rs
++++ b/crates/native/tests/simplex.rs
+@@ -173,3 +173,33 @@ fn original_unit_checks_with_scaled_rows() {
+     assert_eq!(r.status, Status::Optimal, "{r:?}");
+     assert!((r.evaluation.unwrap().objective - expected).abs() < 1e-7);
+ }
++
++#[test]
++fn devex_enabled_matches_planted_certificates() {
++    for size in [17, 64, 128] {
++        for fixture in [fixtures::packing, fixtures::network, fixtures::irregular] {
++            let (m, expected) = fixture(size);
++            let r = NativeSolver::new(NativeOptions {
++                devex: true,
++                decompose: false,
++                ..Default::default()
++            })
++            .solve(&m, &Options::default(), None, &CancellationToken::default())
++            .unwrap();
++            assert_eq!(r.status, Status::Optimal, "{r:?}");
++            assert!((r.evaluation.as_ref().unwrap().objective - expected).abs() < 1e-6);
++            assert!(
++                check::lp_residuals(&m, r.candidate.as_ref().unwrap(), r.duals.as_ref().unwrap())
++                    .unwrap()
++                    .max()
++                    < 1e-6
++            );
++            assert!(
++                r.backend
++                    .effective_options
++                    .iter()
++                    .any(|(k, v)| k == "devex" && v == "true")
++            );
++        }
++    }
++}
+diff --git a/crates/python/src/lib.rs b/crates/python/src/lib.rs
+index 42f7a98..1d4e053 100644
+--- a/crates/python/src/lib.rs
++++ b/crates/python/src/lib.rs
+@@ -386,6 +386,15 @@ fn native_settings(
+             "node_reoptimization" => settings.node_reoptimization = field(&value, &key)?,
+             "strong_branching" => settings.strong_branching = field(&value, &key)?,
+             "reduced_cost_fixing" => settings.reduced_cost_fixing = field(&value, &key)?,
++            "factor_replay" => settings.factor_replay = field(&value, &key)?,
++            "adaptive_pricing" => settings.adaptive_pricing = field(&value, &key)?,
++            "devex" => settings.devex = field(&value, &key)?,
++            "avoid_dominant_components" => {
++                settings.avoid_dominant_components = field(&value, &key)?
++            }
++            "singleton_presolve" => settings.singleton_presolve = field(&value, &key)?,
++            "root_propagation" => settings.root_propagation = field(&value, &key)?,
++            "root_cuts" => settings.root_cuts = field(&value, &key)?,
+             "steepest_edge" => settings.steepest_edge = field(&value, &key)?,
+             "redundant_row_min_ratio" => settings.redundant_row_min_ratio = field(&value, &key)?,
+             "redundant_rows" => settings.redundant_rows = field(&value, &key)?,
+@@ -508,6 +517,14 @@ fn solve_native<'py>(
+         }
+     };
+ 
++    result_dict(py, inner.sense(), r)
++}
++
++fn result_dict(
++    py: Python<'_>,
++    sense: Sense,
++    r: lp_ip_craft::SolveResult,
++) -> PyResult<Bound<'_, PyDict>> {
+     let out = PyDict::new(py);
+     out.set_item("status", r.status.as_str())?;
+     out.set_item("message", &r.message)?;
+@@ -516,7 +533,7 @@ fn solve_native<'py>(
+     out.set_item("nodes", r.nodes)?;
+     out.set_item("iterations", r.iterations)?;
+     out.set_item("backend", report_dict(py, &r.backend)?)?;
+-    match r.gap(inner.sense()).map_err(to_py_err)? {
++    match r.gap(sense).map_err(to_py_err)? {
+         Some(gap) => {
+             let d = PyDict::new(py);
+             d.set_item("absolute", gap.absolute)?;
+@@ -541,6 +558,36 @@ fn solve_native<'py>(
+     Ok(out)
+ }
+ 
++/// Ordered independent solves; no Python callbacks or model copies in workers.
++#[pyfunction]
++#[allow(clippy::too_many_arguments)]
++fn solve_batch_native<'py>(
++    py: Python<'py>,
++    models: Vec<Py<PyModel>>,
++    workers: usize,
++    feasibility_tolerance: f64,
++    integrality_tolerance: f64,
++    cancellation: &Bound<'py, Cancellation>,
++    backend_options: Option<&Bound<'py, PyDict>>,
++) -> PyResult<Vec<Py<PyAny>>> {
++    let options = options(feasibility_tolerance, integrality_tolerance, 1)?;
++    let solver = lp_ip_craft_native::NativeSolver::new(native_settings(backend_options)?);
++    let refs: Vec<&Model> = models.iter().map(|m| &m.bind(py).get().inner).collect();
++    let token = cancellation.get().inner.clone();
++    let results = py
++        .detach(|| solver.solve_batch(&refs, &options, workers, &token))
++        .map_err(to_py_err)?;
++    // A per-job error is an exception value, so successful jobs remain usable.
++    results
++        .into_iter()
++        .zip(&refs)
++        .map(|(r, m)| match r {
++            Ok(r) => Ok(result_dict(py, m.sense(), r)?.into_any().unbind()),
++            Err(e) => Ok(to_py_err(e).into_value(py).into_any()),
++        })
++        .collect()
++}
++
+ /// Independent evaluation of a point. Use `lp_ip_craft.evaluate` instead.
+ #[pyfunction]
+ #[pyo3(signature = (model, x, feasibility_tolerance, integrality_tolerance))]
+@@ -618,6 +665,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
+     m.add("BackendError", py.get_type::<BackendError>())?;
+     m.add_function(wrap_pyfunction!(backends, m)?)?;
+     m.add_function(wrap_pyfunction!(solve_native, m)?)?;
++    m.add_function(wrap_pyfunction!(solve_batch_native, m)?)?;
+     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
+     m.add_function(wrap_pyfunction!(lp_residuals, m)?)?;
+     m.add_function(wrap_pyfunction!(safe_dual_bound, m)?)?;
+diff --git a/pyproject.toml b/pyproject.toml
+index b76f42e..a475f08 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -4,7 +4,7 @@ build-backend = "maturin"
+ 
+ [project]
+ name = "lp-ip-craft"
+-version = "0.21.0"
++version = "0.22.0"
+ description = "LP and mixed-integer LP in Rust with a native Rust solver and Python bindings"
+ readme = "README.md"
+ license = "MIT"
+diff --git a/python/lp_ip_craft/__init__.py b/python/lp_ip_craft/__init__.py
+index 637c72a..00f89cd 100644
+--- a/python/lp_ip_craft/__init__.py
++++ b/python/lp_ip_craft/__init__.py
+@@ -28,11 +28,13 @@ from ._native import evaluate as _evaluate
+ from ._native import lp_residuals as _lp_residuals
+ from ._native import safe_dual_bound as _safe_dual_bound
+ from ._native import solve_native as _solve_native
++from ._native import solve_batch_native as _solve_batch_native
+ 
+-__version__ = "0.21.0"
++__version__ = "0.22.0"
+ 
+ __all__ = [
+     "BACKENDS",
++    "solve_batch",
+     "BackendError",
+     "BackendReport",
+     "Cancellation",
+@@ -107,6 +109,13 @@ class NativeOptions:
+     basis_update: Literal["auto", "eta", "forrest_tomlin"] = "auto"
+     factor_pivot_search: int = 4
+     factor_ordering: Literal["auto", "natural", "min_degree"] = "auto"
++    factor_replay: bool = False
++    adaptive_pricing: bool = True
++    devex: bool = False
++    avoid_dominant_components: bool = True
++    singleton_presolve: bool = True
++    root_propagation: bool = True
++    root_cuts: bool = False
+     steepest_edge: bool = True
+     presolve: bool = True
+     redundant_rows: bool = True
+@@ -262,6 +271,10 @@ def solve(
+         backend,
+         None if backend_options is None else asdict(backend_options),
+     )
++    return _result_from_raw(raw)
++
++
++def _result_from_raw(raw: dict) -> SolveResult:
+     evaluation, duals, gap = raw["evaluation"], raw["duals"], raw["gap"]
+     return SolveResult(
+         status=raw["status"],
+@@ -277,6 +290,29 @@ def solve(
+     )
+ 
+ 
++def solve_batch(models: Iterable[Model], *, workers: int = 1, options: Optional[Options] = None,
++                backend_options: Optional[NativeOptions] = None,
++                cancellation: Optional[Cancellation] = None) -> list[SolveResult | Exception]:
++    """Solve independent native jobs in order with 1..16 Rust workers.
++
++    Budgets apply per job. Component threading is disabled inside the pool.
++    Returns an exception value for a failed job; batch argument errors raise.
++    Cancellation is shared, and queued jobs report cancellation too.
++    """
++    options = options or Options()
++    if options.threads != 1:
++        raise NotImplementedError("batch numerical kernels require options.threads = 1")
++    if isinstance(workers, bool) or not isinstance(workers, int):
++        raise TypeError("workers must be an integer")
++    if not 1 <= workers <= 16:
++        raise ValueError("workers must be in 1..16")
++    raw = _solve_batch_native(list(models), workers, options.feasibility_tolerance,
++                             options.integrality_tolerance,
++                             cancellation if cancellation is not None else Cancellation(),
++                             None if backend_options is None else asdict(backend_options))
++    return [r if isinstance(r, Exception) else _result_from_raw(r) for r in raw]
++
++
+ def evaluate(
+     model: Model,
+     x: Iterable[float],
+diff --git a/python/lp_ip_craft/_native.pyi b/python/lp_ip_craft/_native.pyi
+index 6aae6cd..2aadd72 100644
+--- a/python/lp_ip_craft/_native.pyi
++++ b/python/lp_ip_craft/_native.pyi
+@@ -96,3 +96,5 @@ def safe_dual_bound(
+     model: Model,
+     row_duals: Iterable[float],
+ ) -> dict[str, Any]: ...
++
++def solve_batch_native(models: list[Model], workers: int, feasibility_tolerance: float, integrality_tolerance: float, cancellation: Cancellation, backend_options: Optional[dict[str, Any]]) -> list[Any]: ...
+diff --git a/tests/test_batch.py b/tests/test_batch.py
+new file mode 100644
+index 0000000..598d839
+--- /dev/null
++++ b/tests/test_batch.py
+@@ -0,0 +1,26 @@
++import pytest
++import lp_ip_craft as lp
++
++def box(integral=False, free=False):
++    return lp.Model(objective=[1.],lower=[-float('inf') if free else 0.],upper=[float('inf') if free else 7.],row_lower=[],row_upper=[],indptr=[0],indices=[],values=[],kinds=['integer' if integral else 'continuous'],sense='maximize')
++
++@pytest.mark.parametrize('workers',[1,2,4,8,16])
++def test_ordered_batch_with_job_error(workers):
++    good,bad=box(),box(True,True)
++    result=lp.solve_batch([good,bad,good]*6,workers=workers)
++    assert len(result)==18
++    for i,r in enumerate(result):
++        if i%3==1: assert isinstance(r,NotImplementedError)
++        else:
++            assert r.status=='optimal'
++            assert r.evaluation.objective==7.
++            assert r.backend.effective_options['component_threads']=='1'
++
++def test_empty_invalid_and_cancelled_batch():
++    assert lp.solve_batch([],workers=16)==[]
++    for n in [0,-1,17]:
++        with pytest.raises(ValueError): lp.solve_batch([],workers=n)
++    for n in [True,1.5]:
++        with pytest.raises(TypeError): lp.solve_batch([],workers=n)
++    token=lp.Cancellation();token.cancel()
++    assert all(r.status=='cancelled' for r in lp.solve_batch([box()]*20,workers=4,cancellation=token))

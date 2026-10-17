@@ -247,3 +247,26 @@ target model is still needed to measure usefulness and choose performance work.
 - [Rust `f64` documentation](https://doc.rust-lang.org/std/primitive.f64.html),
   binary64 representation, operations and adjacent floats. Standard
   `next_down`/`next_up` methods were stabilized after this project's MSRV.
+
+## Prepared bounds (Rust, 0.21)
+
+`PreparedDualBound::new(model, bounds, row_duals)` owns residual intervals and
+the downward-rounded row constant. `set_bound(j, lower, upper)` replaces a
+variable interval; `bound()` reads the current report. Rebuild for new model
+coefficients or multipliers. The floating-point environment must remain
+unchanged throughout its lifetime. This API is currently Rust-only.
+
+Each leaf of its balanced sum tree is the lower enclosure of a variable's
+rectangle infimum. Each internal node downward-adds its children's enclosures;
+by induction the root is a lower enclosure of the sum of all infima. Adding the
+cached row constant downwards preserves the Lagrangian inequality. Sign reversal
+then gives the appropriate bound in the original objective sense. Updates
+recompute exactly the changed leaf and its ancestors, including failed nodes, so
+infinite/overflowing variable terms can recover after a valid domain change.
+The immutable row preparation cannot recover from failure without rebuilding.
+
+Preparation is O(nnz+n+m) time and O(n) space; changes are O(log n), reads O(1).
+Summation order differs from the fresh API: last bits, availability near overflow
+and failure precedence can differ. Both APIs retain conservative rounding.
+The fresh API's operation order is unchanged. Certified reduced-cost fixing uses
+prepared bounds when two or more domain trials share the same multipliers.

@@ -112,6 +112,131 @@ pub fn safe_dual_bound_with_bounds(
     })
 }
 
+/// Reusable conservative Lagrangian bound for fixed matrix, objective, rows and
+/// multipliers, with independently mutable variable intervals.
+///
+/// Construction costs O(nnz+n+m); [`Self::set_bound`] costs O(log n), and
+/// [`Self::bound`] costs O(1). Storage is O(n). Every residual interval and
+/// partial sum encloses rounding error, just as in [`safe_dual_bound`]. A balanced
+/// sum tree uses a different addition order, so last bits and failure precedence
+/// can differ from the fresh calculation. Neither result dominates the other.
+/// Infinite/overflowing variable contributions can recover after a bound update;
+/// failure while preparing the immutable row terms cannot recover.
+///
+/// The IEEE environment must remain unchanged throughout this object's lifetime;
+/// do not use fast-math. Probes reject unsupported arithmetic, without changing
+/// the environment. This object owns its data; modifying the source model or
+/// multipliers does not modify it. Construct a new object for new coefficients.
+pub struct PreparedDualBound {
+    sense: Sense,
+    residual: Vec<Interval>,
+    constant: std::result::Result<f64, Failure>,
+    leaves: usize,
+    tree: Vec<std::result::Result<f64, Failure>>,
+}
+
+impl PreparedDualBound {
+    /// Validate inputs and prepare outward-rounded residuals and bound terms.
+    pub fn new(model: &Model, bounds: &crate::Bounds, row_duals: &[f64]) -> Result<Self> {
+        bounds.validate(model.n(), "replacement variable bounds")?;
+        ensure(row_duals.len() == model.m(), || {
+            format!(
+                "row duals: expected {} entries, got {}",
+                model.m(),
+                row_duals.len()
+            )
+        })?;
+        ensure_finite(row_duals, "row duals")?;
+        let prepared = if gradual_underflow() {
+            prepare(model, row_duals)
+        } else {
+            Err((SafeBoundStatus::UnsupportedArithmetic, None))
+        };
+        let (constant, residual) = match prepared {
+            Ok((constant, residual)) => (Ok(constant), residual),
+            Err(failure) => (Err(failure), vec![Interval::point(0.); model.n()]),
+        };
+        let leaves = model
+            .n()
+            .max(1)
+            .checked_next_power_of_two()
+            .ok_or_else(|| crate::Error::InvalidInput("too many bound contributions".into()))?;
+        let slots = leaves
+            .checked_mul(2)
+            .ok_or_else(|| crate::Error::InvalidInput("too many bound contributions".into()))?;
+        let mut tree = vec![Ok(0.); slots];
+        if constant.is_ok() {
+            for j in 0..model.n() {
+                tree[leaves + j] = variable_term(j, residual[j], bounds.lower[j], bounds.upper[j]);
+            }
+            for at in (1..leaves).rev() {
+                tree[at] = combine(tree[2 * at], tree[2 * at + 1]);
+            }
+        }
+        Ok(Self {
+            sense: model.sense(),
+            residual,
+            constant,
+            leaves,
+            tree,
+        })
+    }
+
+    /// Replace one variable interval. Invalid inputs leave the object unchanged.
+    /// Arithmetic failures are reported by [`Self::bound`], not as input errors.
+    pub fn set_bound(&mut self, j: usize, lower: f64, upper: f64) -> Result<()> {
+        ensure(j < self.residual.len(), || {
+            format!("bound variable {j} out of range")
+        })?;
+        ensure(
+            !lower.is_nan()
+                && !upper.is_nan()
+                && lower != f64::INFINITY
+                && upper != f64::NEG_INFINITY
+                && lower <= upper,
+            || format!("replacement variable bounds: entry {j} has lower={lower}, upper={upper}"),
+        )?;
+        if !gradual_underflow() {
+            self.constant = Err((SafeBoundStatus::UnsupportedArithmetic, None));
+        }
+        if self.constant.is_ok() {
+            let mut at = self.leaves + j;
+            self.tree[at] = variable_term(j, self.residual[j], lower, upper);
+            while at > 1 {
+                at /= 2;
+                self.tree[at] = combine(self.tree[2 * at], self.tree[2 * at + 1]);
+            }
+        }
+        Ok(())
+    }
+
+    /// Read the current conservative bound, including its typed failure reason.
+    pub fn bound(&self) -> SafeDualBound {
+        if !gradual_underflow() {
+            return unavailable(SafeBoundStatus::UnsupportedArithmetic, None);
+        }
+        match combine(self.constant, self.tree[1]) {
+            Ok(total) => SafeDualBound {
+                bound: Some(if self.sense == Sense::Minimize {
+                    total
+                } else {
+                    -total
+                }),
+                status: SafeBoundStatus::Finite,
+                index: None,
+            },
+            Err((status, index)) => unavailable(status, index),
+        }
+    }
+}
+
+fn combine(
+    a: std::result::Result<f64, Failure>,
+    b: std::result::Result<f64, Failure>,
+) -> std::result::Result<f64, Failure> {
+    Ok(addition(a?, b?).ok_or(OVERFLOW)?.lo)
+}
+
 fn unavailable(status: SafeBoundStatus, index: Option<usize>) -> SafeDualBound {
     SafeDualBound {
         bound: None,
@@ -123,7 +248,7 @@ fn unavailable(status: SafeBoundStatus, index: Option<usize>) -> SafeDualBound {
 type Failure = (SafeBoundStatus, Option<usize>);
 const OVERFLOW: Failure = (SafeBoundStatus::ArithmeticOverflow, None);
 
-fn compute(model: &Model, bounds: &crate::Bounds, y: &[f64]) -> std::result::Result<f64, Failure> {
+fn prepare(model: &Model, y: &[f64]) -> std::result::Result<(f64, Vec<Interval>), Failure> {
     let orient = |v: f64| match model.sense() {
         Sense::Minimize => v,
         Sense::Maximize => -v,
@@ -157,27 +282,40 @@ fn compute(model: &Model, bounds: &crate::Bounds, y: &[f64]) -> std::result::Res
             residual[j] = residual[j].subtract(p).ok_or(OVERFLOW)?;
         }
     }
+    Ok((total, residual))
+}
+
+fn variable_term(j: usize, r: Interval, l: f64, u: f64) -> std::result::Result<f64, Failure> {
+    if (l == f64::NEG_INFINITY && r.hi > 0.0) || (u == f64::INFINITY && r.lo < 0.0) {
+        return Err((SafeBoundStatus::UnboundedVariable, Some(j)));
+    }
+    // A bilinear function attains its minimum at a corner of a finite
+    // rectangle. Above, all unbounded directions with negative infimum
+    // have been excluded. A wholly free box is possible only for r=[0,0].
+    let mut term = f64::INFINITY;
+    for x in [l, u].into_iter().filter(|x| x.is_finite()) {
+        for coefficient in [r.lo, r.hi] {
+            term = term.min(product(coefficient, x).ok_or(OVERFLOW)?.lo);
+        }
+    }
+    if term == f64::INFINITY {
+        debug_assert!(r.lo == 0.0 && r.hi == 0.0);
+        term = 0.0;
+    }
+    Ok(term)
+}
+
+fn compute(model: &Model, bounds: &crate::Bounds, y: &[f64]) -> std::result::Result<f64, Failure> {
+    let (mut total, residual) = prepare(model, y)?;
     for (j, r) in residual.into_iter().enumerate() {
-        let (l, u) = (bounds.lower[j], bounds.upper[j]);
-        if (l == f64::NEG_INFINITY && r.hi > 0.0) || (u == f64::INFINITY && r.lo < 0.0) {
-            return Err((SafeBoundStatus::UnboundedVariable, Some(j)));
-        }
-        // A bilinear function attains its minimum at a corner of a finite
-        // rectangle. Above, all unbounded directions with negative infimum
-        // have been excluded. A wholly free box is possible only for r=[0,0].
-        let mut term = f64::INFINITY;
-        for x in [l, u].into_iter().filter(|x| x.is_finite()) {
-            for coefficient in [r.lo, r.hi] {
-                term = term.min(product(coefficient, x).ok_or(OVERFLOW)?.lo);
-            }
-        }
-        if term == f64::INFINITY {
-            debug_assert!(r.lo == 0.0 && r.hi == 0.0);
-            term = 0.0;
-        }
+        let term = variable_term(j, r, bounds.lower[j], bounds.upper[j])?;
         total = addition(total, term).ok_or(OVERFLOW)?.lo;
     }
-    Ok(orient(total))
+    Ok(if model.sense() == Sense::Minimize {
+        total
+    } else {
+        -total
+    })
 }
 
 #[derive(Clone, Copy, Debug)]

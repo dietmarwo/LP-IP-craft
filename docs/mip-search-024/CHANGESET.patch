@@ -1,0 +1,3085 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 032c438..fc3de97 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -16,18 +16,18 @@ checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+ 
+ [[package]]
+ name = "lp-ip-craft"
+-version = "0.23.0"
++version = "0.24.0"
+ 
+ [[package]]
+ name = "lp-ip-craft-native"
+-version = "0.23.0"
++version = "0.24.0"
+ dependencies = [
+  "lp-ip-craft",
+ ]
+ 
+ [[package]]
+ name = "lp-ip-craft-python"
+-version = "0.23.0"
++version = "0.24.0"
+ dependencies = [
+  "lp-ip-craft",
+  "lp-ip-craft-native",
+diff --git a/Cargo.toml b/Cargo.toml
+index 9875b3f..987ec4f 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -3,7 +3,7 @@ members = ["crates/core", "crates/native", "crates/python"]
+ default-members = ["crates/core", "crates/native"]
+ resolver = "3"
+ [workspace.package]
+-version = "0.23.0"
++version = "0.24.0"
+ edition = "2024"
+ rust-version = "1.85"
+ license = "MIT"
+diff --git a/README.md b/README.md
+index 8841735..39da4e6 100644
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,5 @@
++> Native 0.24: bounded exact rational incumbent witnesses, reliability branching, serial Feasibility Jump, LP-directed lifted covers, and reversible mixed-row node propagation. See [the implementation plan](docs/mip-search-024/PLAN.md), [results](docs/mip-search-024/RESULTS.md), and [reproduction instructions](docs/mip-search-024/REPRODUCE.md).
++
+ > Native 0.23: reuse FT output support and captured spike seeds to remove redundant scans; add opt-in bounded MIP search diagnostics and six additional public MIPs. See [the plan](docs/packing-ftran-mip-diagnostics/PLAN.md), [diagnostic contract](docs/packing-ftran-mip-diagnostics/DIAGNOSTICS.md) and [results](docs/packing-ftran-mip-diagnostics/RESULTS.md).
+ 
+ > Native 0.22: sparse-support propagation, broader guarded FT updates, selectable replay/Devex/column pricing, reversible singleton presolve, sound MIP root bounds, exact root cover cuts and ordered Rust/Python batch solving. See [the implementation plan](docs/highs-lessons-implementation/PLAN.md) and [results](docs/highs-lessons-implementation/RESULTS.md).
+@@ -12,7 +14,7 @@
+ 
+ # LP-IP-craft — native Rust LP/MIP solver
+ 
+-Version **0.23.0** extends the 0.16 architecture, which replaced both 0.15
++Version **0.24.0** extends the 0.16 architecture, which replaced both 0.15
+ linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
+ simplex on a sparse LU factorization**, and replaces depth-first search with
+ best-bound search, diving and pseudocost branching. The optimization engine
+diff --git a/benchmarks/Cargo.lock b/benchmarks/Cargo.lock
+index 2ac10ce..d4aadf2 100644
+--- a/benchmarks/Cargo.lock
++++ b/benchmarks/Cargo.lock
+@@ -10,11 +10,11 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+ 
+ [[package]]
+ name = "lp-ip-craft"
+-version = "0.23.0"
++version = "0.24.0"
+ 
+ [[package]]
+ name = "lp-ip-craft-native"
+-version = "0.23.0"
++version = "0.24.0"
+ dependencies = [
+  "lp-ip-craft",
+ ]
+diff --git a/benchmarks/audit_mip_search_024.py b/benchmarks/audit_mip_search_024.py
+new file mode 100644
+index 0000000..c0810b2
+--- /dev/null
++++ b/benchmarks/audit_mip_search_024.py
+@@ -0,0 +1,70 @@
++"""Audit fresh numerical observations against unchanged frozen adjudications."""
++import hashlib
++import json
++from pathlib import Path
++import re
++ROOT=Path(__file__).resolve().parent.parent
++DATA=ROOT/'docs/mip-search-024/data'
++old=ROOT/'docs/performance-ten/data'
++
++def read(p):return json.loads(p.read_text())
++inputs_raw=(old/'oracle-inputs.json').read_bytes();adj_raw=(old/'oracle-adjudication.json').read_bytes()
++assert hashlib.sha256(inputs_raw).hexdigest()=='7da1d445743d20c29c70e5bbe658c017f755fcf8769214c30a519401dbc21bb9'
++assert hashlib.sha256(adj_raw).hexdigest()=='1ebc3c213212af2451801a965418520bfd402867f76db46b36a6b908a3cd1564'
++inputs={r['case_id']:r for r in json.loads(inputs_raw)['records']};adj={r['case_id']:r for r in json.loads(adj_raw)['records']}
++result=dict(input_sha256=hashlib.sha256(inputs_raw).hexdigest(),adjudication_sha256=hashlib.sha256(adj_raw).hexdigest(),oracle_runs=[])
++counts={name:6330 for name in ['default','ft','no-fix','devex','root-cuts','factor-replay','row-pricing','reliability','jump','directed','lifted','mixed','combined']};counts.update(refactor1=1200,workers4=180)
++for name,count in counts.items():
++ d=read(DATA/f'oracle-{name}.json');assert d['wrapper_version']=='0.24.0';assert d['dataset_sha256']==result['input_sha256'];assert len(d['records'])==len({r['case_id']for r in d['records']})==count
++ failures=[]
++ for r in d['records']:
++  original=inputs[r['case_id']];a=adj.get(r['case_id'],{});expected=a.get('adjudicated_status',original['expected_status']);reference=a.get('reference',original['reference']);issues=[v for v in r.get('problems',[])if v!='status mismatch']
++  if r['status']!=expected:issues.append('status mismatch')
++  if r['status']=='optimal'and reference is not None and abs(r['objective']-reference)>1e-6*(1+abs(reference)):issues.append('objective mismatch')
++  if issues:failures.append(dict(case_id=r['case_id'],issues=issues))
++ result['oracle_runs'].append(dict(policy=name,cases=count,raw_flags=sum(bool(r.get('problems'))for r in d['records']),failures=failures))
++result['oracle_cases']=sum(r['cases']for r in result['oracle_runs'])
++result['unsafe_finite_bounds']=read(DATA/'bounds.json')['unsafe_finite_bounds']
++result['rust_checks']=sum(map(int,re.findall(r'test result: ok\. (\d+) passed',(DATA/'final-rust-tests.log').read_text())))
++result['native_unit_recheck_count']=int(re.search(r'test result: ok\. (\d+) passed',(DATA/'final-arithmetic-tests.log').read_text()).group(1))
++result['python_checks']=int(re.search(r'(\d+) passed',(DATA/'final-python-tests.log').read_text()).group(1))
++assert 'error:'not in(DATA/'final-clippy.log').read_text()
++result['public_observations']=[]
++for file in ['public-policies.json','public-repeat.json']:
++ p=DATA/file
++ if not p.exists():continue
++ d=read(p)
++ for row in d['records']:
++  for r in row['result']['runs']:
++   assert r['status']in['optimal','node_limit','iteration_limit','time_limit'],(file,row['case'],row['policy'],r['status'],r.get('message'))
++   assert r['nodes']<=100000 and r['iterations']<=1000000
++   if (r.get('checks') or {}).get('objective')is not None:assert r['checks']['feasible'],(file,row['case'],row['policy'])
++   expected=row['result']['expected'];meta=dict(r['effective_options']);trace=json.loads(meta['diagnostics.mip_search'])
++   assert r['iterations']==trace['terminal']['pivots']+int(meta.get('root_separation_pivots',0))
++   assert r['nodes']==trace['terminal']['nodes']+int(meta.get('root_separation_nodes',0))
++   if expected is not None:
++    assert r['best_bound']is None or r['best_bound']<=expected+1e-6*(1+abs(expected)),(row['case'],row['policy'],'unsafe bound')
++    proof=trace['terminal']['certified_incumbent_bound']
++    assert proof is None or proof>=expected-1e-6*(1+abs(expected)),(row['case'],row['policy'],'unsafe incumbent')
++  result['public_observations'].append(dict(file=file,case=row['case'],policy=row['policy'],round=row['round']))
++lp=read(DATA/'lp-controls.json')
++assert len(lp['summary'])==6
++assert all(row['accepted']==5 and not row['errors']for row in lp['summary'])
++result['lp_controls']=lp['summary']
++result['public_process_count']=len(result['public_observations'])
++result['public_solver_runs']=3*result['public_process_count']
++result['legacy_work_equivalence']=[]
++public_file=DATA/'public-policies.json'
++if public_file.exists():
++ rows=read(public_file)['records']
++ for case in sorted({r['case']for r in rows}):
++  sides={r['policy']:r['result']['runs'][-1]for r in rows if r['case']==case and r['policy']in['baseline-023','legacy-policy']}
++  if len(sides)!=2:continue
++  a,b=sides['baseline-023'],sides['legacy-policy'];limited='time_limit'in[a['status'],b['status']]
++  same=all(a.get(k)==b.get(k)for k in ['status','nodes','iterations','best_bound'])and(a.get('checks')or{}).get('objective')==(b.get('checks')or{}).get('objective')
++  result['legacy_work_equivalence'].append(dict(case=case,equal=same,wall_limited=limited))
++  assert same or limited,(case,'legacy policy changed search work')
++(DATA/'audit.json').write_text(json.dumps(result,indent=2)+'\n')
++print(json.dumps(result,indent=2))
++assert not result['unsafe_finite_bounds']
++assert all(not r['failures']for r in result['oracle_runs']),result['oracle_runs']
+diff --git a/benchmarks/inspect_mip_witness.py b/benchmarks/inspect_mip_witness.py
+new file mode 100644
+index 0000000..08fcc77
+--- /dev/null
++++ b/benchmarks/inspect_mip_witness.py
+@@ -0,0 +1,44 @@
++import json
++from pathlib import Path
++from fractions import Fraction as F
++import lp_ip_craft as lp
++root=Path(__file__).resolve().parent.parent;out=[]
++for name in ['flugpl','egout']:
++ p=next(root.glob('docs/*/corpus/**/'+name+'.json'));d=json.loads(p.read_text())['model']
++ for key,sign in [('lower',-1),('upper',1),('row_lower',-1),('row_upper',1)]:d[key]=[v if v is not None else sign*float('inf') for v in d[key]]
++ m=lp.Model(**d);r=lp.solve(m,backend='native',backend_options=lp.NativeOptions(decompose=False,time_limit_seconds=10.));x=r.candidate;z=list(map(F,x));free=[]
++ for j,v in enumerate(x):
++  l,u=d['lower'][j],d['upper'][j]
++  if d['kinds'][j]!='continuous':z[j]=F(round(v))
++  elif abs(l)!=float('inf') and abs(v-l)<=1e-8*(1+abs(l)):z[j]=F(l)
++  elif abs(u)!=float('inf') and abs(v-u)<=1e-8*(1+abs(u)):z[j]=F(u)
++  else:free.append(j)
++ print(name,'free',len(free),free,flush=True)
++ n=len(free);pos={j:p for p,j in enumerate(free)};basis={};eq=[]
++ for i in range(len(d['row_lower'])):
++  rr=range(d['indptr'][i],d['indptr'][i+1]);act=sum(d['values'][k]*x[d['indices'][k]]for k in rr);l,u=d['row_lower'][i],d['row_upper'][i]
++  side=l if l==u or abs(act-l)<=1e-6*(1+abs(act)) else u if abs(act-u)<=1e-6*(1+abs(act))else None
++  if side is not None:eq.append((l!=u,i,side))
++ for _,i,b in sorted(eq):
++  if len(basis)==n:break
++  row=[F(0)for _ in range(n)]+[F(b)]
++  for k in range(d['indptr'][i],d['indptr'][i+1]):
++   j=d['indices'][k];c=F(d['values'][k])
++   if j in pos:row[pos[j]]=c
++   else:row[-1]-=c*z[j]
++  for p in range(n):
++   if not row[p]:continue
++   if p in basis:
++    v=row[p];row=[a-v*b for a,b in zip(row,basis[p])]
++   else:
++    v=row[p];basis[p]=[a/v for a in row];break
++ for p in reversed(range(n)):
++  if p in basis:z[free[p]]=basis[p][-1]-sum(basis[p][k]*z[free[k]]for k in range(p+1,n))
++ failures=[]
++ for j,v in enumerate(z):
++  if (d['lower'][j]!=-float('inf')and v<F(d['lower'][j]))or(d['upper'][j]!=float('inf')and v>F(d['upper'][j])):failures.append(('bound',j,float(v),d['lower'][j],d['upper'][j]))
++ for i in range(len(d['row_lower'])):
++  act=sum(F(d['values'][k])*z[d['indices'][k]]for k in range(d['indptr'][i],d['indptr'][i+1]));l,u=d['row_lower'][i],d['row_upper'][i]
++  if(l!=-float('inf')and act<F(l))or(u!=float('inf')and act>F(u)):failures.append(('row',i,float(act),l,u,float(min(abs(act-F(b))for b in [l,u]if abs(b)!=float('inf')))))
++ print(name,'rank',len(basis),'failures',failures[:12],flush=True);out.append(dict(name=name,free=free,failures=failures,candidate=x))
++(root/'docs/mip-search-024/data/witness-inspection.json').write_text(json.dumps(out,indent=2))
+diff --git a/benchmarks/oracle_worker.py b/benchmarks/oracle_worker.py
+index 63821d5..a2db2c9 100644
+--- a/benchmarks/oracle_worker.py
++++ b/benchmarks/oracle_worker.py
+@@ -1,4 +1,5 @@
+ """One backend and pass over pre-generated common inputs, external checks untimed."""
++from dataclasses import replace
+ import argparse
+ import hashlib
+ import json
+@@ -9,7 +10,7 @@ import lp_ip_craft as lp
+ 
+ p=argparse.ArgumentParser();p.add_argument('dataset');p.add_argument('backend',choices=['native','highs']);p.add_argument('output')
+ p.add_argument('--variant',choices=['default','dantzig','refactor1','refactor8','workers4','ft','eta','ordering','fixed128','fixed256','devex','root-cuts','factor-replay','row-pricing'],default='default')
+-p.add_argument('--no-fixing',action='store_true');p.add_argument('--basis-update',choices=['auto','eta','forrest_tomlin']);p.add_argument('--suite',choices=['random','exact','components']);p.add_argument('--seed',type=int);a=p.parse_args()
++p.add_argument('--native-options', type=json.loads, default={});p.add_argument('--no-fixing',action='store_true');p.add_argument('--basis-update',choices=['auto','eta','forrest_tomlin']);p.add_argument('--suite',choices=['random','exact','components']);p.add_argument('--seed',type=int);a=p.parse_args()
+ data=Path(a.dataset).read_bytes();dataset=json.loads(data)
+ records=[]
+ for entry in dataset['records']:
+@@ -25,6 +26,7 @@ for entry in dataset['records']:
+                                   decomposition_min_variables=1 if entry['suite']=='components' else 32,
+                                   component_parallel_min_entries=0 if entry['suite']=='components' else 2048)
+     else:settings=lp.HighsOptions(time_limit_seconds=30.,node_limit=100_000 if mip else None,iteration_limit=None if mip else 1_000_000)
++    if a.backend == 'native' and a.native_options:settings=replace(settings, **a.native_options)
+     if not records:
+         lp.solve(model,backend=a.backend,backend_options=settings)  # one batch warmup
+     started=time.perf_counter()
+@@ -69,7 +71,7 @@ for suite in sorted({r['suite'] for r in records}):
+         summary.append(dict(suite=suite,mip=mip,cases=len(group),failures=sum(bool(r.get('problems')) for r in group),
+                             seconds=sum(r['seconds'] for r in group),nodes=sum(r.get('nodes',0) for r in group),
+                             iterations=sum(r.get('iterations',0) for r in group),statuses={s:sum(r['status']==s for r in group) for s in sorted({r['status'] for r in group})}))
+-result=dict(backend=a.backend,variant=a.variant,reduced_cost_fixing=not a.no_fixing,wrapper_version=lp.__version__,python=platform.python_version(),
++result=dict(backend=a.backend,variant=a.variant,native_options=a.native_options,reduced_cost_fixing=not a.no_fixing,wrapper_version=lp.__version__,python=platform.python_version(),
+             dataset_sha256=hashlib.sha256(data).hexdigest(),numpy=dataset['numpy'],summary=summary,records=records)
+ Path(a.output).write_text(json.dumps(result,indent=2)+'\n')
+ print(json.dumps(dict(backend=a.backend,variant=a.variant,cases=len(records),failures=sum(bool(r.get('problems')) for r in records),summary=summary)),flush=True)
+diff --git a/benchmarks/report_mip_search_024.py b/benchmarks/report_mip_search_024.py
+new file mode 100644
+index 0000000..d3b546a
+--- /dev/null
++++ b/benchmarks/report_mip_search_024.py
+@@ -0,0 +1,28 @@
++"""Generate the report from retained observations; no hand-entered performance values."""
++import json
++from pathlib import Path
++from statistics import median
++ROOT=Path(__file__).resolve().parent.parent;D=ROOT/'docs/mip-search-024/data'
++def read(p):return json.loads(p.read_text())
++def fmt(v):return '—' if v is None else f'{v:,.7g}'
++def meta(r):return dict(r['effective_options'])
++audit=read(D/'audit.json');public=read(D/'public-policies.json');repeat=read(D/'public-repeat.json')
++lines=['# LP-IP-craft 0.24 — results','',f"Implemented the requested order: exact incumbent witnesses → reliability branching → serial Feasibility Jump prototype → LP-directed covers and lifting → reversible mixed-row propagation. {audit['rust_checks']} Rust checks, {audit['python_checks']} Python checks, {audit['oracle_cases']:,} frozen-oracle runs and the 400-model bound audit pass under the unchanged adjudications. The final native unit suite was rerun and passes {audit['native_unit_recheck_count']} checks after exact zero/integer fast paths were added. Clippy passes with warnings denied.",'','## Defaults and capability limits','','Exact rational certification is enabled by default. Reliability branching, Feasibility Jump, directed root separation and mixed-row node propagation are independently selectable and remain opt-in: their gains and costs vary by model. This release adds no third-party production dependency and does not add parallel tree search.','', 'A rational certificate proves existence of a feasible rational point for the supplied binary64 data, with an outward objective endpoint. Its binary64 display approximation is separately checked. This is a primal-witness mechanism; the solver still reports its existing numerical optimality contract. Failed reconstruction does not authorize pruning.','','The FJ implementation is a bounded deterministic feasibility-only prototype inspired by the published weighted-violation coordinate-jump method. It uses cached sparse coordinate scores, breakpoint jumps, row-weight increases and deterministic restarts. It does not implement the full published heuristic or objective-weight adaptation.','','Directed covers are heuristic proposals from the current root LP, for positive integral binary-knapsack rows with 3..128 stored entries and coefficients/capacity up to the documented 31-bit range. Integer validity is checked before insertion. Sequential lifting and final validation use an exact profit DP capped at 8192 profit states and 2000000 work units per separation call. Up to eight cuts per round and four configured rounds are supported. General MIR/GMI cuts and live-tree insertion remain outside scope.','','Mixed propagation recomputes outward-rounded prefix/suffix activities for finite-box rows, derives conservative quotient bounds, rounds integral targets, records local row reasons and restores implications through NodeBox. It alternates at most twice with the existing exact integer propagator. Continuous changes below a relative 1e-12 threshold are ignored, safely retaining wider boxes. No approximate row activity can itself prove infeasibility.','','## Certification diagnosis','','The independent Python Fraction inspection establishes why flugpl cannot receive an exact certificate for these numerical candidates. Its supplied model fixes x0=60 and requires binary64(0.9)*x0+x1−x3=0 with integer x1 and x3. Exact binary64(0.9)*60 differs from integer 54 by 1.3322676295501878e-15. The equality is incompatible in exact real arithmetic on those data. Numerical tolerance acceptance remains unchanged; the certificate is correctly refused. No coefficients or tolerances were altered.','','Egout initially exceeded the first reconstruction cap: its final point has 41 free continuous columns. The accepted cap is 64, with 8192-bit arithmetic, a 250 ms per-attempt guard and the whole-call cancellation/time budget. Python Fraction independently reconstructs and checks its boundary point. All unsupported, oversized, inconsistent or failed reconstructions retain the existing LP-shrinking fallback.','','## Public policy observations','','Each row below is the final measured solve after one warmup and one earlier measured solve in its own fresh process. Both measured solves are retained in the raw data. Public cases use one numerical thread, decomposition off, 30 seconds, 100000 nodes and 1000000 pivots. This table contains single-process observations, not stable timing estimates. The repeat table below provides the selected timing comparison. References are numerical reference values, not an exact-decimal reformulation.','','| Case | Policy | Status | Nodes | Pivots | Objective | Bound | ms |','| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |']
++for row in public['records']:
++ r=row['result']['runs'][-1];lines.append(f"| {row['case']} | {row['policy']} | {r['status']} | {r['nodes']:,} | {r['iterations']:,} | {fmt((r.get('checks') or {}).get('objective'))} | {fmt(r.get('best_bound'))} | {1000*r['seconds']:.3f} |")
++lines+=['','## Selected three-round repeats','','Fresh process for each case/policy/round, one warmup and two measured solves (six measured samples across three rounds). Policy order rotates. Reported times are measured-solve medians and ranges; shared-host variability remains. Nodes/pivots include any charged lookahead or root prepasses.','','| Case | Policy | Statuses | Median ms | Range ms | Nodes | Pivots |','| --- | --- | --- | ---: | ---: | ---: | ---: |']
++groups={}
++for row in repeat['records']:groups.setdefault((row['case'],row['policy']),[]).extend(row['result']['runs'][1:])
++for (case,policy),runs in groups.items():
++ times=[1000*r['seconds']for r in runs];nodes=sorted({r['nodes']for r in runs});pivots=sorted({r['iterations']for r in runs});lines.append(f"| {case} | {policy} | {', '.join(sorted({r['status']for r in runs}))} | {median(times):.3f} | {min(times):.3f}–{max(times):.3f} | {', '.join(map(str,nodes))} | {', '.join(map(str,pivots))} |")
++lines+=['','## Mechanism observations','','| Case | Policy | Rational successes | Probes | FJ proposals | Directed / lifted cuts | Mixed rows / changes | First certified node |','| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |']
++for row in public['records']:
++ if row['policy']in['baseline-023','legacy-policy','directed-covers']:continue
++ r=row['result']['runs'][-1];e=meta(r);t=json.loads(e['diagnostics.mip_search']);first=t.get('first_certified_incumbent');lines.append(f"| {row['case']} | {row['policy']} | {e.get('diagnostics.rational_witness_successes','0')} | {e.get('diagnostics.strong_branch_probes','0')} | {e.get('diagnostics.feasibility_jump_candidates','0')} | {e.get('directed_root_cuts','0')} / {e.get('lifted_root_cuts','0')} | {e.get('diagnostics.mixed_propagation_rows','0')} / {e.get('diagnostics.mixed_propagation_changes','0')} | {first['nodes']if first else '—'} |")
++lines+=['','Root separation metadata reports initial LP objectives/bounds, cuts and prepass work. The bounded internal search trace begins after preprocessing; its node/pivot coordinates exclude prepasses. Total SolveResult counts include them. Compare search trace terminal work plus root_separation_nodes/pivots to total result work.','','## Correctness evidence','','The input and adjudication SHA-256 values remain unchanged. Every full 6330-case policy file retains the same 19 raw disputed-reference flags; those flags are resolved by the existing adjudications. No new adjudication or tolerance change was introduced.','','| Policy | Cases | Raw flags | Failures after existing adjudication |','| --- | ---: | ---: | ---: |']
++for row in audit['oracle_runs']:lines.append(f"| {row['policy']} | {row['cases']:,} | {row['raw_flags']} | {len(row['failures'])} |")
++lines+=['','New targeted checks include exact signed arithmetic and extreme values, independent machine-integer division/product oracles, nonrepresentable rational equalities, incompatible numerical equalities, bounded lookahead/parent restoration, sparse infeasible-seed repair, cut-profit enumeration and full binary cut validity, mixed feasible-grid preservation and sibling restoration, combined-policy small-MIP enumeration, and root-prepass budget accounting.','','See PLAN.md for the initial design and execution log, INITIAL-PLAN.md for the original plan, REPRODUCE.md for commands, CHANGESET.patch for review, and data/ for raw observations, hashes and audit outputs.']
++lines+=['','## Findings and practical limits','','Default certification reduces egout from 66553 to 12602 nodes and turns rgn from a 100000-node cap into an optimal numerical solve at 7249 nodes. Reliability branching reduces gt2 to 16056 nodes from 72182. Mixed propagation reduces flugpl to 425 nodes and solves bell5 below its earlier node cap, at substantially higher per-node cost.','','On gt2, FJ and mixed propagation can worsen search; the combined policy reaches the node cap. The FJ prototype alone finds no p0548 incumbent under its default work cap. The combined policy does find a feasible p0548 incumbent at objective 20592 through tree search, but remains capped. Optional mechanisms therefore remain independently selectable, rather than being enabled as a universal preset.','','## LP performance controls','','Five measured fresh processes per binary/case after one discarded round; each process contains one warmup and one measured solve. All LP controls pass. Medians are close, with a retained 159.599 ms native network outlier; no uniform LP speedup is claimed.','','| Fixture | Binary | Median ms | Range ms |','| --- | --- | ---: | ---: |']
++for row in audit['lp_controls']:
++ lines.append(f"| {row['fixture']} {row['size']} | {row['backend']} | {row['median_ms']:.3f} | {row['range_ms'][0]:.3f}–{row['range_ms'][1]:.3f} |")
++(ROOT/'docs/mip-search-024/RESULTS.md').write_text('\n'.join(lines)+'\n')
+diff --git a/benchmarks/run_mip_search_024.py b/benchmarks/run_mip_search_024.py
+new file mode 100644
+index 0000000..771418d
+--- /dev/null
++++ b/benchmarks/run_mip_search_024.py
+@@ -0,0 +1,73 @@
++"""Serial fresh-process policy comparisons; no solver timing overlaps builds/tests."""
++import argparse
++import hashlib
++import json
++import os
++from pathlib import Path
++import subprocess
++import time
++
++ROOT = Path(__file__).resolve().parent.parent
++POLICIES = {
++    'baseline-023': {},
++    'legacy-policy': {'LPIP_RATIONAL_CERTIFICATION': 'off'},
++    'certification': {},
++    'reliability': {'LPIP_RELIABILITY': '1'},
++    'jump': {'LPIP_FEASIBILITY_JUMP': '1'},
++    'directed-covers': {'LPIP_ROOT_SEPARATION': '1', 'LPIP_COVER_LIFTING': 'off'},
++    'lifted-covers': {'LPIP_ROOT_SEPARATION': '1'},
++    'mixed-propagation': {'LPIP_MIXED_PROPAGATION': '1'},
++    'combined': {'LPIP_RELIABILITY': '1', 'LPIP_FEASIBILITY_JUMP': '1',
++                 'LPIP_ROOT_SEPARATION': '1', 'LPIP_MIXED_PROPAGATION': '1'},
++}
++
++
++def main():
++    p = argparse.ArgumentParser()
++    p.add_argument('--baseline', type=Path, required=True)
++    p.add_argument('--native', type=Path, required=True)
++    p.add_argument('--output', type=Path, required=True)
++    p.add_argument('--rounds', type=int, default=1)
++    p.add_argument('--resume', action='store_true')
++    p.add_argument('--cases', nargs='+', default=['bell5', 'egout', 'flugpl', 'gt2', 'lseu', 'p0548', 'rgn', 'p01'])
++    p.add_argument('--policies', nargs='+', default=list(POLICIES))
++    p.add_argument('--time-limit', type=float, default=30.)
++    p.add_argument('--jump-steps', type=int)
++    a = p.parse_args()
++    records = json.loads(a.output.read_text())['records'] if a.resume and a.output.exists() else []
++    fingerprints = {r['case']: r['result']['model_fingerprint'] for r in records}
++    completed = {(r['case'],r['policy'],r['round']) for r in records}
++    hashes = {k: hashlib.sha256(v.read_bytes()).hexdigest() for k,v in [('baseline',a.baseline),('native',a.native)]}
++    for round_index in range(a.rounds):
++        for case in a.cases:
++            fixture = next(ROOT.glob('docs/*/corpus/**/' + case + '.json'))
++            policies = a.policies[round_index % len(a.policies):] + a.policies[:round_index % len(a.policies)]
++            for policy in policies:
++                if (case,policy,round_index+1) in completed: continue
++                binary = a.baseline if policy == 'baseline-023' else a.native
++                env = {k:v for k,v in os.environ.items() if not k.startswith('LPIP_')}
++                env.update(LPIP_BENCH_NO_DECOMPOSE='1', LPIP_MIP_DIAGNOSTICS='1',
++                           LPIP_MIP_TRACE_LIMIT='32', LPIP_TIME_LIMIT=str(a.time_limit),
++                           LPIP_NODE_LIMIT='100000', LPIP_ITERATION_LIMIT='1000000')
++                env.update(POLICIES[policy])
++                if a.jump_steps is not None and policy in ['jump','combined']:
++                    env['LPIP_JUMP_STEPS'] = str(a.jump_steps)
++                # One warmup and two measured solves use distinct solver instances in one fresh process.
++                cmd = [str(binary), 'json=' + str(fixture), '0', 'warm', '1', '2']
++                began = time.time()
++                proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=2*a.time_limit+30)
++                if proc.returncode:
++                    raise RuntimeError((case,policy,proc.stderr[-2000:]))
++                result = json.loads(proc.stdout)
++                old = fingerprints.setdefault(case, result['model_fingerprint'])
++                assert old == result['model_fingerprint']
++                record = dict(case=case, policy=policy, round=round_index+1, started=began,
++                              input_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(), result=result)
++                records.append(record)
++                a.output.parent.mkdir(parents=True, exist_ok=True)
++                a.output.write_text(json.dumps(dict(protocol='serial fresh processes, first solve warmup, next two measured; fixed caps; policy order rotated across rounds',binary_sha256=hashes,time_limit=a.time_limit,jump_steps=a.jump_steps,records=records), indent=2)+'\n')
++                r = result['runs'][-1]
++                print(json.dumps(dict(case=case,policy=policy,round=round_index+1,status=r['status'],nodes=r.get('nodes'),pivots=r.get('iterations'),objective=(r.get('checks') or {}).get('objective'),ms=round(r['seconds']*1000,3))), flush=True)
++
++
++if __name__ == '__main__': main()
+diff --git a/benchmarks/shared/main.rs b/benchmarks/shared/main.rs
+index 2d80a8c..aa1b1cb 100644
+--- a/benchmarks/shared/main.rs
++++ b/benchmarks/shared/main.rs
+@@ -219,6 +219,13 @@ fn main() {
+         }
+         #[cfg(all(feature="backend_native",feature="search-diagnostics"))]
+         {
++            solver.settings.rational_certification = std::env::var("LPIP_RATIONAL_CERTIFICATION").map_or(true, |v| v != "off");
++            solver.settings.reliability_branching = std::env::var_os("LPIP_RELIABILITY").is_some();
++            solver.settings.feasibility_jump = std::env::var_os("LPIP_FEASIBILITY_JUMP").is_some();
++            solver.settings.feasibility_jump_steps = std::env::var("LPIP_JUMP_STEPS").map_or(2000, |v| v.parse().unwrap());
++            solver.settings.root_separation = std::env::var_os("LPIP_ROOT_SEPARATION").is_some();
++            solver.settings.cover_lifting = std::env::var("LPIP_COVER_LIFTING").map_or(true, |v| v != "off");
++            solver.settings.mixed_propagation = std::env::var_os("LPIP_MIXED_PROPAGATION").is_some();
+             solver.settings.mip_diagnostics = std::env::var_os("LPIP_MIP_DIAGNOSTICS").is_some();
+             solver.settings.mip_trace_limit = std::env::var("LPIP_MIP_TRACE_LIMIT").map_or(256, |v| v.parse().unwrap());
+         }
+diff --git a/benchmarks/validate_mip_search_024.py b/benchmarks/validate_mip_search_024.py
+new file mode 100644
+index 0000000..8446578
+--- /dev/null
++++ b/benchmarks/validate_mip_search_024.py
+@@ -0,0 +1,15 @@
++"""Numerical reruns with immutable inputs/adjudications, including new policy gates."""
++import argparse
++import json
++from pathlib import Path
++import subprocess
++import sys
++ROOT=Path(__file__).resolve().parent.parent
++p=argparse.ArgumentParser();p.add_argument('--output',type=Path,default=ROOT/'docs/mip-search-024/data');a=p.parse_args();out=a.output;out.mkdir(parents=True,exist_ok=True)
++base=[('default',[]),('ft',['--variant','ft']),('no-fix',['--no-fixing']),('refactor1',['--variant','refactor1','--suite','exact']),('workers4',['--variant','workers4','--suite','components']),('devex',['--variant','devex']),('root-cuts',['--variant','root-cuts']),('factor-replay',['--variant','factor-replay']),('row-pricing',['--variant','row-pricing'])]
++new=[('reliability',dict(reliability_branching=True)),('jump',dict(feasibility_jump=True)),('directed',dict(root_separation=True,cover_lifting=False)),('lifted',dict(root_separation=True)),('mixed',dict(mixed_propagation=True)),('combined',dict(reliability_branching=True,feasibility_jump=True,root_separation=True,mixed_propagation=True))]
++for name,args in base+[(name,['--native-options',json.dumps(options)]) for name,options in new]:
++ print('START',name,flush=True)
++ with(out/f'oracle-{name}.log').open('w')as log:subprocess.run([sys.executable,str(ROOT/'benchmarks/oracle_worker.py'),str(ROOT/'docs/performance-ten/data/oracle-inputs.json'),'native',str(out/f'oracle-{name}.json'),*args],stdout=log,stderr=subprocess.STDOUT,check=True)
++ print('DONE',name,flush=True)
++with(out/'bounds.log').open('w')as log:subprocess.run([sys.executable,str(ROOT/'benchmarks/check_bounds.py'),str(ROOT),'native',str(out/'bounds.json')],stdout=log,stderr=subprocess.STDOUT,check=True)
+diff --git a/crates/native/src/cuts.rs b/crates/native/src/cuts.rs
+new file mode 100644
+index 0000000..8a31cd0
+--- /dev/null
++++ b/crates/native/src/cuts.rs
+@@ -0,0 +1,254 @@
++//! LP-directed binary knapsack covers with exact bounded sequential lifting.
++use crate::CancellationToken;
++use lp_ip_craft::{Model, Result};
++#[derive(Default)]
++pub(crate) struct Stats {
++    pub added: usize,
++    pub lifted: usize,
++    pub work: usize,
++}
++/// Exact minimum weight for every attainable cut profit. None means effort cap.
++fn max_profit(terms: &[(usize, i128, i64)], capacity: i128, work: &mut usize) -> Option<i64> {
++    if capacity < 0 {
++        return None;
++    }
++    let total: usize = terms.iter().map(|t| t.2 as usize).sum();
++    if total > 8192 {
++        return None;
++    }
++    let mut dp = vec![i128::MAX; total + 1];
++    dp[0] = 0;
++    let mut end = 0;
++    for &(_, w, c) in terms {
++        let c = c as usize;
++        if c == 0 {
++            continue;
++        }
++        for p in (0..=end).rev() {
++            *work += 1;
++            if *work > 2_000_000 {
++                return None;
++            }
++            if dp[p] != i128::MAX {
++                let v = dp[p] + w;
++                if v <= capacity {
++                    dp[p + c] = dp[p + c].min(v);
++                }
++            }
++        }
++        end += c;
++    }
++    (0..dp.len())
++        .rev()
++        .find(|&p| dp[p] <= capacity)
++        .map(|p| p as i64)
++}
++pub(crate) fn separate(
++    model: &mut Model,
++    x: &[f64],
++    lifting: bool,
++    cancel: &CancellationToken,
++) -> Result<Stats> {
++    let mut stats = Stats::default();
++    let a = model.matrix();
++    let mut output: Vec<(Vec<(usize, i64)>, i64)> = Vec::new();
++    let mut seen = std::collections::BTreeSet::new();
++    for i in 0..model.m() {
++        if cancel.is_cancelled() || stats.work > 2_000_000 || output.len() >= 8 {
++            break;
++        }
++        let b = model.rows().upper[i];
++        let r = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
++        if !(3..=128).contains(&r.len()) || !b.is_finite() || !(0. ..=2_147_483_647.).contains(&b) {
++            continue;
++        }
++        let mut weights = Vec::new();
++        let mut valid = true;
++        for k in r {
++            let (j, v) = (a.pattern.indices[k], a.values[k]);
++            if v == 0. {
++                continue;
++            }
++            if !model.kinds()[j].is_integral()
++                || model.variables().lower[j] < 0.
++                || model.variables().upper[j] > 1.
++                || v.fract() != 0.
++                || !(1. ..=2_147_483_647.).contains(&v)
++            {
++                valid = false;
++                break;
++            }
++            weights.push((j, v as i128));
++        }
++        if !valid {
++            continue;
++        }
++        let capacity = b.floor() as i128;
++        for order in 0..2 {
++            let mut sorted = weights.clone();
++            sorted.sort_by(|&(j, w), &(k, v)| {
++                if order == 0 {
++                    x[k].total_cmp(&x[j]).then(j.cmp(&k))
++                } else {
++                    ((1. - x[j]) / w as f64)
++                        .total_cmp(&((1. - x[k]) / v as f64))
++                        .then(j.cmp(&k))
++                }
++            });
++            let mut sum = 0;
++            let mut cover = Vec::new();
++            for pair in sorted {
++                sum += pair.1;
++                cover.push(pair);
++                if sum > capacity {
++                    break;
++                }
++            }
++            if sum <= capacity {
++                continue;
++            }
++            for p in (0..cover.len()).rev() {
++                if sum - cover[p].1 > capacity {
++                    sum -= cover.remove(p).1;
++                }
++            }
++            if cover.len() < 2 {
++                continue;
++            }
++            let rhs = (cover.len() - 1) as i64;
++            let mut terms: Vec<_> = cover.iter().map(|&(j, w)| (j, w, 1i64)).collect();
++            if lifting {
++                let mut outside: Vec<_> = weights
++                    .iter()
++                    .copied()
++                    .filter(|(j, _)| !cover.iter().any(|t| t.0 == *j))
++                    .collect();
++                outside.sort_by(|a, b| x[b.0].total_cmp(&x[a.0]).then(a.0.cmp(&b.0)));
++                for (j, w) in outside {
++                    if cancel.is_cancelled() {
++                        break;
++                    }
++                    if let Some(max) = max_profit(&terms, capacity - w, &mut stats.work) {
++                        let alpha = (rhs - max).max(0);
++                        if alpha > 0 {
++                            terms.push((j, w, alpha));
++                        }
++                    } else {
++                        break;
++                    }
++                }
++            }
++            // Independent final exact knapsack validation. Unlifted cover proof also checked.
++            if max_profit(&terms, capacity, &mut stats.work).is_none_or(|v| v > rhs) {
++                continue;
++            }
++            let mut cut: Vec<_> = terms.iter().map(|&(j, _, c)| (j, c)).collect();
++            cut.sort_unstable();
++            let activity: f64 = cut.iter().map(|&(j, c)| x[j] * c as f64).sum();
++            if activity <= rhs as f64 + 1e-7 {
++                continue;
++            }
++            let duplicate = (0..model.m()).any(|row| {
++                let r = a.pattern.indptr[row]..a.pattern.indptr[row + 1];
++                model.rows().upper[row] == rhs as f64
++                    && r.len() == cut.len()
++                    && r.zip(&cut)
++                        .all(|(k, &(j, c))| a.pattern.indices[k] == j && a.values[k] == c as f64)
++            });
++            if duplicate || !seen.insert(cut.clone()) {
++                continue;
++            }
++            stats.lifted += usize::from(terms.len() > cover.len());
++            output.push((cut, rhs));
++            if output.len() >= 8 {
++                break;
++            }
++        }
++    }
++    if !output.is_empty() {
++        let mut data = model.data().clone();
++        for (cut, rhs) in &output {
++            for &(j, c) in cut {
++                data.matrix.pattern.indices.push(j);
++                data.matrix.values.push(c as f64);
++            }
++            data.matrix.pattern.indptr.push(data.matrix.values.len());
++            data.matrix.pattern.rows += 1;
++            data.rows.lower.push(f64::NEG_INFINITY);
++            data.rows.upper.push(*rhs as f64);
++        }
++        stats.added = output.len();
++        *model = Model::new(data)?;
++    }
++    Ok(stats)
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use lp_ip_craft::*;
++    #[test]
++    fn directed_lifted_cover_is_violated_and_exhaustively_valid() {
++        let mut m = Model::new(ModelData {
++            sense: Sense::Maximize,
++            objective: vec![1.; 4],
++            objective_offset: 0.,
++            variables: Bounds::new(vec![0.; 4], vec![1.; 4]),
++            kinds: vec![VariableKind::Binary; 4],
++            matrix: CsrMatrix::from_dense(1, 4, &[3., 3., 3., 4.]).unwrap(),
++            rows: Bounds::new(vec![f64::NEG_INFINITY], vec![5.]),
++        })
++        .unwrap();
++        let original = m.clone();
++        let stats = separate(
++            &mut m,
++            &[0.55, 0.55, 0.55, 0.],
++            true,
++            &CancellationToken::default(),
++        )
++        .unwrap();
++        assert!(stats.added > 0 && stats.lifted > 0);
++        for mask in 0..16 {
++            let x: Vec<_> = (0..4).map(|j| ((mask >> j) & 1) as f64).collect();
++            if check::evaluate(&original, &x, &Tolerances::default())
++                .unwrap()
++                .feasible_candidate
++            {
++                assert!(
++                    check::evaluate(&m, &x, &Tolerances::default())
++                        .unwrap()
++                        .feasible_candidate
++                );
++            }
++        }
++    }
++    #[test]
++    fn exact_profit_matches_enumeration() {
++        let mut seed = 3u64;
++        for n in 2..10 {
++            for _ in 0..30 {
++                let mut terms = Vec::new();
++                for j in 0..n {
++                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
++                    terms.push((
++                        j,
++                        ((seed >> 33) % 13 + 1) as i128,
++                        ((seed >> 28) % 5 + 1) as i64,
++                    ));
++                }
++                let cap = 20;
++                let exact = (0..1usize << n)
++                    .filter_map(|mask| {
++                        let (w, p) = terms
++                            .iter()
++                            .enumerate()
++                            .filter(|(j, _)| (mask >> j) & 1 != 0)
++                            .fold((0, 0), |(w, p), (_, t)| (w + t.1, p + t.2));
++                        (w <= cap).then_some(p)
++                    })
++                    .max()
++                    .unwrap();
++                assert_eq!(max_profit(&terms, cap, &mut 0), Some(exact));
++            }
++        }
++    }
++}
+diff --git a/crates/native/src/jump.rs b/crates/native/src/jump.rs
+new file mode 100644
+index 0000000..f0f9748
+--- /dev/null
++++ b/crates/native/src/jump.rs
+@@ -0,0 +1,222 @@
++//! Bounded deterministic Feasibility Jump prototype. Scores are heuristic only.
++use crate::Budget;
++use lp_ip_craft::{Bounds, Model};
++#[derive(Default)]
++pub(crate) struct Stats {
++    pub steps: u64,
++    pub work: u64,
++    pub feasible: u64,
++    pub bumps: u64,
++}
++fn violation(v: f64, l: f64, u: f64) -> f64 {
++    (l - v).max(v - u).max(0.)
++}
++pub(crate) fn search(
++    model: &Model,
++    bounds: &Bounds,
++    seed: &[f64],
++    budget: &Budget<'_>,
++    limit: u64,
++) -> (Option<Vec<f64>>, Stats) {
++    let mut stats = Stats::default();
++    let n = model.n();
++    let m = model.m();
++    let a = model.matrix();
++    let mut incident = vec![Vec::new(); n];
++    for i in 0..m {
++        for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
++            let j = a.pattern.indices[k];
++            if a.values[k] != 0. {
++                incident[j].push((i, a.values[k]));
++            }
++        }
++    }
++    let initial = |j: usize| {
++        let v = if model.kinds()[j].is_integral() {
++            seed[j].round()
++        } else {
++            seed[j]
++        };
++        v.max(bounds.lower[j]).min(bounds.upper[j])
++    };
++    let mut x: Vec<f64> = (0..n).map(initial).collect();
++    let mut lhs = vec![0.; m];
++    a.multiply(&x, &mut lhs);
++    let mut weight = vec![1.; m];
++    let mut dirty = vec![true; n];
++    let mut jumps = x.clone();
++    let mut scores = vec![f64::NEG_INFINITY; n];
++    let mut stall = 0usize;
++    let cap = limit.saturating_mul(512).min(10_000_000);
++    for step in 0..limit {
++        if budget.stop().is_some() || stats.work >= cap {
++            break;
++        }
++        if step % 32 == 0 {
++            a.multiply(&x, &mut lhs);
++            dirty.fill(true);
++        }
++        if (0..m).all(|i| violation(lhs[i], model.rows().lower[i], model.rows().upper[i]) <= 1e-10)
++        {
++            stats.feasible += 1;
++            return (Some(x), stats);
++        }
++        for j in 0..n {
++            if !dirty[j] {
++                continue;
++            }
++            dirty[j] = false;
++            let old = x[j];
++            let mut candidates = vec![old, bounds.lower[j], bounds.upper[j]];
++            for &(i, c) in &incident[j] {
++                for b in [model.rows().lower[i], model.rows().upper[i]] {
++                    if b.is_finite() {
++                        let v = old + (b - lhs[i]) / c;
++                        if model.kinds()[j].is_integral() {
++                            candidates.push(v.floor());
++                            candidates.push(v.ceil());
++                        } else {
++                            candidates.push(v);
++                        }
++                    }
++                }
++            }
++            let mut best = (f64::NEG_INFINITY, old);
++            for v in candidates {
++                let v = v.max(bounds.lower[j]).min(bounds.upper[j]);
++                if !v.is_finite() || v == old {
++                    continue;
++                }
++                let mut score = 0.;
++                for &(i, c) in &incident[j] {
++                    stats.work += 1;
++                    score += weight[i]
++                        * (violation(lhs[i], model.rows().lower[i], model.rows().upper[i])
++                            - violation(
++                                lhs[i] + c * (v - old),
++                                model.rows().lower[i],
++                                model.rows().upper[i],
++                            ));
++                    if stats.work >= cap {
++                        break;
++                    }
++                }
++                if stats.work >= cap {
++                    break;
++                }
++                if score > best.0 {
++                    best = (score, v);
++                }
++            }
++            scores[j] = best.0;
++            jumps[j] = best.1;
++            if stats.work >= cap || budget.stop().is_some() {
++                break;
++            }
++        }
++        if stats.work >= cap || budget.stop().is_some() {
++            break;
++        }
++        let mut chosen = (0..n)
++            .filter(|&j| jumps[j] != x[j])
++            .max_by(|&j, &k| scores[j].total_cmp(&scores[k]).then(k.cmp(&j)));
++        if chosen.is_none_or(|j| scores[j] <= 1e-10) {
++            stats.bumps += 1;
++            stall += 1;
++            let violated: Vec<_> = (0..m)
++                .filter(|&i| {
++                    violation(lhs[i], model.rows().lower[i], model.rows().upper[i]) > 1e-10
++                })
++                .collect();
++            for &i in &violated {
++                weight[i] = (weight[i] + 1.).min(1e6);
++                for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
++                    dirty[a.pattern.indices[k]] = true;
++                }
++            }
++            if violated.is_empty() {
++                break;
++            }
++            let row = violated[(stall - 1) % violated.len()];
++            chosen = (a.pattern.indptr[row]..a.pattern.indptr[row + 1])
++                .map(|k| a.pattern.indices[k])
++                .filter(|&j| jumps[j] != x[j])
++                .max_by(|&j, &k| scores[j].total_cmp(&scores[k]).then(k.cmp(&j)));
++            // A deterministic restart explores a different corner while keeping fixed columns.
++            if stall % 32 == 0 {
++                for (j, value) in x.iter_mut().enumerate() {
++                    let v = if (j + stall / 32) % 3 == 0 {
++                        bounds.upper[j]
++                    } else {
++                        bounds.lower[j]
++                    };
++                    *value = if v.is_finite() {
++                        if model.kinds()[j].is_integral() {
++                            v.round()
++                        } else {
++                            v
++                        }
++                    } else {
++                        initial(j)
++                    };
++                }
++                a.multiply(&x, &mut lhs);
++                dirty.fill(true);
++                continue;
++            }
++        }
++        let Some(j) = chosen else {
++            dirty.fill(true);
++            continue;
++        };
++        let delta = jumps[j] - x[j];
++        x[j] = jumps[j];
++        for &(i, c) in &incident[j] {
++            lhs[i] += c * delta;
++            for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
++                dirty[a.pattern.indices[k]] = true;
++            }
++        }
++        dirty[j] = true;
++        stats.steps += 1;
++    }
++    (None, stats)
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::NativeOptions;
++    use lp_ip_craft::*;
++    #[test]
++    fn repairs_rounding_with_sparse_jumps() {
++        let m = Model::new(ModelData {
++            sense: Sense::Minimize,
++            objective: vec![0.; 3],
++            objective_offset: 0.,
++            variables: Bounds::new(vec![0.; 3], vec![1.; 3]),
++            kinds: vec![VariableKind::Binary; 3],
++            matrix: CsrMatrix::from_dense(1, 3, &[1., 1., 1.]).unwrap(),
++            rows: Bounds::fixed(vec![1.]),
++        })
++        .unwrap();
++        let s = NativeOptions::default();
++        let c = CancellationToken::default();
++        let b = Budget {
++            start: std::time::Instant::now(),
++            settings: &s,
++            cancel: &c,
++            pivots: 0,
++        };
++        let (x, t) = search(&m, m.variables(), &[0.4; 3], &b, 100);
++        assert!(
++            check::evaluate(&m, &x.unwrap(), &Tolerances::default())
++                .unwrap()
++                .feasible_candidate
++        );
++        assert!(t.steps > 0 && t.work <= 51200);
++        let (x, t) = search(&m, m.variables(), &[0.4; 3], &b, 0);
++        assert!(x.is_none() && t.steps == 0);
++        c.cancel();
++        assert!(search(&m, m.variables(), &[0.4; 3], &b, 100).0.is_none());
++    }
++}
+diff --git a/crates/native/src/lib.rs b/crates/native/src/lib.rs
+index df653ca..6e85704 100644
+--- a/crates/native/src/lib.rs
++++ b/crates/native/src/lib.rs
+@@ -7,19 +7,24 @@ mod active;
+ mod batch;
+ mod boxed;
+ mod components;
++mod cuts;
+ mod dense;
+ mod diagnostics;
+ mod ft;
+ mod incumbent;
++mod jump;
+ mod lp;
+ mod lu;
++mod mixed;
+ mod ordering;
+ mod presolve;
+ pub mod profile;
+ mod propagate;
++mod rational;
+ #[cfg(feature = "basis-replay")]
+ pub mod replay;
+ mod root;
++mod witness;
+ 
+ use lp::{Basis, Lp};
+ use lp_ip_craft::{
+@@ -104,10 +109,19 @@ pub struct NativeOptions {
+     pub node_reoptimization: bool,
+     /// Bounded root lookahead on eligible multi-constraint MIPs.
+     pub strong_branching: bool,
++    /// Bounded early-node probes until directional pseudocosts are reliable.
++    pub reliability_branching: bool,
++    pub reliability_threshold: u32,
++    pub reliability_max_probes: u64,
+     /// Fix integer bound values using conservative opposite-domain dual bounds.
+     pub reduced_cost_fixing: bool,
+     /// Independently checked rounding and bounded unit-move incumbents.
+     pub incumbent_heuristic: bool,
++    /// Exact rational fixed-integer boundary witnesses, bounded by dimension/bit caps.
++    pub rational_certification: bool,
++    /// Bounded serial root Feasibility Jump prototype.
++    pub feasibility_jump: bool,
++    pub feasibility_jump_steps: u64,
+     /// Tighten conservative bounds to a verified integral objective lattice.
+     pub objective_lattice: bool,
+     /// Split independent restricted-row components before solving.
+@@ -121,8 +135,14 @@ pub struct NativeOptions {
+     pub component_parallel_min_entries: usize,
+     /// Add bounded exact binary cover cuts before building LP caches.
+     pub root_cuts: bool,
++    /// LP-directed root cover separation, rebuilding caches before search.
++    pub root_separation: bool,
++    pub root_cut_rounds: usize,
++    pub cover_lifting: bool,
+     /// Infer sound mixed MIP root bounds before finite-domain admission.
+     pub root_propagation: bool,
++    /// Conservative node propagation for finite mixed/nonintegral rows.
++    pub mixed_propagation: bool,
+     /// Remove exactly reversible singleton rows before factorization.
+     pub singleton_presolve: bool,
+     /// Keep large near-monolithic models in a single numerical solve.
+@@ -158,15 +178,25 @@ impl Default for NativeOptions {
+             redundant_row_min_ratio: 1.0,
+             node_reoptimization: true,
+             strong_branching: false,
++            reliability_branching: false,
++            reliability_threshold: 2,
++            reliability_max_probes: 64,
+             reduced_cost_fixing: true,
+             incumbent_heuristic: true,
++            rational_certification: true,
++            feasibility_jump: false,
++            feasibility_jump_steps: 2000,
+             objective_lattice: true,
+             decompose: true,
+             decomposition_min_variables: 32,
+             component_threads: 16,
+             component_parallel_min_entries: 2048,
+             root_cuts: false,
++            root_separation: false,
++            root_cut_rounds: 2,
++            cover_lifting: true,
+             root_propagation: true,
++            mixed_propagation: false,
+             singleton_presolve: true,
+             avoid_dominant_components: true,
+             devex: false,
+@@ -180,6 +210,21 @@ impl Default for NativeOptions {
+ impl NativeOptions {
+     /// Validate settings before cancellation or numerical work.
+     pub fn validate(&self) -> Result<()> {
++        if !(1..=16).contains(&self.reliability_threshold) || self.reliability_max_probes > 1024 {
++            return Err(Error::InvalidInput(
++                "reliability threshold must be 1..=16 and max probes at most 1024".into(),
++            ));
++        }
++        if self.feasibility_jump_steps > 100_000 {
++            return Err(Error::InvalidInput(
++                "feasibility_jump_steps must be at most 100000".into(),
++            ));
++        }
++        if self.root_cut_rounds > 4 {
++            return Err(Error::InvalidInput(
++                "root_cut_rounds must be at most 4".into(),
++            ));
++        }
+         if self.mip_trace_limit > 4096 {
+             return Err(Error::InvalidInput(
+                 "mip_trace_limit must be at most 4096".into(),
+@@ -371,6 +416,9 @@ struct Certifier {
+     attempts: u64,
+     certified: u64,
+     last: Option<Vec<f64>>,
++    lp_attempts: u64,
++    witness_attempts: u64,
++    witness_successes: u64,
+ }
+ const MAX_CERTIFICATIONS: u64 = 64;
+ 
+@@ -397,12 +445,47 @@ fn certify(
+     }
+     certifier.last = Some(x.clone());
+     certifier.attempts += 1;
++    certifier.witness_attempts += u64::from(settings.rational_certification);
++    if let Some(witness) = settings
++        .rational_certification
++        .then(|| witness::upper(pool.original_model, x, budget))
++        .flatten()
++    {
++        let point = witness.point;
++        let upper = witness.upper;
++        let evaluation = check::evaluate(model, &point, &options.tolerances)?;
++        if upper < pool.upper
++            && evaluation.feasible_candidate
++            && check::evaluate(pool.original_model, &point, &options.tolerances)?.feasible_candidate
++        {
++            pool.upper = upper;
++            pool.certified = Some((point.clone(), evaluation.clone()));
++            let objective = oriented(model, evaluation.objective);
++            if objective < pool.best {
++                pool.best = objective;
++                result.candidate = Some(point);
++                result.evaluation = Some(evaluation);
++            }
++            certifier.witness_successes += 1;
++            if let Some(trace) = &mut pool.trace {
++                trace.candidate(
++                    oriented(model, objective),
++                    Some(oriented(model, upper)),
++                    "rational_witness",
++                    result.nodes,
++                    budget.pivots,
++                );
++            }
++            return Ok(());
++        }
++    }
+     let integral: Vec<bool> = model.kinds().iter().map(|k| k.is_integral()).collect();
+     let rounded: Vec<f64> = x
+         .iter()
+         .zip(&integral)
+         .map(|(&v, &i)| if i { v.round() } else { v })
+         .collect();
++    certifier.lp_attempts += 1;
+     let lp = match &mut certifier.lp {
+         Some(lp) => lp,
+         none => {
+@@ -774,6 +857,7 @@ impl NativeSolver {
+         };
+         let lattice = settings.objective_lattice && incumbent::integer_lattice(model);
+         let mut counters = Counters::default();
++        let mut jump_stats = jump::Stats::default();
+         if model.is_mip() {
+             if let Some(s) = start {
+                 consider(
+@@ -787,6 +871,7 @@ impl NativeSolver {
+             }
+         }
+         let mut domain = propagate::Domain::new(model, settings.presolve);
++        let mut mixed = mixed::Domain::new(model, settings.presolve && settings.mixed_propagation);
+         if pool.trace.is_some() && settings.presolve {
+             domain.enable_statistics();
+         }
+@@ -811,6 +896,9 @@ impl NativeSolver {
+             attempts: 0,
+             certified: 0,
+             last: None,
++            lp_attempts: 0,
++            witness_attempts: 0,
++            witness_successes: 0,
+         };
+         let keep = presolve::kept_rows(model, root, settings);
+         let mut closed_bound = f64::INFINITY;
+@@ -890,7 +978,19 @@ impl NativeSolver {
+             };
+             node_box.enter(root, &node.branch, lp)?;
+             let before = node_box.changed.len();
+-            if !domain.apply(&mut node_box.bounds, &mut node_box.changed, &budget) {
++            let mut feasible = domain.apply(&mut node_box.bounds, &mut node_box.changed, &budget);
++            if feasible && settings.mixed_propagation {
++                for _ in 0..2 {
++                    let previous = node_box.changed.len();
++                    feasible =
++                        mixed.apply(model, &mut node_box.bounds, &mut node_box.changed, &budget)
++                            && domain.apply(&mut node_box.bounds, &mut node_box.changed, &budget);
++                    if !feasible || previous == node_box.changed.len() {
++                        break;
++                    }
++                }
++            }
++            if !feasible {
+                 counters.propagated_infeasible += 1;
+                 if node.depth == 0 {
+                     status = if result.candidate.is_some() {
+@@ -1081,6 +1181,30 @@ impl NativeSolver {
+                     &budget,
+                 )?;
+             }
++            if node.depth == 0
++                && branch.is_some()
++                && settings.feasibility_jump
++                && budget.stop().is_none()
++            {
++                let (proposal, stats) = jump::search(
++                    model,
++                    node_bounds,
++                    &x,
++                    &budget,
++                    settings.feasibility_jump_steps,
++                );
++                jump_stats = stats;
++                if let Some(point) = proposal {
++                    consider(
++                        model,
++                        point,
++                        options,
++                        &mut result,
++                        &mut pool,
++                        "feasibility_jump",
++                    )?;
++                }
++            }
+             certify(
+                 model,
+                 options,
+@@ -1102,11 +1226,16 @@ impl NativeSolver {
+             }
+             let mut probe_seconds = 0.;
+             let branch = if branch.is_some()
+-                && node.depth == 0
+-                && settings.strong_branching
++                && ((settings.reliability_branching
++                    && node.depth <= 8
++                    && counters.strong_probes < settings.reliability_max_probes)
++                    || (node.depth == 0 && settings.strong_branching))
+                 && settings.node_reoptimization
+-                && eligible_strong_branching(model)
+-            {
++                && (if settings.reliability_branching {
++                    model.n() <= 1024 && model.m() <= 1024 && model.nnz() <= 20000
++                } else {
++                    eligible_strong_branching(model)
++                }) {
+                 let probe_started = Instant::now();
+                 let chosen = strong_branch(
+                     model,
+@@ -1294,6 +1423,16 @@ impl NativeSolver {
+                     counters.unverified_infeasible,
+                 ),
+                 ("heuristic_candidates", counters.heuristic_candidates),
++                ("mixed_propagation_rows", mixed.stats.rows),
++                ("mixed_propagation_visits", mixed.stats.visits),
++                ("mixed_propagation_terms", mixed.stats.terms),
++                ("mixed_propagation_changes", mixed.stats.changes),
++                ("mixed_propagation_infeasibilities", mixed.stats.infeasible),
++                ("mixed_propagation_work_limits", mixed.stats.limits),
++                ("feasibility_jump_steps", jump_stats.steps),
++                ("feasibility_jump_work", jump_stats.work),
++                ("feasibility_jump_candidates", jump_stats.feasible),
++                ("feasibility_jump_weight_bumps", jump_stats.bumps),
+                 ("pruned_nodes", counters.pruned_nodes),
+                 (
+                     "propagated_infeasible_nodes",
+@@ -1303,7 +1442,9 @@ impl NativeSolver {
+                 ("strong_branch_probes", counters.strong_probes),
+                 ("strong_branch_pivots", counters.strong_pivots),
+                 ("reduced_cost_fixings", counters.reduced_cost_fixings),
+-                ("certification_solves", certifier.attempts),
++                ("certification_solves", certifier.lp_attempts),
++                ("rational_witness_attempts", certifier.witness_attempts),
++                ("rational_witness_successes", certifier.witness_successes),
+                 ("certified_incumbents", certifier.certified),
+             ]
+             .map(|(k, v)| (format!("diagnostics.{k}"), v.to_string())),
+@@ -1455,6 +1596,10 @@ fn strong_branch(
+         .filter(|&j| {
+             model.kinds()[j].is_integral()
+                 && (x[j] - x[j].round()).abs() > options.tolerances.integrality
++                && (!budget.settings.reliability_branching
++                    || pseudocosts.count[j]
++                        .iter()
++                        .any(|&n| n < budget.settings.reliability_threshold))
+         })
+         .collect();
+     candidates.sort_by(|&a, &b| {
+@@ -1464,7 +1609,7 @@ fn strong_branch(
+             .then(a.cmp(&b))
+     });
+     candidates.truncate(2);
+-    if candidates.len() < 2 {
++    if candidates.is_empty() {
+         return Ok(None);
+     }
+     let basis = lp.snapshot();
+@@ -1475,6 +1620,8 @@ fn strong_branch(
+         let mut complete = true;
+         for (d, gain) in gains.iter_mut().enumerate() {
+             if budget.stop().is_some()
++                || (budget.settings.reliability_branching
++                    && counters.strong_probes >= budget.settings.reliability_max_probes)
+                 || budget.settings.node_limit.is_some_and(|cap| *nodes >= cap)
+             {
+                 complete = false;
+@@ -1552,7 +1699,11 @@ fn strong_branch(
+             }
+         }
+     }
+-    Ok(best)
++    if budget.settings.reliability_branching {
++        Ok(branching_variable(model, bounds, x, options, pseudocosts).or(best))
++    } else {
++        Ok(best)
++    }
+ }
+ 
+ /// Branching variable among the fractional integer variables: best
+@@ -1640,7 +1791,11 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
+         ("factor_ordering", s.factor_ordering.as_str().to_string()),
+         ("steepest_edge", s.steepest_edge.to_string()),
+         ("root_cuts", s.root_cuts.to_string()),
++        ("root_separation", s.root_separation.to_string()),
++        ("root_cut_rounds", s.root_cut_rounds.to_string()),
++        ("cover_lifting", s.cover_lifting.to_string()),
+         ("root_propagation", s.root_propagation.to_string()),
++        ("mixed_propagation", s.mixed_propagation.to_string()),
+         ("singleton_presolve", s.singleton_presolve.to_string()),
+         (
+             "avoid_dominant_components",
+@@ -1674,8 +1829,23 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
+         ),
+         ("node_reoptimization", s.node_reoptimization.to_string()),
+         ("strong_branching", s.strong_branching.to_string()),
++        ("reliability_branching", s.reliability_branching.to_string()),
++        ("reliability_threshold", s.reliability_threshold.to_string()),
++        (
++            "reliability_max_probes",
++            s.reliability_max_probes.to_string(),
++        ),
+         ("reduced_cost_fixing", s.reduced_cost_fixing.to_string()),
+         ("incumbent_heuristic", s.incumbent_heuristic.to_string()),
++        (
++            "rational_certification",
++            s.rational_certification.to_string(),
++        ),
++        ("feasibility_jump", s.feasibility_jump.to_string()),
++        (
++            "feasibility_jump_steps",
++            s.feasibility_jump_steps.to_string(),
++        ),
+         ("objective_lattice", s.objective_lattice.to_string()),
+     ]
+     .into_iter()
+diff --git a/crates/native/src/mixed.rs b/crates/native/src/mixed.rs
+new file mode 100644
+index 0000000..b11c006
+--- /dev/null
++++ b/crates/native/src/mixed.rs
+@@ -0,0 +1,338 @@
++//! Outward-rounded mixed-row propagation. No rounded activity proves infeasibility.
++use crate::{Budget, incumbent, root};
++use lp_ip_craft::{Bounds, Model};
++use std::collections::VecDeque;
++#[derive(Default)]
++pub(crate) struct Stats {
++    pub rows: u64,
++    pub visits: u64,
++    pub terms: u64,
++    pub changes: u64,
++    pub infeasible: u64,
++    pub limits: u64,
++}
++#[derive(Clone, Debug)]
++pub(crate) struct Reason {
++    pub row: usize,
++    pub column: usize,
++    pub old: (f64, f64),
++    pub new: (f64, f64),
++}
++pub(crate) struct Domain {
++    rows: Vec<usize>,
++    incident: Vec<Vec<usize>>,
++    last: Vec<usize>,
++    first: bool,
++    pub stats: Stats,
++    pub reasons: Vec<Reason>,
++}
++fn add(a: f64, b: f64, lower: bool) -> Option<f64> {
++    incumbent::dot(std::iter::once((1., b)), a).map(|v| if lower { v.0 } else { v.1 })
++}
++impl Domain {
++    pub fn new(model: &Model, enabled: bool) -> Self {
++        let mut rows = Vec::new();
++        let mut incident = vec![Vec::new(); model.n()];
++        let a = model.matrix();
++        if enabled && model.is_mip() {
++            for i in 0..model.m() {
++                let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
++                let exact = range.clone().all(|k| {
++                    let (j, c) = (a.pattern.indices[k], a.values[k]);
++                    c == 0.
++                        || (model.kinds()[j].is_integral()
++                            && c.fract() == 0.
++                            && c.abs() <= 2147483648.
++                            && model.variables().lower[j].abs() <= 2147483648.
++                            && model.variables().upper[j].abs() <= 2147483648.)
++                }) && [model.rows().lower[i].ceil(), model.rows().upper[i].floor()]
++                    .iter()
++                    .any(|v| v.is_finite() && v.abs() <= 1125899906842624.);
++                if exact
++                    || !range.clone().all(|k| {
++                        let j = a.pattern.indices[k];
++                        model.variables().lower[j].is_finite()
++                            && model.variables().upper[j].is_finite()
++                    })
++                {
++                    continue;
++                }
++                let r = rows.len();
++                rows.push(i);
++                for k in range {
++                    if a.values[k] != 0. {
++                        incident[a.pattern.indices[k]].push(r);
++                    }
++                }
++            }
++        }
++        let stats = Stats {
++            rows: rows.len() as u64,
++            ..Default::default()
++        };
++        Self {
++            rows,
++            incident,
++            last: Vec::new(),
++            first: true,
++            stats,
++            reasons: Vec::new(),
++        }
++    }
++    pub fn apply(
++        &mut self,
++        model: &Model,
++        bounds: &mut Bounds,
++        changed: &mut Vec<usize>,
++        budget: &Budget<'_>,
++    ) -> bool {
++        self.reasons.clear();
++        if self.rows.is_empty() {
++            return true;
++        }
++        let mut queue = VecDeque::new();
++        let mut queued = vec![false; self.rows.len()];
++        let enqueue = |r: usize, q: &mut VecDeque<usize>, flags: &mut [bool]| {
++            if !flags[r] {
++                flags[r] = true;
++                q.push_back(r);
++            }
++        };
++        if self.first {
++            for r in 0..self.rows.len() {
++                enqueue(r, &mut queue, &mut queued);
++            }
++            self.first = false;
++        } else {
++            for &j in self.last.iter().chain(changed.iter()) {
++                for &r in &self.incident[j] {
++                    enqueue(r, &mut queue, &mut queued);
++                }
++            }
++        }
++        self.last = changed.clone();
++        let a = model.matrix();
++        let cap = model
++            .nnz()
++            .saturating_mul(8)
++            .saturating_add(model.m() * 32)
++            .clamp(4096, 200000);
++        let mut work = 0;
++        while let Some(r) = queue.pop_front() {
++            queued[r] = false;
++            if work >= cap || budget.stop().is_some() {
++                self.stats.limits += u64::from(work >= cap);
++                break;
++            }
++            let i = self.rows[r];
++            self.stats.visits += 1;
++            let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
++            let entries: Vec<_> = range
++                .filter(|&k| a.values[k] != 0.)
++                .map(|k| (a.pattern.indices[k], a.values[k]))
++                .collect();
++            work += entries.len();
++            self.stats.terms += entries.len() as u64;
++            if work >= cap {
++                self.stats.limits += 1;
++                break;
++            }
++            let n = entries.len();
++            let mut pmin = vec![0.; n + 1];
++            let mut pmax = vec![0.; n + 1];
++            let mut smin = vec![0.; n + 1];
++            let mut smax = vec![0.; n + 1];
++            let mut terms = Vec::new();
++            let mut valid = true;
++            for &(j, c) in &entries {
++                let (l, u) = if c > 0. {
++                    (bounds.lower[j], bounds.upper[j])
++                } else {
++                    (bounds.upper[j], bounds.lower[j])
++                };
++                let pair = incumbent::dot(std::iter::once((c, l)), 0.)
++                    .zip(incumbent::dot(std::iter::once((c, u)), 0.));
++                if let Some((mn, mx)) = pair {
++                    terms.push((mn.0, mx.1));
++                } else {
++                    valid = false;
++                    break;
++                }
++            }
++            if !valid {
++                continue;
++            }
++            for k in 0..n {
++                if let Some((mn, mx)) =
++                    add(pmin[k], terms[k].0, true).zip(add(pmax[k], terms[k].1, false))
++                {
++                    pmin[k + 1] = mn;
++                    pmax[k + 1] = mx;
++                } else {
++                    valid = false;
++                    break;
++                }
++            }
++            if !valid {
++                continue;
++            }
++            for k in (0..n).rev() {
++                if let Some((mn, mx)) =
++                    add(smin[k + 1], terms[k].0, true).zip(add(smax[k + 1], terms[k].1, false))
++                {
++                    smin[k] = mn;
++                    smax[k] = mx;
++                } else {
++                    valid = false;
++                    break;
++                }
++            }
++            if !valid {
++                continue;
++            }
++            if pmin[n] > model.rows().upper[i] || pmax[n] < model.rows().lower[i] {
++                self.stats.infeasible += 1;
++                return false;
++            }
++            for (k, &(j, c)) in entries.iter().enumerate() {
++                if work >= cap || budget.stop().is_some() {
++                    self.stats.limits += u64::from(work >= cap);
++                    return true;
++                }
++                work += 1;
++                self.stats.terms += 1;
++                let Some((mn, mx)) =
++                    add(pmin[k], smin[k + 1], true).zip(add(pmax[k], smax[k + 1], false))
++                else {
++                    continue;
++                };
++                let old = (bounds.lower[j], bounds.upper[j]);
++                let (mut lo, mut hi) = old;
++                if model.rows().upper[i].is_finite() {
++                    if let Some(rhs) = add(model.rows().upper[i], -mn, false) {
++                        if let Some(v) = root::quotient(c, rhs, c < 0.) {
++                            if c > 0. {
++                                hi = hi.min(v);
++                            } else {
++                                lo = lo.max(v);
++                            }
++                        }
++                    }
++                }
++                if model.rows().lower[i].is_finite() {
++                    if let Some(rhs) = add(model.rows().lower[i], -mx, true) {
++                        if let Some(v) = root::quotient(c, rhs, c > 0.) {
++                            if c > 0. {
++                                lo = lo.max(v);
++                            } else {
++                                hi = hi.min(v);
++                            }
++                        }
++                    }
++                }
++                if model.kinds()[j].is_integral() {
++                    lo = lo.ceil();
++                    hi = hi.floor();
++                }
++                if lo > hi {
++                    self.stats.infeasible += 1;
++                    return false;
++                }
++                // Ignore tiny continuous progress; keeping a wider box is always sound.
++                if !model.kinds()[j].is_integral() {
++                    if lo - old.0 <= 1e-12 * (1. + old.0.abs()) {
++                        lo = old.0;
++                    }
++                    if old.1 - hi <= 1e-12 * (1. + old.1.abs()) {
++                        hi = old.1;
++                    }
++                }
++                if (lo, hi) != old {
++                    bounds.lower[j] = lo;
++                    bounds.upper[j] = hi;
++                    changed.push(j);
++                    self.last.push(j);
++                    self.reasons.push(Reason {
++                        row: i,
++                        column: j,
++                        old,
++                        new: (lo, hi),
++                    });
++                    debug_assert!(self.reasons.last().is_some_and(|r| r.row < model.m()
++                        && r.column < model.n()
++                        && r.new.0 >= r.old.0
++                        && r.new.1 <= r.old.1));
++                    self.stats.changes += 1;
++                    for &rr in &self.incident[j] {
++                        enqueue(rr, &mut queue, &mut queued);
++                    }
++                }
++            }
++        }
++        true
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::NativeOptions;
++    use lp_ip_craft::*;
++    #[test]
++    fn mixed_dyadic_feasible_grid_and_sibling_restoration() {
++        let settings = NativeOptions::default();
++        let cancel = CancellationToken::default();
++        let budget = Budget {
++            start: std::time::Instant::now(),
++            settings: &settings,
++            cancel: &cancel,
++            pivots: 0,
++        };
++        for trial in 0..30 {
++            let c = 0.5 + (trial % 3) as f64 * 0.25;
++            let model = Model::new(ModelData {
++                sense: Sense::Minimize,
++                objective: vec![0.; 3],
++                objective_offset: 0.,
++                variables: Bounds::new(vec![0.; 3], vec![2.; 3]),
++                kinds: vec![
++                    VariableKind::Integer,
++                    VariableKind::Continuous,
++                    VariableKind::Continuous,
++                ],
++                matrix: CsrMatrix::from_dense(2, 3, &[1., c, -0.5, -1., 0.5, c]).unwrap(),
++                rows: Bounds::new(vec![-0.25, -0.75], vec![1.5, 1.25]),
++            })
++            .unwrap();
++            let mut d = Domain::new(&model, true);
++            for value in [0., 2., 1., 0.] {
++                let mut b = model.variables().clone();
++                b.lower[0] = value;
++                b.upper[0] = value;
++                let before = b.clone();
++                let mut changed = vec![0];
++                let ok = d.apply(&model, &mut b, &mut changed, &budget);
++                for y in 0..=8 {
++                    for z in 0..=8 {
++                        let x = [value, y as f64 / 4., z as f64 / 4.];
++                        if check::evaluate(&model, &x, &Tolerances::default())
++                            .unwrap()
++                            .feasible_candidate
++                        {
++                            assert!(ok);
++                            assert!((0..3).all(|j| x[j] >= b.lower[j] && x[j] <= b.upper[j]));
++                        }
++                    }
++                }
++                for reason in &d.reasons {
++                    assert!(
++                        reason.row < 2
++                            && reason.column < 3
++                            && reason.new.0 >= reason.old.0
++                            && reason.new.1 <= reason.old.1
++                    );
++                }
++                assert_eq!(before.lower[0], b.lower[0]);
++            }
++        }
++    }
++}
+diff --git a/crates/native/src/rational.rs b/crates/native/src/rational.rs
+new file mode 100644
+index 0000000..e3d286b
+--- /dev/null
++++ b/crates/native/src/rational.rs
+@@ -0,0 +1,360 @@
++//! Bounded owned exact arithmetic for primal witnesses, never a numerical LP kernel.
++//! Every binary64 datum is interpreted exactly. Exceeding 8192 bits fails closed.
++use std::cmp::Ordering;
++const LIMBS: usize = 256;
++#[derive(Clone, Debug, PartialEq, Eq)]
++struct Nat(Vec<u32>);
++impl Nat {
++    fn new(mut v: Vec<u32>) -> Self {
++        while v.last() == Some(&0) {
++            v.pop();
++        }
++        Self(v)
++    }
++    fn small(v: u64) -> Self {
++        Self::new(vec![v as u32, (v >> 32) as u32])
++    }
++    fn zero(&self) -> bool {
++        self.0.is_empty()
++    }
++    fn cmp(&self, b: &Self) -> Ordering {
++        self.0
++            .len()
++            .cmp(&b.0.len())
++            .then_with(|| self.0.iter().rev().cmp(b.0.iter().rev()))
++    }
++    fn bits(&self) -> usize {
++        self.0.last().map_or(0, |v| {
++            32 * (self.0.len() - 1) + 32 - v.leading_zeros() as usize
++        })
++    }
++    fn add(&self, b: &Self) -> Self {
++        let mut v = Vec::new();
++        let mut c = 0u64;
++        for i in 0..self.0.len().max(b.0.len()) {
++            c += u64::from(*self.0.get(i).unwrap_or(&0)) + u64::from(*b.0.get(i).unwrap_or(&0));
++            v.push(c as u32);
++            c >>= 32;
++        }
++        if c > 0 {
++            v.push(c as u32);
++        }
++        Self(v)
++    }
++    fn sub(&self, b: &Self) -> Self {
++        debug_assert!(self.cmp(b) != Ordering::Less);
++        let mut v = Vec::new();
++        let mut borrow = 0i64;
++        for i in 0..self.0.len() {
++            let x = i64::from(self.0[i]) - i64::from(*b.0.get(i).unwrap_or(&0)) - borrow;
++            v.push(x as u32);
++            borrow = i64::from(x < 0);
++        }
++        Self::new(v)
++    }
++    fn mul(&self, b: &Self) -> Option<Self> {
++        if self.0.len() + b.0.len() > LIMBS {
++            return None;
++        }
++        let mut v = vec![0; self.0.len() + b.0.len()];
++        for (i, &a) in self.0.iter().enumerate() {
++            let mut carry = 0u64;
++            for (j, &b) in b.0.iter().enumerate() {
++                let x = u64::from(a) * u64::from(b) + u64::from(v[i + j]) + carry;
++                v[i + j] = x as u32;
++                carry = x >> 32;
++            }
++            v[i + b.0.len()] = carry as u32;
++        }
++        Some(Self::new(v))
++    }
++    fn shift(&self, k: usize) -> Option<Self> {
++        if self.zero() {
++            return Some(self.clone());
++        }
++        let mut v = vec![0; k / 32];
++        let mut carry = 0u64;
++        for &a in &self.0 {
++            let x = (u64::from(a) << (k % 32)) | carry;
++            v.push(x as u32);
++            carry = x >> 32;
++        }
++        if carry > 0 {
++            v.push(carry as u32);
++        }
++        if v.len() > LIMBS { None } else { Some(Self(v)) }
++    }
++    fn div_rem(&self, b: &Self) -> (Self, Self) {
++        assert!(!b.zero());
++        if b == &Self::small(1) {
++            return (self.clone(), Self::small(0));
++        }
++        if self.cmp(b) == Ordering::Less {
++            return (Self::small(0), self.clone());
++        }
++        let mut rem = Self::small(0);
++        let mut q = vec![0; self.0.len()];
++        for bit in (0..self.bits()).rev() {
++            rem = rem
++                .shift(1)
++                .expect("division remainder bounded by numerator");
++            if (self.0[bit / 32] >> (bit % 32)) & 1 != 0 {
++                rem = rem.add(&Self::small(1));
++            }
++            if rem.cmp(b) != Ordering::Less {
++                rem = rem.sub(b);
++                q[bit / 32] |= 1 << (bit % 32);
++            }
++        }
++        (Self::new(q), rem)
++    }
++    fn gcd(mut a: Self, mut b: Self) -> Self {
++        while !b.zero() {
++            let r = a.div_rem(&b).1;
++            a = b;
++            b = r;
++        }
++        a
++    }
++    fn leading(&self) -> f64 {
++        let mut x = 0.;
++        for bit in (self.bits().saturating_sub(53)..self.bits()).rev() {
++            x = 2. * x + f64::from((self.0[bit / 32] >> (bit % 32)) & 1);
++        }
++        x
++    }
++}
++#[derive(Clone, Debug)]
++pub(crate) struct Rat {
++    negative: bool,
++    n: Nat,
++    d: Nat,
++}
++impl Rat {
++    fn norm(negative: bool, n: Nat, d: Nat) -> Option<Self> {
++        if d.zero() || n.0.len() > LIMBS || d.0.len() > LIMBS {
++            return None;
++        }
++        if n.zero() {
++            return Some(Self::zero());
++        }
++        if d == Nat::small(1) {
++            return Some(Self { negative, n, d });
++        }
++        let g = Nat::gcd(n.clone(), d.clone());
++        Some(Self {
++            negative,
++            n: n.div_rem(&g).0,
++            d: d.div_rem(&g).0,
++        })
++    }
++    pub fn zero() -> Self {
++        Self {
++            negative: false,
++            n: Nat::small(0),
++            d: Nat::small(1),
++        }
++    }
++    pub fn from(v: f64) -> Option<Self> {
++        if !v.is_finite() {
++            return None;
++        }
++        let bits = v.to_bits();
++        let e = ((bits >> 52) & 2047) as i32;
++        let mant = (bits & ((1u64 << 52) - 1)) | if e == 0 { 0 } else { 1u64 << 52 };
++        if mant == 0 {
++            return Some(Self::zero());
++        }
++        let shift = mant.trailing_zeros();
++        let exponent = if e == 0 { -1074 } else { e - 1075 } + shift as i32;
++        let n = Nat::small(mant >> shift);
++        let d = Nat::small(1);
++        Some(Self {
++            negative: v < 0.,
++            n: if exponent > 0 {
++                n.shift(exponent as usize)?
++            } else {
++                n
++            },
++            d: if exponent < 0 {
++                d.shift((-exponent) as usize)?
++            } else {
++                d
++            },
++        })
++    }
++    pub fn is_zero(&self) -> bool {
++        self.n.zero()
++    }
++    pub fn neg(&self) -> Self {
++        let mut v = self.clone();
++        if !v.is_zero() {
++            v.negative = !v.negative;
++        }
++        v
++    }
++    pub fn add(&self, b: &Self) -> Option<Self> {
++        if self.is_zero() {
++            return Some(b.clone());
++        }
++        if b.is_zero() {
++            return Some(self.clone());
++        }
++        let a = self.n.mul(&b.d)?;
++        let c = b.n.mul(&self.d)?;
++        let d = self.d.mul(&b.d)?;
++        if self.negative == b.negative {
++            Self::norm(self.negative, a.add(&c), d)
++        } else if a.cmp(&c) != Ordering::Less {
++            Self::norm(self.negative, a.sub(&c), d)
++        } else {
++            Self::norm(b.negative, c.sub(&a), d)
++        }
++    }
++    pub fn sub(&self, b: &Self) -> Option<Self> {
++        self.add(&b.neg())
++    }
++    pub fn mul(&self, b: &Self) -> Option<Self> {
++        if self.is_zero() || b.is_zero() {
++            return Some(Self::zero());
++        }
++        Self::norm(
++            self.negative != b.negative,
++            self.n.mul(&b.n)?,
++            self.d.mul(&b.d)?,
++        )
++    }
++    pub fn div(&self, b: &Self) -> Option<Self> {
++        Self::norm(
++            self.negative != b.negative,
++            self.n.mul(&b.d)?,
++            self.d.mul(&b.n)?,
++        )
++    }
++    pub fn cmp(&self, b: &Self) -> Option<Ordering> {
++        if self.negative != b.negative {
++            return Some(if self.negative {
++                Ordering::Less
++            } else {
++                Ordering::Greater
++            });
++        }
++        let ord = self.n.mul(&b.d)?.cmp(&b.n.mul(&self.d)?);
++        Some(if self.negative { ord.reverse() } else { ord })
++    }
++    pub fn upper(&self) -> Option<f64> {
++        if self.is_zero() {
++            return Some(0.);
++        }
++        let e = self.n.bits() as i32 - self.d.bits() as i32;
++        let mut v = self.n.leading() / self.d.leading()
++            * 2f64.powi(e + self.d.bits().min(53) as i32 - self.n.bits().min(53) as i32);
++        if self.negative {
++            v = -v;
++        }
++        if !v.is_finite() {
++            return None;
++        }
++        for _ in 0..8 {
++            if Self::from(v)?.cmp(self)? != Ordering::Less {
++                return Some(v);
++            }
++            v = if v == 0. {
++                f64::from_bits(1)
++            } else if v > 0. {
++                f64::from_bits(v.to_bits() + 1)
++            } else {
++                f64::from_bits(v.to_bits() - 1)
++            };
++        }
++        None
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn exact_signed_arithmetic_and_conversion() {
++        for a in -30..30 {
++            for b in -20..20 {
++                let x = Rat::from(a as f64 / 8.).unwrap();
++                let y = Rat::from(b as f64 / 4.).unwrap();
++                for (z, w) in [
++                    (x.add(&y).unwrap(), a as f64 / 8. + b as f64 / 4.),
++                    (x.mul(&y).unwrap(), (a * b) as f64 / 32.),
++                ] {
++                    assert_eq!(z.cmp(&Rat::from(w).unwrap()), Some(Ordering::Equal));
++                    assert_eq!(z.upper(), Some(w));
++                }
++                if b != 0 {
++                    let z = x.div(&y).unwrap();
++                    assert_ne!(
++                        Rat::from(z.upper().unwrap()).unwrap().cmp(&z),
++                        Some(Ordering::Less)
++                    );
++                }
++            }
++        }
++        let tiny = Rat::from(f64::from_bits(1)).unwrap();
++        assert_eq!(tiny.upper(), Some(f64::from_bits(1)));
++        let one = Rat::from(1.).unwrap();
++        let third = one.div(&Rat::from(3.).unwrap()).unwrap();
++        assert_eq!(
++            third.mul(&Rat::from(3.).unwrap()).unwrap().cmp(&one),
++            Some(Ordering::Equal)
++        );
++        assert!(one.div(&Rat::zero()).is_none());
++        assert!(Rat::from(f64::INFINITY).is_none());
++    }
++}
++
++#[cfg(test)]
++mod independent_tests {
++    use super::*;
++    fn nat(v: u128) -> Nat {
++        Nat::new(vec![
++            v as u32,
++            (v >> 32) as u32,
++            (v >> 64) as u32,
++            (v >> 96) as u32,
++        ])
++    }
++    #[test]
++    fn long_division_and_products_match_machine_integer_oracle() {
++        let mut seed = 17u128;
++        for _ in 0..1200 {
++            seed = seed
++                .wrapping_mul(6364136223846793005)
++                .wrapping_add(1442695040888963407);
++            let a = seed;
++            let b = (seed.rotate_left(43) >> 48) | 1;
++            let (q, r) = nat(a).div_rem(&nat(b));
++            assert_eq!(q, nat(a / b));
++            assert_eq!(r, nat(a % b));
++            let x = a >> 65;
++            let y = b >> 35;
++            assert_eq!(nat(x).mul(&nat(y)), Some(nat(x * y)));
++        }
++    }
++    #[test]
++    fn exact_f64_extremes_and_cancellation() {
++        for v in [
++            f64::MAX,
++            -f64::MAX,
++            f64::MIN_POSITIVE,
++            -f64::MIN_POSITIVE,
++            f64::from_bits(1),
++            -f64::from_bits(1),
++            1e-300,
++            -1e200,
++        ] {
++            let x = Rat::from(v).unwrap();
++            assert_eq!(x.upper(), Some(v));
++            assert!(x.add(&x.neg()).unwrap().is_zero());
++        }
++        let p = Nat::small(1).shift(400).unwrap().add(&Nat::small(1));
++        let q = Nat::small(1).shift(500).unwrap().sub(&Nat::small(3));
++        let product = p.mul(&q).unwrap();
++        assert_eq!(product.div_rem(&p), (q, Nat::small(0)));
++    }
++}
+diff --git a/crates/native/src/root.rs b/crates/native/src/root.rs
+index af4b64f..3b94b6c 100644
+--- a/crates/native/src/root.rs
++++ b/crates/native/src/root.rs
+@@ -173,7 +173,8 @@ pub(crate) fn solve(
+         || !solver.settings.presolve
+         || (!solver.settings.singleton_presolve
+             && !solver.settings.root_propagation
+-            && !solver.settings.root_cuts)
++            && !solver.settings.root_cuts
++            && !solver.settings.root_separation)
+         || cancel.is_cancelled()
+         || solver.settings.time_limit_seconds == Some(0.)
+         || solver.settings.iteration_limit == Some(0)
+@@ -211,7 +212,72 @@ pub(crate) fn solve(
+     } else {
+         0
+     };
+-    if reduced.model == *model {
++    let mut separation_pivots = 0u64;
++    let mut separation_nodes = 0u64;
++    let mut directed_cuts = 0usize;
++    let mut lifted_cuts = 0usize;
++    let mut cut_work = 0usize;
++    let mut initial_bound = None;
++    let mut initial_objective = None;
++    if solver.settings.root_separation && model.is_mip() && start.is_none() {
++        for _ in 0..solver.settings.root_cut_rounds {
++            if cancel.is_cancelled()
++                || solver
++                    .settings
++                    .node_limit
++                    .is_some_and(|n| separation_nodes >= n)
++            {
++                break;
++            }
++            let mut controls = solver.settings.clone();
++            controls.decompose = false;
++            controls.root_separation = false;
++            if let Some(t) = &mut controls.time_limit_seconds {
++                *t = (*t - began.elapsed().as_secs_f64()).max(0.);
++            }
++            if let Some(p) = &mut controls.iteration_limit {
++                *p = p.saturating_sub(separation_pivots);
++            }
++            if controls.time_limit_seconds == Some(0.) || controls.iteration_limit == Some(0) {
++                break;
++            }
++            let mut data = reduced.model.data().clone();
++            data.kinds.fill(lp_ip_craft::VariableKind::Continuous);
++            let relaxation = Model::new(data)?;
++            let probe = NativeSolver::new(controls).solve_internal(
++                &relaxation,
++                options,
++                None,
++                cancel,
++                &relaxation,
++            )?;
++            separation_pivots += probe.iterations;
++            separation_nodes += 1;
++            if initial_bound.is_none() {
++                initial_bound = probe.best_bound;
++                initial_objective = probe.evaluation.as_ref().map(|e| e.objective);
++            }
++            if probe.status != Status::Optimal {
++                break;
++            }
++            let Some(x) = probe.candidate else {
++                break;
++            };
++            let separated = cuts::separate(
++                &mut reduced.model,
++                &x,
++                solver.settings.cover_lifting,
++                cancel,
++            )?;
++            directed_cuts += separated.added;
++            lifted_cuts += separated.lifted;
++            cut_work += separated.work;
++            if separated.added == 0 {
++                break;
++            }
++        }
++    }
++    if reduced.model == *model && separation_nodes == 0 {
+         return original_after_preprocessing(solver, model, options, start, cancel, began);
+     }
+ 
+@@ -227,6 +293,13 @@ pub(crate) fn solve(
+     settings.singleton_presolve = false;
+     settings.root_propagation = false;
+     settings.root_cuts = false;
++    settings.root_separation = false;
++    if let Some(n) = &mut settings.node_limit {
++        *n = n.saturating_sub(separation_nodes);
++    }
++    if let Some(p) = &mut settings.iteration_limit {
++        *p = p.saturating_sub(separation_pivots);
++    }
+     if let Some(t) = &mut settings.time_limit_seconds {
+         *t = (*t - conversion).max(0.);
+     }
+@@ -237,6 +310,25 @@ pub(crate) fn solve(
+         cancel,
+         model,
+     )?;
++    result.nodes += separation_nodes;
++    result.iterations += separation_pivots;
++    for (key, value) in [
++        ("directed_root_cuts", directed_cuts.to_string()),
++        ("lifted_root_cuts", lifted_cuts.to_string()),
++        ("root_cut_work", cut_work.to_string()),
++        ("root_separation_nodes", separation_nodes.to_string()),
++        ("root_separation_pivots", separation_pivots.to_string()),
++        (
++            "root_separation_initial_bound",
++            format!("{initial_bound:?}"),
++        ),
++        (
++            "root_separation_initial_objective",
++            format!("{initial_objective:?}"),
++        ),
++    ] {
++        result.backend.effective_options.push((key.into(), value));
++    }
+     if solver.settings.mip_diagnostics && model.is_mip() {
+         result.backend.effective_options.push((
+             "diagnostics.mip_search.preprocessing_seconds".into(),
+@@ -441,7 +533,7 @@ fn down(v: f64) -> f64 {
+ fn up(v: f64) -> f64 {
+     -down(-v)
+ }
+-fn quotient(a: f64, b: f64, lower: bool) -> Option<f64> {
++pub(crate) fn quotient(a: f64, b: f64, lower: bool) -> Option<f64> {
+     let q = b / a;
+     if !q.is_finite() {
+         return None;
+diff --git a/crates/native/src/witness.rs b/crates/native/src/witness.rs
+new file mode 100644
+index 0000000..b1dd5a3
+--- /dev/null
++++ b/crates/native/src/witness.rs
+@@ -0,0 +1,231 @@
++//! Exact rational reconstruction of a nearby feasible point with fixed integers.
++//! A rational witness may exist when no exactly feasible binary64 display point does.
++use crate::{Budget, rational::Rat};
++use lp_ip_craft::{Model, Sense};
++use std::cmp::Ordering;
++pub(crate) struct Witness {
++    pub upper: f64,
++    pub point: Vec<f64>,
++}
++pub(crate) fn upper(model: &Model, x: &[f64], budget: &Budget<'_>) -> Option<Witness> {
++    let began = std::time::Instant::now();
++    let stopped = || budget.stop().is_some() || began.elapsed().as_millis() >= 250;
++    if model.m() > 1024 || model.nnz() > 20000 || stopped() {
++        return None;
++    }
++    let mut point: Vec<Rat> = x.iter().map(|&v| Rat::from(v)).collect::<Option<_>>()?;
++    let mut free = Vec::new();
++    for j in 0..model.n() {
++        let (l, u) = (model.variables().lower[j], model.variables().upper[j]);
++        let v = if model.kinds()[j].is_integral() {
++            x[j].round()
++        } else if l.is_finite() && (x[j] - l).abs() <= 1e-8 * (1. + l.abs()) {
++            l
++        } else if u.is_finite() && (x[j] - u).abs() <= 1e-8 * (1. + u.abs()) {
++            u
++        } else {
++            free.push(j);
++            x[j]
++        };
++        point[j] = Rat::from(v)?;
++    }
++    if free.len() > 64 {
++        return None;
++    }
++    let n = free.len();
++    let mut positions = vec![None; model.n()];
++    for (k, &j) in free.iter().enumerate() {
++        positions[j] = Some(k);
++    }
++    let a = model.matrix();
++    let mut equations = Vec::new();
++    for i in 0..model.m() {
++        let activity: f64 = (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
++            .map(|k| a.values[k] * x[a.pattern.indices[k]])
++            .sum();
++        let (l, u) = (model.rows().lower[i], model.rows().upper[i]);
++        let side =
++            if l == u || (l.is_finite() && (activity - l).abs() <= 1e-6 * (1. + activity.abs())) {
++                Some(l)
++            } else if u.is_finite() && (activity - u).abs() <= 1e-6 * (1. + activity.abs()) {
++                Some(u)
++            } else {
++                None
++            };
++        if let Some(rhs) = side {
++            equations.push((l != u, i, rhs));
++        }
++    }
++    equations.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
++    let mut basis: Vec<Option<Vec<Rat>>> = vec![None; n];
++    let mut rank = 0;
++    for (_, i, rhs) in equations {
++        if rank == n {
++            break;
++        }
++        if stopped() {
++            return None;
++        }
++        let mut row = vec![Rat::zero(); n + 1];
++        row[n] = Rat::from(rhs)?;
++        for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
++            let j = a.pattern.indices[k];
++            let coefficient = Rat::from(a.values[k])?;
++            if let Some(p) = positions[j] {
++                row[p] = coefficient;
++            } else {
++                row[n] = row[n].sub(&coefficient.mul(&point[j])?)?;
++            }
++        }
++        for p in 0..n {
++            if row[p].is_zero() {
++                continue;
++            }
++            if let Some(old) = &basis[p] {
++                let v = row[p].clone();
++                for k in p..=n {
++                    row[k] = row[k].sub(&v.mul(&old[k])?)?;
++                }
++            } else {
++                let v = row[p].clone();
++                for value in row.iter_mut().skip(p) {
++                    *value = value.div(&v)?;
++                }
++                basis[p] = Some(row);
++                rank += 1;
++                break;
++            }
++        }
++    }
++    for p in (0..n).rev() {
++        if let Some(row) = &basis[p] {
++            let mut v = row[n].clone();
++            for k in p + 1..n {
++                v = v.sub(&row[k].mul(&point[free[k]])?)?;
++            }
++            point[free[p]] = v;
++        }
++    }
++    for (j, v) in point.iter().enumerate() {
++        for (b, lower) in [
++            (model.variables().lower[j], true),
++            (model.variables().upper[j], false),
++        ] {
++            if b.is_finite() {
++                let c = v.cmp(&Rat::from(b)?)?;
++                if (lower && c == Ordering::Less) || (!lower && c == Ordering::Greater) {
++                    return None;
++                }
++            }
++        }
++    }
++    for i in 0..model.m() {
++        if i % 16 == 0 && stopped() {
++            return None;
++        }
++        let mut sum = Rat::zero();
++        for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
++            sum = sum.add(&Rat::from(a.values[k])?.mul(&point[a.pattern.indices[k]])?)?;
++        }
++        for (b, lower) in [
++            (model.rows().lower[i], true),
++            (model.rows().upper[i], false),
++        ] {
++            if b.is_finite() {
++                let c = sum.cmp(&Rat::from(b)?)?;
++                if (lower && c == Ordering::Less) || (!lower && c == Ordering::Greater) {
++                    return None;
++                }
++            }
++        }
++    }
++    let sign = if model.sense() == Sense::Minimize {
++        1.
++    } else {
++        -1.
++    };
++    let mut value = Rat::from(sign * model.objective_offset())?;
++    for (j, v) in point.iter().enumerate() {
++        value = value.add(&Rat::from(sign * model.objective()[j])?.mul(v)?)?;
++    }
++    Some(Witness {
++        upper: value.upper()?,
++        point: point.iter().map(Rat::upper).collect::<Option<_>>()?,
++    })
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::NativeOptions;
++    use lp_ip_craft::*;
++    #[test]
++    fn rational_boundary_witness_and_false_candidate() {
++        let make = |upper| {
++            Model::new(ModelData {
++                sense: Sense::Minimize,
++                objective: vec![0., 1.],
++                objective_offset: 2.,
++                variables: Bounds::new(vec![0., 0.], vec![1., upper]),
++                kinds: vec![VariableKind::Binary, VariableKind::Continuous],
++                matrix: CsrMatrix::from_dense(1, 2, &[0., 3.]).unwrap(),
++                rows: Bounds::fixed(vec![1.]),
++            })
++            .unwrap()
++        };
++        let settings = NativeOptions::default();
++        let cancel = CancellationToken::default();
++        let budget = Budget {
++            start: std::time::Instant::now(),
++            settings: &settings,
++            cancel: &cancel,
++            pivots: 0,
++        };
++        let m = make(1.);
++        let u = upper(&m, &[0., 1. / 3.], &budget).unwrap().upper;
++        assert!((2. + 1. / 3. ..2. + 1. / 3. + 1e-14).contains(&u));
++        assert!(crate::incumbent::upper(&m, &[0., 1. / 3.]).is_none());
++        assert!(upper(&make(1. / 3.), &[0., 1. / 3.], &budget).is_none());
++        cancel.cancel();
++        assert!(upper(&m, &[0., 1. / 3.], &budget).is_none());
++    }
++}
++
++#[cfg(test)]
++mod incompatible_decimal_test {
++    use super::*;
++    use crate::NativeOptions;
++    use lp_ip_craft::*;
++    #[test]
++    fn numerical_decimal_equality_is_not_an_exact_integer_certificate() {
++        let model = Model::new(ModelData {
++            sense: Sense::Minimize,
++            objective: vec![0.; 3],
++            objective_offset: 0.,
++            variables: Bounds::new(vec![60., 0., 0.], vec![60., 100., 100.]),
++            kinds: vec![
++                VariableKind::Continuous,
++                VariableKind::Integer,
++                VariableKind::Integer,
++            ],
++            matrix: CsrMatrix::from_dense(1, 3, &[0.9, 1., -1.]).unwrap(),
++            rows: Bounds::fixed(vec![0.]),
++        })
++        .unwrap();
++        let x = [60., 0., 54.];
++        assert!(
++            check::evaluate(&model, &x, &Tolerances::default())
++                .unwrap()
++                .feasible_candidate
++        );
++        let s = NativeOptions::default();
++        let c = CancellationToken::default();
++        let b = Budget {
++            start: std::time::Instant::now(),
++            settings: &s,
++            cancel: &c,
++            pivots: 0,
++        };
++        assert!(upper(&model, &x, &b).is_none());
++    }
++}
+diff --git a/crates/native/tests/acceptance.rs b/crates/native/tests/acceptance.rs
+index cf483cf..08b8e1a 100644
+--- a/crates/native/tests/acceptance.rs
++++ b/crates/native/tests/acceptance.rs
+@@ -526,7 +526,10 @@ fn certification_lp_enables_pruning_on_mixed_models() {
+         .solve(&m, &Options::default(), None, &CancellationToken::default())
+         .unwrap();
+     assert_eq!(r.status, Status::Optimal, "{r:?}");
+-    assert!(diagnostic(&r, "certified_incumbents") > 0, "{r:?}");
++    assert!(
++        diagnostic(&r, "certified_incumbents") + diagnostic(&r, "rational_witness_successes") > 0,
++        "{r:?}"
++    );
+     assert!(diagnostic(&r, "pruned_nodes") > 0, "{r:?}");
+     let b = r.best_bound.unwrap();
+     assert!(b >= r.evaluation.unwrap().objective - 1e-9);
+diff --git a/crates/python/src/lib.rs b/crates/python/src/lib.rs
+index 22114c7..2ec426d 100644
+--- a/crates/python/src/lib.rs
++++ b/crates/python/src/lib.rs
+@@ -382,9 +382,15 @@ fn native_settings(
+             "dual_tolerance" => settings.dual_tolerance = field(&value, &key)?,
+             "pivot_tolerance" => settings.pivot_tolerance = field(&value, &key)?,
+             "incumbent_heuristic" => settings.incumbent_heuristic = field(&value, &key)?,
++            "rational_certification" => settings.rational_certification = field(&value, &key)?,
++            "feasibility_jump" => settings.feasibility_jump = field(&value, &key)?,
++            "feasibility_jump_steps" => settings.feasibility_jump_steps = field(&value, &key)?,
+             "objective_lattice" => settings.objective_lattice = field(&value, &key)?,
+             "node_reoptimization" => settings.node_reoptimization = field(&value, &key)?,
+             "strong_branching" => settings.strong_branching = field(&value, &key)?,
++            "reliability_branching" => settings.reliability_branching = field(&value, &key)?,
++            "reliability_threshold" => settings.reliability_threshold = field(&value, &key)?,
++            "reliability_max_probes" => settings.reliability_max_probes = field(&value, &key)?,
+             "reduced_cost_fixing" => settings.reduced_cost_fixing = field(&value, &key)?,
+             "factor_replay" => settings.factor_replay = field(&value, &key)?,
+             "mip_diagnostics" => settings.mip_diagnostics = field(&value, &key)?,
+@@ -396,7 +402,11 @@ fn native_settings(
+             }
+             "singleton_presolve" => settings.singleton_presolve = field(&value, &key)?,
+             "root_propagation" => settings.root_propagation = field(&value, &key)?,
++            "mixed_propagation" => settings.mixed_propagation = field(&value, &key)?,
+             "root_cuts" => settings.root_cuts = field(&value, &key)?,
++            "root_separation" => settings.root_separation = field(&value, &key)?,
++            "root_cut_rounds" => settings.root_cut_rounds = field(&value, &key)?,
++            "cover_lifting" => settings.cover_lifting = field(&value, &key)?,
+             "steepest_edge" => settings.steepest_edge = field(&value, &key)?,
+             "redundant_row_min_ratio" => settings.redundant_row_min_ratio = field(&value, &key)?,
+             "redundant_rows" => settings.redundant_rows = field(&value, &key)?,
+diff --git a/docs/api.md b/docs/api.md
+index 72394f7..c4d8fd1 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -222,3 +222,29 @@ with O(n) storage. Its balanced outward sum can differ in last bits and failure
+ precedence from the fresh API. Keep the IEEE arithmetic environment unchanged
+ throughout its lifetime. See [the proof and restrictions](safe-dual-bounds.md#prepared-bounds-rust-021).
+ The Python bound API is unchanged.
++
++
++## MIP search additions in 0.24
++
++All flags exist in Rust `NativeOptions` and Python `NativeOptions`. Search remains serial inside each independent component.
++
++| Setting | Default | Contract |
++| --- | --- | --- |
++| rational_certification | true | Exact binary64-data rational witness reconstruction, up to 64 free continuous columns, 1024 rows, 20000 nonzeros, 8192-bit arithmetic and 64 attempts. A 250 ms per-attempt guard is polled between bounded arithmetic operations. A certificate proves existence of a rational feasible point; the returned numerical display point remains tolerance checked. |
++| reliability_branching | false | Probe unreliable directional pseudocosts at depth at most 8 on models with at most 1024 columns/rows and 20000 nonzeros. At most two candidates per call, 32 pivots per direction. Probe outcomes never prune. |
++| reliability_threshold | 2 | Required optimal observations in each direction; valid 1..16. |
++| reliability_max_probes | 64 | Whole-search probe cap, 0..1024. Probes consume reported node/pivot/time budgets. |
++| feasibility_jump | false | One deterministic serial coordinate-jump feasibility-repair call at the root. Proposals use the existing acceptance and certification checks. |
++| feasibility_jump_steps | 2000 | Iteration cap, 0..100000; term evaluations capped at min(512*steps, 10000000). No LP solve is hidden in the heuristic. |
++| root_separation | false | Initial root LP and at most eight violated covers per round. Rebuild all caches before search. Skipped when a user warm start is supplied. |
++| root_cut_rounds | 2 | Initial LP/separation rounds, 0..4. Root LPs consume whole-call nodes/pivots/time; their work is reported separately from the internal search trace. |
++| cover_lifting | true | Sequential exact lifting of directed covers using bounded profit dynamic programming. Only applies with root_separation. Static root_cuts remains a separate legacy control. |
++| mixed_propagation | false | Outward prefix/suffix activities for finite-box rows outside the exact integer-row propagator; up to two mixed/exact passes per node. Row queue work is capped; partial deductions remain sound. |
++
++New metadata includes `diagnostics.rational_witness_attempts/successes`, `diagnostics.feasibility_jump_steps/work/candidates/weight_bumps`, and `diagnostics.mixed_propagation_rows/visits/terms/changes/infeasibilities/work_limits`. Existing `diagnostics.strong_branch_probes/pivots` counts both root strong branching and reliability lookahead. `diagnostics.certification_solves` now counts actual LP repair calls, with rational attempts reported separately.
++
++Directed root separation reports `directed_root_cuts`, `lifted_root_cuts`, `root_cut_work`, `root_separation_nodes/pivots`, and the initial relaxation objective/bound. The internal `diagnostics.mip_search` trace begins after these root prepasses. Its node/pivot coordinates exclude the separately reported prepasses; total `SolveResult.nodes/iterations` include them. Time spent on prepasses is included in preprocessing time.
++
++Mixed deductions record a bounded node-local reason trail (source row, column, old and new endpoints). All changed columns, including continuous implications, are restored through NodeBox before a sibling is entered. Reasons do not drive conflict learning.
++
++All new optional policies are opt-in because effects vary by model. Exact rational certification is enabled by default, and can be disabled for matched ablations. Failure to reconstruct a witness never weakens acceptance, pruning or stopping thresholds. Decimal-looking data are interpreted as their exact supplied binary64 values; tolerance-feasible equality points may have no exact witness.
+diff --git a/docs/mip-search-024/INITIAL-PLAN.md b/docs/mip-search-024/INITIAL-PLAN.md
+new file mode 100644
+index 0000000..a2cb091
+--- /dev/null
++++ b/docs/mip-search-024/INITIAL-PLAN.md
+@@ -0,0 +1,79 @@
++# LP-IP-craft 0.24 — implementation and validation plan
++
++Baseline: accepted 0.23.0 delivery. Requested order: incumbent certification, item 4 reliability branching, item 3 Feasibility Jump, item 5 stronger root relaxation, item 6 mixed-row node propagation. Written before implementation on 2026-10-17.
++
++## Scope and invariants
++
++Implement all five work packages in owned safe Rust, with matching Python controls and metadata. Keep the production native engine free of third-party numerical engines and arithmetic dependencies. Preserve the original model, objective sense/offset, tolerance acceptance, conservative bounds, shared cancellation/time/pivot/node budgets, private solver state and existing component support. Do not push to GitHub. Experimental search policies remain independently selectable; enable by default only when the regression evidence supports it. No general branch-and-cut, conflict learning, parallel tree or parallel FJ in this release.
++
++## A. Mixed-model incumbent certification
++
++Problem: egout, flugpl and rgn accept candidates without obtaining a certified pruning upper bound. Existing inward LP shrinking is insufficient for equality/boundary solutions.
++
++1. Preserve tolerance candidate acceptance and existing outward enclosure certification.
++2. Add owned bounded arbitrary-precision rational arithmetic for exact binary64 input values. Test signed arithmetic, division, normalization, cancellation, extreme exponents and outward conversion.
++3. Reconstruct a nearby rational witness: fix integers exactly, anchor continuous bounds, solve a bounded independent active subsystem exactly, and verify every original variable bound and row in rational arithmetic. A rounded display point alone is never the proof.
++4. Compute a conservative oriented objective upper endpoint from that witness. Enforce dimension, bit-size, attempt and cancellation limits. Unsupported/large/inconsistent systems produce no certificate and retain the existing shrinking fallback.
++5. Record witness attempts/successes separately from LP repair attempts. Validate infeasible boundary candidates cannot acquire certificates, and equality solutions with no exactly feasible binary64 representation can be certified through existence of a rational witness.
++
++Acceptance: no relaxed feasibility threshold, no unsafe upper bounds on exact small enumerated models, original model verification, public-case outcomes and limitations documented.
++
++## B. Item 4 — reliability branching
++
++1. Reuse directional pseudocost observations and parent-origin learning.
++2. Require a minimum observation count in both directions before trusting a variable. Rank fractional candidates deterministically.
++3. Probe only a small set of unreliable candidates, with per-direction pivot limits and a global probe cap across several early nodes. Respect model-size guards, shared work limits and cancellation.
++4. Restore the parent bounds and basis after every outcome. Probe estimates guide selection only; no probe status or estimate justifies pruning.
++5. Keep the original root-only strong-branching switch available for comparisons. Expose reliability selection, thresholds and counters in Rust/Python.
++
++Acceptance: deterministic policy tests, parent restoration on failed/limited probes, budget/cancel checks, correctness matrix and node/pivot comparisons on gt2, lseu and synthetic MIPs.
++
++## C. Item 3 — bounded serial Feasibility Jump prototype
++
++1. Add deterministic LP-free weighted violation local search, optionally seeded from the root relaxation.
++2. Round integral columns within bounds, retain continuous columns, and generate coordinate jumps at incident row breakpoints and variable bounds. Evaluate the full incident-row weighted piecewise-linear violation change.
++3. Select improving jumps; at a local minimum increase violated-row weights and apply deterministic diversification/restarts. Keep sparse incidence, incremental row activities and explicit term-evaluation/step caps.
++4. Recompute activities periodically. Pass all proposals through the existing original-model acceptance and certification machinery; heuristic arithmetic never proves pruning/infeasibility.
++5. Run only a bounded root call initially. Expose enable/effort controls and steps/work/candidate counters. No thread scheduler or new tree sharing.
++
++Acceptance: an infeasible rounded seed is repaired on targeted tests, mixed/equality/negative-coefficient cases remain valid, work/cancel limits hold, no global LP budget is hidden, p0548 plus holdout outcomes reported even if no speedup.
++
++## D. Item 5 — LP-directed exact covers and sequential lifting
++
++1. Preserve static covers as a comparison control. Add a separately controlled root separation pass using an initial root LP point.
++2. Restrict proofs to positive integral binary knapsack rows in the existing supported range. Use fractional values to propose minimal covers; check validity in integer arithmetic and actual LP violation before insertion.
++3. Sequentially lift outside variables using an exact bounded dynamic program over attainable cut profit with minimum knapsack weight. If a work/profit cap is reached, retain a valid unlifted coefficient zero.
++4. Verify generated coefficients independently with the same exact knapsack maximum bound; enumerate small rows exhaustively in tests.
++5. Run a small number of root rounds, rebuilding all LP/presolve/propagation caches between rounds. Deduct initial LP work from the shared node/pivot/time budget, preserve dual/postsolve dimensions and original-model checks. Never mutate a live search matrix.
++
++Acceptance: exhaustive cut validity, planted violation and root-bound improvements, no stronger-bound claims on unsupported rows, total work accounting, public/synthetic comparisons including regressions.
++
++## E. Item 6 — reversible mixed-row node propagation
++
++1. Retain the exact i128 integer-row propagator. Add a mixed-row queue for remaining finite-box rows.
++2. Recompute outward-rounded prefix/suffix activities to exclude one term without unsafe cancellation. Derive outward quotient bounds, round only integer targets inward to their integer domain, skip nonfinite/unsupported arithmetic.
++3. Apply only provable tightenings/infeasibilities. Record row reasons, old/new endpoints and node-local changes. Restore all implications when entering siblings using NodeBox's existing changed-column contract.
++4. Maintain bounded incident-row queuing and work/cancellation polling. Alternate with exact integer propagation only within a fixed work cap; reaching the cap preserves sound partial deductions.
++5. Expose a switch and work/change/infeasibility counters; do not introduce conflict learning.
++
++Acceptance: enumerated feasible points survive mixed propagation, continuous/negative/tight/equality/extreme cases, sibling restoration, cancellation and work caps, diagnostics coverage, on/off equivalence and public-case comparisons.
++
++## Validation and delivery
++
++- For each stage: focused meaningful Rust/Python tests, formatting, warnings-as-errors Clippy; retain logs and stage snapshots/patches.
++- Final: full Rust all-features checks, full Python tests, frozen oracle policy matrix and unchanged adjudications, exact finite-bound audit. Add new policy combinations to the same small exact oracle corpus.
++- Compare accepted 0.23 executable with each policy and the integrated candidate on the same public models. Use fixed node/pivot/time caps; record statuses, objective/checks, conservative bounds, first accepted/certified incumbent, nodes/pivots, root LP, policy work and source/binary hashes. Repeat headline timing comparisons serially; do not time concurrently with builds/tests.
++- Retain failures/regressions, avoid claiming universal improvement, choose defaults based on evidence. Document capability/effort limits explicitly.
++- Update API/README/version, record exact commands, include full source, detailed results, original/final plan, patches, input hashes and raw validation data in a checksummed downloadable ZIP. Save the plan and ZIP for download.
++
++## References
++
++Algorithm references guide mechanisms; implementation and correctness checks remain owned.
++
++- Achterberg, Koch, Martin (2005), Branching rules revisited: https://doi.org/10.1016/j.orl.2004.04.002
++- Luteberget, Sartor (2023), Feasibility Jump: https://doi.org/10.1007/s12532-023-00234-8 ; author preprint https://luteberget.github.io/preprints/feasibilityjump-2023-01-09.pdf
++- Sequential lifting overview and formulations: https://optimization-online.org/wp-content/uploads/2019/04/7162.pdf
++
++## Execution log
++
++- Plan written; implementation pending. The original 0.23 git worktree metadata points into an expired workspace. Its source and previous ZIP remain intact; a new local git baseline was created for reviewable patches.
+diff --git a/docs/mip-search-024/PLAN.md b/docs/mip-search-024/PLAN.md
+new file mode 100644
+index 0000000..3a98647
+--- /dev/null
++++ b/docs/mip-search-024/PLAN.md
+@@ -0,0 +1,95 @@
++# LP-IP-craft 0.24 — implementation and validation plan
++
++Status: all five work packages implemented and validated. Experimental search policies are individually selectable; exact rational certification is enabled by default.
++
++Baseline: accepted 0.23.0 delivery. Requested order: incumbent certification, item 4 reliability branching, item 3 Feasibility Jump, item 5 stronger root relaxation, item 6 mixed-row node propagation. Written before implementation on 2026-10-17.
++
++## Scope and invariants
++
++Implement all five work packages in owned safe Rust, with matching Python controls and metadata. Keep the production native engine free of third-party numerical engines and arithmetic dependencies. Preserve the original model, objective sense/offset, tolerance acceptance, conservative bounds, shared cancellation/time/pivot/node budgets, private solver state and existing component support. Do not push to GitHub. Experimental search policies remain independently selectable; enable by default only when the regression evidence supports it. No general branch-and-cut, conflict learning, parallel tree or parallel FJ in this release.
++
++## A. Mixed-model incumbent certification
++
++Problem: egout, flugpl and rgn accept candidates without obtaining a certified pruning upper bound. Existing inward LP shrinking is insufficient for equality/boundary solutions.
++
++1. Preserve tolerance candidate acceptance and existing outward enclosure certification.
++2. Add owned bounded arbitrary-precision rational arithmetic for exact binary64 input values. Test signed arithmetic, division, normalization, cancellation, extreme exponents and outward conversion.
++3. Reconstruct a nearby rational witness: fix integers exactly, anchor continuous bounds, solve a bounded independent active subsystem exactly (at most 64 free continuous columns), and verify every original variable bound and row in rational arithmetic. A rounded display point alone is never the proof.
++4. Compute a conservative oriented objective upper endpoint from that witness. Enforce dimension, bit-size, attempt and cancellation limits. Unsupported/large/inconsistent systems produce no certificate and retain the existing shrinking fallback.
++5. Record witness attempts/successes separately from LP repair attempts. Validate infeasible boundary candidates cannot acquire certificates, and equality solutions with no exactly feasible binary64 representation can be certified through existence of a rational witness.
++
++Acceptance: no relaxed feasibility threshold, no unsafe upper bounds on exact small enumerated models, original model verification, public-case outcomes and limitations documented.
++
++## B. Item 4 — reliability branching
++
++1. Reuse directional pseudocost observations and parent-origin learning.
++2. Require a minimum observation count in both directions before trusting a variable. Rank fractional candidates deterministically.
++3. Probe only a small set of unreliable candidates, with per-direction pivot limits and a global probe cap across several early nodes. Respect model-size guards, shared work limits and cancellation.
++4. Restore the parent bounds and basis after every outcome. Probe estimates guide selection only; no probe status or estimate justifies pruning.
++5. Keep the original root-only strong-branching switch available for comparisons. Expose reliability selection, thresholds and counters in Rust/Python.
++
++Acceptance: deterministic policy tests, parent restoration on failed/limited probes, budget/cancel checks, correctness matrix and node/pivot comparisons on gt2, lseu and synthetic MIPs.
++
++## C. Item 3 — bounded serial Feasibility Jump prototype
++
++1. Add deterministic LP-free weighted violation local search, optionally seeded from the root relaxation.
++2. Round integral columns within bounds, retain continuous columns, and generate coordinate jumps at incident row breakpoints and variable bounds. Evaluate the full incident-row weighted piecewise-linear violation change.
++3. Select improving jumps; at a local minimum increase violated-row weights and apply deterministic diversification/restarts. Keep sparse incidence, incremental row activities and explicit term-evaluation/step caps.
++4. Recompute activities periodically. Pass all proposals through the existing original-model acceptance and certification machinery; heuristic arithmetic never proves pruning/infeasibility.
++5. Run only a bounded root call initially. Expose enable/effort controls and steps/work/candidate counters. No thread scheduler or new tree sharing.
++
++Acceptance: an infeasible rounded seed is repaired on targeted tests, mixed/equality/negative-coefficient cases remain valid, work/cancel limits hold, no global LP budget is hidden, p0548 plus holdout outcomes reported even if no speedup.
++
++## D. Item 5 — LP-directed exact covers and sequential lifting
++
++1. Preserve static covers as a comparison control. Add a separately controlled root separation pass using an initial root LP point.
++2. Restrict proofs to positive integral binary knapsack rows in the existing supported range. Use fractional values to propose minimal covers; check validity in integer arithmetic and actual LP violation before insertion.
++3. Sequentially lift outside variables using an exact bounded dynamic program over attainable cut profit with minimum knapsack weight. If a work/profit cap is reached, retain a valid unlifted coefficient zero.
++4. Verify generated coefficients independently with the same exact knapsack maximum bound; enumerate small rows exhaustively in tests.
++5. Run a small number of root rounds, rebuilding all LP/presolve/propagation caches between rounds. Deduct initial LP work from the shared node/pivot/time budget, preserve dual/postsolve dimensions and original-model checks. Never mutate a live search matrix.
++
++Acceptance: exhaustive cut validity, planted violation and root-bound improvements, no stronger-bound claims on unsupported rows, total work accounting, public/synthetic comparisons including regressions.
++
++## E. Item 6 — reversible mixed-row node propagation
++
++1. Retain the exact i128 integer-row propagator. Add a mixed-row queue for remaining finite-box rows.
++2. Recompute outward-rounded prefix/suffix activities to exclude one term without unsafe cancellation. Derive outward quotient bounds, round only integer targets inward to their integer domain, skip nonfinite/unsupported arithmetic.
++3. Apply only provable tightenings/infeasibilities. Record row reasons, old/new endpoints and node-local changes. Restore all implications when entering siblings using NodeBox's existing changed-column contract.
++4. Maintain bounded incident-row queuing and work/cancellation polling. Alternate with exact integer propagation only within a fixed work cap; reaching the cap preserves sound partial deductions.
++5. Expose a switch and work/change/infeasibility counters; do not introduce conflict learning.
++
++Acceptance: enumerated feasible points survive mixed propagation, continuous/negative/tight/equality/extreme cases, sibling restoration, cancellation and work caps, diagnostics coverage, on/off equivalence and public-case comparisons.
++
++## Validation and delivery
++
++- For each stage: focused meaningful Rust/Python tests, formatting, warnings-as-errors Clippy; retain logs and stage snapshots/patches.
++- Final: full Rust all-features checks, full Python tests, frozen oracle policy matrix and unchanged adjudications, exact finite-bound audit. Add new policy combinations to the same small exact oracle corpus.
++- Compare accepted 0.23 executable with each policy and the integrated candidate on the same public models. Use fixed node/pivot/time caps; record statuses, objective/checks, conservative bounds, first accepted/certified incumbent, nodes/pivots, root LP, policy work and source/binary hashes. Repeat headline timing comparisons serially; do not time concurrently with builds/tests.
++- Retain failures/regressions, avoid claiming universal improvement, choose defaults based on evidence. Document capability/effort limits explicitly.
++- Update API/README/version, record exact commands, include full source, detailed results, original/final plan, patches, input hashes and raw validation data in a checksummed downloadable ZIP. Save the plan and ZIP for download.
++
++## References
++
++Algorithm references guide mechanisms; implementation and correctness checks remain owned.
++
++- Achterberg, Koch, Martin (2005), Branching rules revisited: https://doi.org/10.1016/j.orl.2004.04.002
++- Luteberget, Sartor (2023), Feasibility Jump: https://doi.org/10.1007/s12532-023-00234-8 ; author preprint https://luteberget.github.io/preprints/feasibilityjump-2023-01-09.pdf
++- Sequential lifting overview and formulations: https://optimization-online.org/wp-content/uploads/2019/04/7162.pdf
++
++## Execution log
++
++- Plan written; implementation pending. The original 0.23 git worktree metadata points into an expired workspace. Its source and previous ZIP remain intact; a new local git baseline was created for reviewable patches.
++
++- Stage A: implemented owned bounded rationals and exact active-system witnesses; arithmetic, nonrepresentable equality witness and false-certificate rejection tests pass. Initial 32-column reconstruction cap excluded egout's 41 free continuous columns; increased to 64 with a 250 ms per-attempt guard. Inspection with Python Fraction independently finds a valid rational reconstruction on egout's final candidate.
++- Flugpl limitation: row x0=60 and row 0.9*x0+x1-x3=0, with integral x1/x3, are incompatible in exact real arithmetic on the supplied binary64 data: exact binary64(0.9)*60 differs from 54 by 1.3322676295501878e-15. The tolerance-feasible numerical result cannot legitimately receive an exact incumbent certificate. This is retained and tested, without altering coefficients, tolerances or pruning.
++- Stages B/C: bounded reliability probes and serial sparse coordinate-jump repair implemented; existing Rust suite plus focused jump/certificate checks pass. Existing LP-certification regression now accepts either independently checked certificate mechanism rather than requiring the old LP route specifically.
++- Stage D: LP-directed minimal covers and exact profit-DP sequential lifting implemented; cut validity/profit enumeration checks pass. Initial root solves consume the same overall work budgets and occur before caches are built. Directed separation is skipped when a user warm start is supplied to preserve the existing tolerance-start contract.
++- Stage E: outward prefix/suffix mixed-row propagation, bounded queue and row reasons implemented; exhaustive dyadic-grid/sibling restoration checks pass. Integrated policy and frozen-oracle validation ongoing.
++
++- Benchmark protocol audit: the existing Rust harness iterates 0..=repeats. Passing repeats=2 produces one warmup plus two measured solves per fresh process. The initial controller protocol label incorrectly said one measured solve; all raw observations were retained. Documentation and the final report use the actual protocol; the repeat summary includes six measured samples over three processes. A reporting-only null-primal guard was also fixed, and the paused sweep resumed from its saved observations without rerunning solver work.
++
++- Final validation: 139 Rust checks, 209 Python checks, warnings-as-errors Clippy, 83670 oracle observations across all fifteen policy configurations, unchanged frozen inputs/adjudications and 400 bound-audit models pass. No unsafe finite bounds were found. All eight legacy-policy public results reproduce 0.23 statuses, objectives, bounds, nodes and pivots exactly.
++- Public evidence: 72 case/policy processes plus 48 selected repeat processes; each contains one warmup and two measured solves. The selected repeats therefore provide six measured samples over three fresh processes per case/policy. Five-round LP controls on packing4096, network2048 and aspect-wide512 all pass.
++- Results: default certification reduces egout from 66553 to 12602 nodes and rgn from the 100000-node cap to 7249 nodes. Reliability branching reduces gt2 from 72182 to 16056 nodes. Mixed propagation solves flugpl in 425 nodes and bell5 below its previous node cap, with higher per-node cost. The combined policy finds a p0548 incumbent but still reaches the node cap; its FJ prototype produces no direct feasible proposal on that model under the default effort cap.
++- Defaults: retain independent opt-in controls for reliability, FJ, directed covers/lifting and mixed propagation. On gt2, FJ or mixed propagation can worsen search, and the combined policy reaches the node cap. These regressions remain in the results and raw data. The FJ prototype repairs infeasible seeds in focused checks and improves lseu in the public observation, but is not a full reproduction of the published heuristic.
++- Delivery: full source, API documentation, original/final plans, reproduction commands, code patch, results, immutable inputs and raw validation evidence are included. The implementation is local; no remote repository was modified.
+diff --git a/docs/mip-search-024/REPRODUCE.md b/docs/mip-search-024/REPRODUCE.md
+new file mode 100644
+index 0000000..a144c05
+--- /dev/null
++++ b/docs/mip-search-024/REPRODUCE.md
+@@ -0,0 +1,61 @@
++# Reproduce 0.24
++
++Use Rust 1.85+ and Python 3.10+ with maturin, pytest, NumPy and SciPy in an isolated environment. No third-party arithmetic or solver dependency was added to the native/core crates. The benchmark workspace alone uses serde_json. The runtime used Rust 1.99.1 and Python 3.12; exact source/binary hashes and runtime details are recorded in `data/build-manifest.json`.
++
++From the source root:
++
++```sh
++cargo fmt --all -- --check
++cargo test --all-features
++cargo clippy --all-targets --all-features -- -D warnings
++maturin develop --release
++python -m pytest -q
++python benchmarks/validate_mip_search_024.py
++```
++
++The validation script runs all nine previous policy configurations plus six new policy configurations against the same immutable 6330-case input collection (83670 solves across the policy matrix). It then performs the existing 400-model conservative-bound audit. The adjudication file and tolerances are unchanged. Raw flags remain visible; the final audit applies the established adjudications.
++
++Build the uninstrumented benchmark executable:
++
++```sh
++cargo build --release --manifest-path benchmarks/Cargo.toml
++```
++
++Use a separately extracted accepted 0.23 delivery for the baseline. Compile its benchmark workspace and copy that executable before rebuilding the candidate. Do not substitute the current public GitHub branch for the delivered 0.23 source. The baseline ZIP SHA-256 is `52803235788233b037b3ef220af1a2d659f21f8ab297db1ff5ebf2fed02783c0`.
++
++After correctness checks and builds finish, run timing processes sequentially:
++
++```sh
++python benchmarks/run_mip_search_024.py \
++  --baseline /absolute/path/native023 --native /absolute/path/native024 \
++  --output docs/mip-search-024/data/public-policies.json
++python benchmarks/run_mip_search_024.py \
++  --baseline /absolute/path/native023 --native /absolute/path/native024 \
++  --output docs/mip-search-024/data/public-repeat.json --rounds 3 \
++  --cases egout gt2 lseu rgn \
++  --policies baseline-023 certification reliability combined
++python benchmarks/audit_mip_search_024.py
++```
++
++Each case/policy launches a fresh process, performs one warmup solve and two measured solves, with one kernel thread, decomposition off, 30 seconds, 100000 nodes and 1000000 pivots. Repeat policy order rotates by round. All records include hashes, primal checks, bounds, nodes, pivots and bounded traces. A root separation prepass is charged to total result nodes/pivots and reported separately from the internal post-preprocessing trace.
++
++`legacy-policy` disables rational certification and all new optional search policies on the candidate, allowing a same-harness control for unintended search changes. The other individual controls add one policy to default certification; `combined` enables all mechanisms.
++
++The independent `benchmarks/inspect_mip_witness.py` uses Python Fraction on final egout/flugpl candidates. It is a diagnostic/reference tool, never a production dependency. It demonstrates the exact equality conflict in flugpl and independently reconstructs/checks the egout boundary witness.
++
++The source package includes `CHANGESET.patch` against the reconstructed local baseline of the accepted 0.23 source. The old worktree git metadata referred to an expired workspace, so the local baseline has a different commit identity from the earlier delivery. Content provenance and the accepted 0.23 ZIP hash are retained.
++
++
++The LP controls use the same uninstrumented binaries, after all other work finishes:
++
++```sh
++python benchmarks/compare_packing_mip.py \
++  --binary baseline=/absolute/path/native023 \
++  --binary native=/absolute/path/native024 \
++  --case packing:4096 --case network:2048 --case aspect-wide:512 \
++  --rounds 5 --output docs/mip-search-024/data/lp-controls.json
++python benchmarks/audit_mip_search_024.py
++python benchmarks/report_mip_search_024.py
++```
++
++The raw original public-controller protocol string predates the harness-count audit. Its actual process records contain one warmup and two measured solves; the final report and this document describe that actual protocol. The earlier paused controller log and resumed log are both retained. No numerical data were altered by the reporting fixes.
+diff --git a/docs/mip-search-024/RESULTS.md b/docs/mip-search-024/RESULTS.md
+new file mode 100644
+index 0000000..2f23a44
+--- /dev/null
++++ b/docs/mip-search-024/RESULTS.md
+@@ -0,0 +1,223 @@
++# LP-IP-craft 0.24 — results
++
++Implemented the requested order: exact incumbent witnesses → reliability branching → serial Feasibility Jump prototype → LP-directed covers and lifting → reversible mixed-row propagation. 139 Rust checks, 209 Python checks, 83,670 frozen-oracle runs and the 400-model bound audit pass under the unchanged adjudications. The final native unit suite was rerun and passes 47 checks after exact zero/integer fast paths were added. Clippy passes with warnings denied.
++
++## Defaults and capability limits
++
++Exact rational certification is enabled by default. Reliability branching, Feasibility Jump, directed root separation and mixed-row node propagation are independently selectable and remain opt-in: their gains and costs vary by model. This release adds no third-party production dependency and does not add parallel tree search.
++
++A rational certificate proves existence of a feasible rational point for the supplied binary64 data, with an outward objective endpoint. Its binary64 display approximation is separately checked. This is a primal-witness mechanism; the solver still reports its existing numerical optimality contract. Failed reconstruction does not authorize pruning.
++
++The FJ implementation is a bounded deterministic feasibility-only prototype inspired by the published weighted-violation coordinate-jump method. It uses cached sparse coordinate scores, breakpoint jumps, row-weight increases and deterministic restarts. It does not implement the full published heuristic or objective-weight adaptation.
++
++Directed covers are heuristic proposals from the current root LP, for positive integral binary-knapsack rows with 3..128 stored entries and coefficients/capacity up to the documented 31-bit range. Integer validity is checked before insertion. Sequential lifting and final validation use an exact profit DP capped at 8192 profit states and 2000000 work units per separation call. Up to eight cuts per round and four configured rounds are supported. General MIR/GMI cuts and live-tree insertion remain outside scope.
++
++Mixed propagation recomputes outward-rounded prefix/suffix activities for finite-box rows, derives conservative quotient bounds, rounds integral targets, records local row reasons and restores implications through NodeBox. It alternates at most twice with the existing exact integer propagator. Continuous changes below a relative 1e-12 threshold are ignored, safely retaining wider boxes. No approximate row activity can itself prove infeasibility.
++
++## Certification diagnosis
++
++The independent Python Fraction inspection establishes why flugpl cannot receive an exact certificate for these numerical candidates. Its supplied model fixes x0=60 and requires binary64(0.9)*x0+x1−x3=0 with integer x1 and x3. Exact binary64(0.9)*60 differs from integer 54 by 1.3322676295501878e-15. The equality is incompatible in exact real arithmetic on those data. Numerical tolerance acceptance remains unchanged; the certificate is correctly refused. No coefficients or tolerances were altered.
++
++Egout initially exceeded the first reconstruction cap: its final point has 41 free continuous columns. The accepted cap is 64, with 8192-bit arithmetic, a 250 ms per-attempt guard and the whole-call cancellation/time budget. Python Fraction independently reconstructs and checks its boundary point. All unsupported, oversized, inconsistent or failed reconstructions retain the existing LP-shrinking fallback.
++
++## Public policy observations
++
++Each row below is the final measured solve after one warmup and one earlier measured solve in its own fresh process. Both measured solves are retained in the raw data. Public cases use one numerical thread, decomposition off, 30 seconds, 100000 nodes and 1000000 pivots. This table contains single-process observations, not stable timing estimates. The repeat table below provides the selected timing comparison. References are numerical reference values, not an exact-decimal reformulation.
++
++| Case | Policy | Status | Nodes | Pivots | Objective | Bound | ms |
++| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
++| bell5 | baseline-023 | node_limit | 100,000 | 105,524 | 8,966,406 | 8,963,502 | 3476.450 |
++| bell5 | legacy-policy | node_limit | 100,000 | 105,524 | 8,966,406 | 8,963,502 | 3494.257 |
++| bell5 | certification | node_limit | 100,000 | 105,544 | 8,966,414 | 8,963,032 | 3316.483 |
++| bell5 | reliability | node_limit | 100,000 | 111,223 | 8,966,406 | 8,961,823 | 3343.325 |
++| bell5 | jump | node_limit | 100,000 | 105,544 | 8,966,414 | 8,963,032 | 3321.959 |
++| bell5 | directed-covers | node_limit | 100,000 | 105,612 | 8,966,414 | 8,963,032 | 3257.316 |
++| bell5 | lifted-covers | node_limit | 100,000 | 105,612 | 8,966,414 | 8,963,032 | 3089.697 |
++| bell5 | mixed-propagation | optimal | 43,946 | 54,191 | 8,966,406 | 8,966,406 | 13488.272 |
++| bell5 | combined | optimal | 26,351 | 41,737 | 8,966,406 | 8,966,406 | 8082.310 |
++| egout | baseline-023 | optimal | 66,553 | 55,398 | 568.1007 | 568.1007 | 3018.696 |
++| egout | legacy-policy | optimal | 66,553 | 55,398 | 568.1007 | 568.1007 | 3181.267 |
++| egout | certification | optimal | 12,602 | 14,718 | 568.1007 | 568.1007 | 516.156 |
++| egout | reliability | optimal | 13,353 | 15,658 | 568.1007 | 568.1007 | 461.285 |
++| egout | jump | optimal | 12,602 | 14,718 | 568.1007 | 568.1007 | 572.107 |
++| egout | directed-covers | optimal | 12,603 | 14,760 | 568.1007 | 568.1007 | 576.498 |
++| egout | lifted-covers | optimal | 12,603 | 14,760 | 568.1007 | 568.1007 | 534.820 |
++| egout | mixed-propagation | optimal | 3,094 | 4,949 | 568.1007 | 568.1007 | 903.745 |
++| egout | combined | optimal | 2,980 | 5,349 | 568.1007 | 568.1007 | 883.697 |
++| flugpl | baseline-023 | optimal | 23,947 | 15,622 | 1,201,500 | 1,201,500 | 247.916 |
++| flugpl | legacy-policy | optimal | 23,947 | 15,622 | 1,201,500 | 1,201,500 | 265.453 |
++| flugpl | certification | optimal | 23,947 | 15,622 | 1,201,500 | 1,201,500 | 246.214 |
++| flugpl | reliability | optimal | 25,967 | 16,612 | 1,201,500 | 1,201,500 | 252.092 |
++| flugpl | jump | optimal | 23,947 | 15,622 | 1,201,500 | 1,201,500 | 253.374 |
++| flugpl | directed-covers | optimal | 23,948 | 15,634 | 1,201,500 | 1,201,500 | 233.367 |
++| flugpl | lifted-covers | optimal | 23,948 | 15,634 | 1,201,500 | 1,201,500 | 262.403 |
++| flugpl | mixed-propagation | optimal | 425 | 502 | 1,201,500 | 1,201,500 | 51.150 |
++| flugpl | combined | optimal | 295 | 330 | 1,201,500 | 1,201,500 | 27.899 |
++| gt2 | baseline-023 | optimal | 72,182 | 147,116 | 21,166 | 21,166 | 2809.906 |
++| gt2 | legacy-policy | optimal | 72,182 | 147,116 | 21,166 | 21,166 | 2686.238 |
++| gt2 | certification | optimal | 72,182 | 147,116 | 21,166 | 21,166 | 2652.163 |
++| gt2 | reliability | optimal | 16,056 | 49,131 | 21,166 | 21,166 | 664.085 |
++| gt2 | jump | node_limit | 100,000 | 190,011 | 22,521 | 21,166 | 3910.328 |
++| gt2 | directed-covers | optimal | 72,183 | 147,151 | 21,166 | 21,166 | 2762.166 |
++| gt2 | lifted-covers | optimal | 72,183 | 147,151 | 21,166 | 21,166 | 2857.624 |
++| gt2 | mixed-propagation | node_limit | 100,000 | 176,882 | 22,342 | 21,166 | 5476.861 |
++| gt2 | combined | node_limit | 100,000 | 174,354 | 22,521 | 21,166 | 5245.375 |
++| lseu | baseline-023 | optimal | 19,747 | 47,935 | 1,120 | 1,120 | 538.016 |
++| lseu | legacy-policy | optimal | 19,747 | 47,935 | 1,120 | 1,120 | 528.928 |
++| lseu | certification | optimal | 19,747 | 47,935 | 1,120 | 1,120 | 581.541 |
++| lseu | reliability | optimal | 13,898 | 33,674 | 1,120 | 1,120 | 376.026 |
++| lseu | jump | optimal | 15,277 | 36,364 | 1,120 | 1,120 | 428.399 |
++| lseu | directed-covers | optimal | 21,807 | 51,794 | 1,120 | 1,120 | 649.598 |
++| lseu | lifted-covers | optimal | 17,806 | 43,493 | 1,120 | 1,120 | 496.358 |
++| lseu | mixed-propagation | optimal | 19,747 | 47,935 | 1,120 | 1,120 | 597.943 |
++| lseu | combined | optimal | 14,063 | 36,178 | 1,120 | 1,120 | 422.004 |
++| p0548 | baseline-023 | node_limit | 100,000 | 602,083 | — | 4,033 | 18584.463 |
++| p0548 | legacy-policy | node_limit | 100,000 | 602,083 | — | 4,033 | 18636.758 |
++| p0548 | certification | node_limit | 100,000 | 602,083 | — | 4,033 | 18788.900 |
++| p0548 | reliability | node_limit | 100,000 | 540,211 | — | 4,487 | 16746.173 |
++| p0548 | jump | node_limit | 100,000 | 602,083 | — | 4,033 | 18895.452 |
++| p0548 | directed-covers | node_limit | 100,000 | 621,955 | — | 5,110 | 20421.483 |
++| p0548 | lifted-covers | node_limit | 100,000 | 560,000 | — | 5,785 | 19184.525 |
++| p0548 | mixed-propagation | node_limit | 100,000 | 602,083 | — | 4,033 | 19206.783 |
++| p0548 | combined | node_limit | 100,000 | 515,657 | 20,592 | 6,946 | 18886.192 |
++| rgn | baseline-023 | node_limit | 100,000 | 279,893 | 82.2 | 82.2 | 5107.892 |
++| rgn | legacy-policy | node_limit | 100,000 | 279,893 | 82.2 | 82.2 | 4744.732 |
++| rgn | certification | optimal | 7,249 | 33,502 | 82.2 | 82.2 | 344.372 |
++| rgn | reliability | optimal | 6,503 | 28,031 | 82.2 | 82.2 | 310.594 |
++| rgn | jump | optimal | 7,249 | 33,502 | 82.2 | 82.2 | 348.067 |
++| rgn | directed-covers | optimal | 7,250 | 33,554 | 82.2 | 82.2 | 340.311 |
++| rgn | lifted-covers | optimal | 7,250 | 33,554 | 82.2 | 82.2 | 341.891 |
++| rgn | mixed-propagation | optimal | 7,871 | 38,276 | 82.2 | 82.2 | 1663.654 |
++| rgn | combined | optimal | 6,606 | 28,341 | 82.2 | 82.2 | 1492.539 |
++| p01 | baseline-023 | optimal | 1 | 25 | 263 | 263 | 0.146 |
++| p01 | legacy-policy | optimal | 1 | 25 | 263 | 263 | 0.151 |
++| p01 | certification | optimal | 1 | 25 | 263 | 263 | 0.145 |
++| p01 | reliability | optimal | 1 | 25 | 263 | 263 | 0.143 |
++| p01 | jump | optimal | 1 | 25 | 263 | 263 | 0.165 |
++| p01 | directed-covers | optimal | 2 | 50 | 263 | 263 | 0.254 |
++| p01 | lifted-covers | optimal | 2 | 50 | 263 | 263 | 0.347 |
++| p01 | mixed-propagation | optimal | 1 | 25 | 263 | 263 | 0.151 |
++| p01 | combined | optimal | 2 | 50 | 263 | 263 | 0.367 |
++
++## Selected three-round repeats
++
++Fresh process for each case/policy/round, one warmup and two measured solves (six measured samples across three rounds). Policy order rotates. Reported times are measured-solve medians and ranges; shared-host variability remains. Nodes/pivots include any charged lookahead or root prepasses.
++
++| Case | Policy | Statuses | Median ms | Range ms | Nodes | Pivots |
++| --- | --- | --- | ---: | ---: | ---: | ---: |
++| egout | baseline-023 | optimal | 3022.403 | 2844.168–3060.253 | 66553 | 55398 |
++| egout | certification | optimal | 517.492 | 510.470–554.139 | 12602 | 14718 |
++| egout | reliability | optimal | 489.681 | 474.931–524.343 | 13353 | 15658 |
++| egout | combined | optimal | 926.952 | 882.688–1007.194 | 2980 | 5349 |
++| gt2 | baseline-023 | optimal | 2736.265 | 2631.789–2745.144 | 72182 | 147116 |
++| gt2 | certification | optimal | 2762.806 | 2630.015–2805.384 | 72182 | 147116 |
++| gt2 | reliability | optimal | 668.330 | 629.131–705.347 | 16056 | 49131 |
++| gt2 | combined | node_limit | 5348.332 | 5208.428–5551.303 | 100000 | 174354 |
++| lseu | baseline-023 | optimal | 575.125 | 532.970–603.768 | 19747 | 47935 |
++| lseu | certification | optimal | 562.836 | 529.515–634.736 | 19747 | 47935 |
++| lseu | reliability | optimal | 398.640 | 378.774–502.801 | 13898 | 33674 |
++| lseu | combined | optimal | 438.926 | 430.760–468.173 | 14063 | 36178 |
++| rgn | baseline-023 | node_limit | 4979.608 | 4861.519–5234.087 | 100000 | 279893 |
++| rgn | certification | optimal | 356.234 | 343.508–389.235 | 7249 | 33502 |
++| rgn | reliability | optimal | 338.955 | 306.016–350.270 | 6503 | 28031 |
++| rgn | combined | optimal | 1429.916 | 1398.242–1475.245 | 6606 | 28341 |
++
++## Mechanism observations
++
++| Case | Policy | Rational successes | Probes | FJ proposals | Directed / lifted cuts | Mixed rows / changes | First certified node |
++| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
++| bell5 | certification | 3 | 0 | 0 | 0 / 0 | 0 / 0 | 6 |
++| bell5 | reliability | 5 | 64 | 0 | 0 / 0 | 0 / 0 | 118 |
++| bell5 | jump | 3 | 0 | 0 | 0 / 0 | 0 / 0 | 6 |
++| bell5 | lifted-covers | 3 | 0 | 0 | 0 / 0 | 0 / 0 | 6 |
++| bell5 | mixed-propagation | 8 | 0 | 0 | 0 / 0 | 60 / 4860932 | 6 |
++| bell5 | combined | 8 | 64 | 0 | 0 / 0 | 60 / 2963789 | 54 |
++| egout | certification | 4 | 0 | 0 | 0 / 0 | 0 / 0 | 1 |
++| egout | reliability | 2 | 64 | 0 | 0 / 0 | 0 / 0 | 1 |
++| egout | jump | 4 | 0 | 1 | 0 / 0 | 0 / 0 | 1 |
++| egout | lifted-covers | 4 | 0 | 0 | 0 / 0 | 0 / 0 | 1 |
++| egout | mixed-propagation | 12 | 0 | 0 | 0 / 0 | 98 / 134345 | 1 |
++| egout | combined | 13 | 64 | 1 | 0 / 0 | 98 / 123665 | 1 |
++| flugpl | certification | 0 | 0 | 0 | 0 / 0 | 0 / 0 | — |
++| flugpl | reliability | 0 | 58 | 0 | 0 / 0 | 0 / 0 | — |
++| flugpl | jump | 0 | 0 | 0 | 0 / 0 | 0 / 0 | — |
++| flugpl | lifted-covers | 0 | 0 | 0 | 0 / 0 | 0 / 0 | — |
++| flugpl | mixed-propagation | 0 | 0 | 0 | 0 / 0 | 17 / 21630 | — |
++| flugpl | combined | 0 | 64 | 0 | 0 / 0 | 17 / 12919 | — |
++| gt2 | certification | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 35 |
++| gt2 | reliability | 0 | 64 | 0 | 0 / 0 | 0 / 0 | 80 |
++| gt2 | jump | 0 | 0 | 1 | 0 / 0 | 0 / 0 | 1 |
++| gt2 | lifted-covers | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 35 |
++| gt2 | mixed-propagation | 0 | 0 | 0 | 0 / 0 | 4 / 1477 | 32 |
++| gt2 | combined | 0 | 64 | 1 | 0 / 0 | 4 / 1655 | 1 |
++| lseu | certification | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 122 |
++| lseu | reliability | 0 | 64 | 0 | 0 / 0 | 0 / 0 | 207 |
++| lseu | jump | 0 | 0 | 1 | 0 / 0 | 0 / 0 | 1 |
++| lseu | lifted-covers | 0 | 0 | 0 | 2 / 1 | 0 / 0 | 75 |
++| lseu | mixed-propagation | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 122 |
++| lseu | combined | 0 | 64 | 1 | 2 / 1 | 0 / 0 | 1 |
++| p0548 | certification | 0 | 0 | 0 | 0 / 0 | 0 / 0 | — |
++| p0548 | reliability | 0 | 64 | 0 | 0 / 0 | 0 / 0 | — |
++| p0548 | jump | 0 | 0 | 0 | 0 / 0 | 0 / 0 | — |
++| p0548 | lifted-covers | 0 | 0 | 0 | 2 / 2 | 0 / 0 | — |
++| p0548 | mixed-propagation | 0 | 0 | 0 | 0 / 0 | 0 / 0 | — |
++| p0548 | combined | 0 | 64 | 0 | 2 / 2 | 0 / 0 | 93634 |
++| rgn | certification | 1 | 0 | 0 | 0 / 0 | 0 / 0 | 45 |
++| rgn | reliability | 1 | 64 | 0 | 0 / 0 | 0 / 0 | 91 |
++| rgn | jump | 2 | 0 | 1 | 0 / 0 | 0 / 0 | 1 |
++| rgn | lifted-covers | 1 | 0 | 0 | 0 / 0 | 0 / 0 | 45 |
++| rgn | mixed-propagation | 1 | 0 | 0 | 0 / 0 | 20 / 26456 | 45 |
++| rgn | combined | 2 | 64 | 1 | 0 / 0 | 20 / 23548 | 1 |
++| p01 | certification | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 1 |
++| p01 | reliability | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 1 |
++| p01 | jump | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 1 |
++| p01 | lifted-covers | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 1 |
++| p01 | mixed-propagation | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 1 |
++| p01 | combined | 0 | 0 | 0 | 0 / 0 | 0 / 0 | 1 |
++
++Root separation metadata reports initial LP objectives/bounds, cuts and prepass work. The bounded internal search trace begins after preprocessing; its node/pivot coordinates exclude prepasses. Total SolveResult counts include them. Compare search trace terminal work plus root_separation_nodes/pivots to total result work.
++
++## Correctness evidence
++
++The input and adjudication SHA-256 values remain unchanged. Every full 6330-case policy file retains the same 19 raw disputed-reference flags; those flags are resolved by the existing adjudications. No new adjudication or tolerance change was introduced.
++
++| Policy | Cases | Raw flags | Failures after existing adjudication |
++| --- | ---: | ---: | ---: |
++| default | 6,330 | 19 | 0 |
++| ft | 6,330 | 19 | 0 |
++| no-fix | 6,330 | 19 | 0 |
++| devex | 6,330 | 19 | 0 |
++| root-cuts | 6,330 | 19 | 0 |
++| factor-replay | 6,330 | 19 | 0 |
++| row-pricing | 6,330 | 19 | 0 |
++| reliability | 6,330 | 19 | 0 |
++| jump | 6,330 | 19 | 0 |
++| directed | 6,330 | 19 | 0 |
++| lifted | 6,330 | 19 | 0 |
++| mixed | 6,330 | 19 | 0 |
++| combined | 6,330 | 19 | 0 |
++| refactor1 | 1,200 | 0 | 0 |
++| workers4 | 180 | 0 | 0 |
++
++New targeted checks include exact signed arithmetic and extreme values, independent machine-integer division/product oracles, nonrepresentable rational equalities, incompatible numerical equalities, bounded lookahead/parent restoration, sparse infeasible-seed repair, cut-profit enumeration and full binary cut validity, mixed feasible-grid preservation and sibling restoration, combined-policy small-MIP enumeration, and root-prepass budget accounting.
++
++See PLAN.md for the initial design and execution log, INITIAL-PLAN.md for the original plan, REPRODUCE.md for commands, CHANGESET.patch for review, and data/ for raw observations, hashes and audit outputs.
++
++## Findings and practical limits
++
++Default certification reduces egout from 66553 to 12602 nodes and turns rgn from a 100000-node cap into an optimal numerical solve at 7249 nodes. Reliability branching reduces gt2 to 16056 nodes from 72182. Mixed propagation reduces flugpl to 425 nodes and solves bell5 below its earlier node cap, at substantially higher per-node cost.
++
++On gt2, FJ and mixed propagation can worsen search; the combined policy reaches the node cap. The FJ prototype alone finds no p0548 incumbent under its default work cap. The combined policy does find a feasible p0548 incumbent at objective 20592 through tree search, but remains capped. Optional mechanisms therefore remain independently selectable, rather than being enabled as a universal preset.
++
++## LP performance controls
++
++Five measured fresh processes per binary/case after one discarded round; each process contains one warmup and one measured solve. All LP controls pass. Medians are close, with a retained 159.599 ms native network outlier; no uniform LP speedup is claimed.
++
++| Fixture | Binary | Median ms | Range ms |
++| --- | --- | ---: | ---: |
++| packing 4096 | baseline | 229.485 | 218.114–253.015 |
++| packing 4096 | native | 224.249 | 214.924–235.049 |
++| network 2048 | baseline | 74.237 | 72.176–87.781 |
++| network 2048 | native | 75.167 | 72.962–159.599 |
++| aspect-wide 512 | baseline | 10.214 | 9.738–10.395 |
++| aspect-wide 512 | native | 9.708 | 9.469–11.710 |
+diff --git a/pyproject.toml b/pyproject.toml
+index 20a84a1..b61c52c 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -4,7 +4,7 @@ build-backend = "maturin"
+ 
+ [project]
+ name = "lp-ip-craft"
+-version = "0.23.0"
++version = "0.24.0"
+ description = "LP and mixed-integer LP in Rust with a native Rust solver and Python bindings"
+ readme = "README.md"
+ license = "MIT"
+diff --git a/python/lp_ip_craft/__init__.py b/python/lp_ip_craft/__init__.py
+index d605a3b..2882fb8 100644
+--- a/python/lp_ip_craft/__init__.py
++++ b/python/lp_ip_craft/__init__.py
+@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
+ from ._native import solve_native as _solve_native
+ from ._native import solve_batch_native as _solve_batch_native
+ 
+-__version__ = "0.23.0"
++__version__ = "0.24.0"
+ 
+ __all__ = [
+     "BACKENDS",
+@@ -117,15 +117,25 @@ class NativeOptions:
+     avoid_dominant_components: bool = True
+     singleton_presolve: bool = True
+     root_propagation: bool = True
++    mixed_propagation: bool = False
+     root_cuts: bool = False
++    root_separation: bool = False
++    root_cut_rounds: int = 2
++    cover_lifting: bool = True
+     steepest_edge: bool = True
+     presolve: bool = True
+     redundant_rows: bool = True
+     redundant_row_min_ratio: float = 1.0
+     node_reoptimization: bool = True
+     strong_branching: bool = False
++    reliability_branching: bool = False
++    reliability_threshold: int = 2
++    reliability_max_probes: int = 64
+     reduced_cost_fixing: bool = True
+     incumbent_heuristic: bool = True
++    rational_certification: bool = True
++    feasibility_jump: bool = False
++    feasibility_jump_steps: int = 2000
+     objective_lattice: bool = True
+     decompose: bool = True
+     decomposition_min_variables: int = 32
+diff --git a/tests/test_mip_search_024.py b/tests/test_mip_search_024.py
+new file mode 100644
+index 0000000..6aa3848
+--- /dev/null
++++ b/tests/test_mip_search_024.py
+@@ -0,0 +1,126 @@
++"""Proof, restoration, work-accounting and algorithmic regression checks for 0.24."""
++import itertools
++import json
++import random
++import pytest
++import lp_ip_craft as lp
++
++
++def knapsack(weights=(3., 3., 3., 4.), capacity=5.):
++    n = len(weights)
++    return lp.Model(objective=[1.] * n, lower=[0.] * n, upper=[1.] * n,
++                    kinds=['binary'] * n, sense='maximize', row_lower=[-float('inf')],
++                    row_upper=[capacity], indptr=[0, n], indices=list(range(n)), values=weights)
++
++
++def run(m, **kwargs):
++    settings = dict(decompose=False, mip_diagnostics=True, redundant_rows=False,
++                    singleton_presolve=False, root_propagation=False)
++    settings.update(kwargs)
++    return lp.solve(m, backend='native', backend_options=lp.NativeOptions(**settings))
++
++
++def test_rational_witness_for_nonrepresentable_boundary():
++    m = lp.Model(objective=[0., 1.], objective_offset=2., lower=[0., 0.], upper=[1., 1.],
++                 kinds=['binary', 'continuous'], indptr=[0, 1], indices=[1], values=[3.],
++                 row_lower=[1.], row_upper=[1.])
++    a, b = run(m, rational_certification=False), run(m)
++    assert a.status == b.status == 'optimal'
++    assert b.evaluation.objective == pytest.approx(2. + 1. / 3.)
++    meta = b.backend.effective_options
++    assert int(meta['diagnostics.rational_witness_successes']) > 0
++    assert json.loads(meta['diagnostics.mip_search'])['first_certified_incumbent'] is not None
++    assert json.loads(a.backend.effective_options['diagnostics.mip_search'])['first_certified_incumbent'] is None
++
++
++@pytest.mark.parametrize('cap', [1, 2, 3, 7, 20])
++def test_reliability_probes_share_limits_and_restore_parent(cap):
++    m = knapsack()
++    r = run(m, reliability_branching=True, node_limit=cap, reliability_max_probes=4,
++            incumbent_heuristic=False)
++    assert r.nodes <= cap
++    assert int(r.backend.effective_options['diagnostics.strong_branch_probes']) <= 4
++    if r.candidate is not None:
++        assert lp.evaluate(m, r.candidate).feasible_candidate
++    complete = run(m, reliability_branching=True, node_limit=100, reliability_max_probes=4)
++    assert complete.status == 'optimal' and complete.evaluation.objective == 1.
++
++
++def test_directed_lifting_strengthens_root_and_accounts_for_prepasses():
++    m = knapsack()
++    a, b = run(m), run(m, root_separation=True)
++    assert a.status == b.status == 'optimal'
++    assert b.evaluation.objective == a.evaluation.objective == 1.
++    meta = b.backend.effective_options
++    assert int(meta['directed_root_cuts']) > 0
++    assert int(meta['lifted_root_cuts']) > 0
++    d = json.loads(meta['diagnostics.mip_search'])
++    assert d['root']['conservative_bound'] <= 1. + 1e-10
++    assert b.iterations == d['terminal']['pivots'] + int(meta['root_separation_pivots'])
++    assert b.nodes == d['terminal']['nodes'] + int(meta['root_separation_nodes'])
++
++
++@pytest.mark.parametrize('caps', [dict(node_limit=1), dict(iteration_limit=1),
++                                 dict(node_limit=0), dict(iteration_limit=0),
++                                 dict(time_limit_seconds=0.)])
++def test_root_separation_has_no_hidden_work(caps):
++    r = run(knapsack(), root_separation=True, **caps)
++    if 'node_limit' in caps:
++        assert r.nodes <= caps['node_limit']
++    if 'iteration_limit' in caps:
++        assert r.iterations <= caps['iteration_limit']
++    assert r.status in {'node_limit', 'iteration_limit', 'time_limit', 'optimal'}
++
++
++def test_jump_repairs_an_infeasible_rounded_root_seed():
++    m = knapsack((2., 2., 2.), 3.)
++    r = run(m, feasibility_jump=True, incumbent_heuristic=False)
++    assert r.status == 'optimal' and r.evaluation.objective == 1.
++    meta = r.backend.effective_options
++    assert int(meta['diagnostics.feasibility_jump_candidates']) > 0
++    assert int(meta['diagnostics.feasibility_jump_work']) <= 2000 * 512
++
++
++@pytest.mark.parametrize('bad', [dict(reliability_threshold=0), dict(reliability_threshold=17),
++                                dict(reliability_max_probes=1025), dict(root_cut_rounds=5),
++                                dict(feasibility_jump_steps=100001)])
++def test_new_effort_limits_are_validated(bad):
++    with pytest.raises((ValueError, lp.BackendError)):
++        run(knapsack(), **bad)
++
++
++def test_search_policies_match_small_exact_binary_enumeration():
++    rng = random.Random(24017)
++    for case in range(30):
++        n, rows = 7, 3
++        weights = [[rng.randrange(1, 9) for _ in range(n)] for _ in range(rows)]
++        capacities = [float(sum(w) // 3) for w in weights]
++        objective = [float(rng.randrange(-2, 10)) for _ in range(n)]
++        m = lp.Model(objective=objective, lower=[0.] * n, upper=[1.] * n,
++                     kinds=['binary'] * n, sense='maximize', row_lower=[-float('inf')] * rows,
++                     row_upper=capacities, indptr=[i * n for i in range(rows + 1)],
++                     indices=list(range(n)) * rows, values=sum(weights, []))
++        optimum = max(sum(c * v for c, v in zip(objective, x))
++                      for x in itertools.product([0., 1.], repeat=n)
++                      if all(sum(c * v for c, v in zip(w, x)) <= b
++                             for w, b in zip(weights, capacities)))
++        r = run(m, reliability_branching=True, feasibility_jump=True,
++                root_separation=True, mixed_propagation=True)
++        assert r.status == 'optimal', (case, r)
++        assert r.evaluation.objective == optimum
++        assert r.best_bound >= optimum - 1e-7
++
++
++def test_mixed_node_propagation_proves_tightenings_without_losing_optimum():
++    m = lp.Model(objective=[3., 1., 2.], lower=[0., 0., 0.], upper=[4., 4., 4.],
++                 kinds=['integer', 'integer', 'continuous'], sense='maximize',
++                 row_lower=[-float('inf'), -float('inf')], row_upper=[2.5, 3.5],
++                 indptr=[0, 3, 6], indices=[0, 1, 2, 0, 1, 2],
++                 values=[1., 0.5, 0.75, 0.5, 1., -0.25])
++    a, b = run(m), run(m, mixed_propagation=True)
++    assert a.status == b.status == 'optimal'
++    assert b.evaluation.objective == pytest.approx(a.evaluation.objective)
++    assert lp.evaluate(m, b.candidate).feasible_candidate
++    meta = b.backend.effective_options
++    assert int(meta['diagnostics.mixed_propagation_rows']) == 2
++    assert int(meta['diagnostics.mixed_propagation_changes']) > 0

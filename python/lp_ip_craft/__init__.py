@@ -28,11 +28,13 @@ from ._native import evaluate as _evaluate
 from ._native import lp_residuals as _lp_residuals
 from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
+from ._native import solve_batch_native as _solve_batch_native
 
-__version__ = "0.20.0"
+__version__ = "0.24.0"
 
 __all__ = [
     "BACKENDS",
+    "solve_batch",
     "BackendError",
     "BackendReport",
     "Cancellation",
@@ -107,14 +109,33 @@ class NativeOptions:
     basis_update: Literal["auto", "eta", "forrest_tomlin"] = "auto"
     factor_pivot_search: int = 4
     factor_ordering: Literal["auto", "natural", "min_degree"] = "auto"
+    factor_replay: bool = False
+    mip_diagnostics: bool = False
+    mip_trace_limit: int = 256
+    adaptive_pricing: bool = True
+    devex: bool = False
+    avoid_dominant_components: bool = True
+    singleton_presolve: bool = True
+    root_propagation: bool = True
+    mixed_propagation: bool = False
+    root_cuts: bool = False
+    root_separation: bool = False
+    root_cut_rounds: int = 2
+    cover_lifting: bool = True
     steepest_edge: bool = True
     presolve: bool = True
     redundant_rows: bool = True
     redundant_row_min_ratio: float = 1.0
     node_reoptimization: bool = True
     strong_branching: bool = False
+    reliability_branching: bool = False
+    reliability_threshold: int = 2
+    reliability_max_probes: int = 64
     reduced_cost_fixing: bool = True
     incumbent_heuristic: bool = True
+    rational_certification: bool = True
+    feasibility_jump: bool = False
+    feasibility_jump_steps: int = 2000
     objective_lattice: bool = True
     decompose: bool = True
     decomposition_min_variables: int = 32
@@ -262,6 +283,10 @@ def solve(
         backend,
         None if backend_options is None else asdict(backend_options),
     )
+    return _result_from_raw(raw)
+
+
+def _result_from_raw(raw: dict) -> SolveResult:
     evaluation, duals, gap = raw["evaluation"], raw["duals"], raw["gap"]
     return SolveResult(
         status=raw["status"],
@@ -275,6 +300,29 @@ def solve(
         iterations=raw["iterations"],
         backend=BackendReport(**raw["backend"]),
     )
+
+
+def solve_batch(models: Iterable[Model], *, workers: int = 1, options: Optional[Options] = None,
+                backend_options: Optional[NativeOptions] = None,
+                cancellation: Optional[Cancellation] = None) -> list[SolveResult | Exception]:
+    """Solve independent native jobs in order with 1..16 Rust workers.
+
+    Budgets apply per job. Component threading is disabled inside the pool.
+    Returns an exception value for a failed job; batch argument errors raise.
+    Cancellation is shared, and queued jobs report cancellation too.
+    """
+    options = options or Options()
+    if options.threads != 1:
+        raise NotImplementedError("batch numerical kernels require options.threads = 1")
+    if isinstance(workers, bool) or not isinstance(workers, int):
+        raise TypeError("workers must be an integer")
+    if not 1 <= workers <= 16:
+        raise ValueError("workers must be in 1..16")
+    raw = _solve_batch_native(list(models), workers, options.feasibility_tolerance,
+                             options.integrality_tolerance,
+                             cancellation if cancellation is not None else Cancellation(),
+                             None if backend_options is None else asdict(backend_options))
+    return [r if isinstance(r, Exception) else _result_from_raw(r) for r in raw]
 
 
 def evaluate(

@@ -171,7 +171,11 @@ pub fn run_with_options(
         |p, out| out.extend_from_slice(&case.columns[p]),
         cap,
         &mut workspace,
-        crate::lu::FactorOptions { search, ordered },
+        crate::lu::FactorOptions {
+            search,
+            ordered,
+            ..Default::default()
+        },
     )
     .map_err(|e| format!("{e:?}"))?;
     let factor_seconds = start.elapsed().as_secs_f64();

@@ -1,5 +1,30 @@
 # Reproduce the performance checks
 
+The 0.23 packing/FTRAN and MIP diagnosis plan is in
+`docs/packing-ftran-mip-diagnostics/PLAN.md`. The new optional search payload
+is documented in `DIAGNOSTICS.md` beside it. `LPIP_MIP_DIAGNOSTICS=1` enables
+it in the current native harness; `LPIP_MIP_TRACE_LIMIT` sets its event cap.
+`LPIP_TIME_LIMIT`, `LPIP_NODE_LIMIT` and `LPIP_ITERATION_LIMIT` override harness
+budgets explicitly. Defaults remain 30 seconds, 100000 nodes and 1000000 pivots.
+`LPIP_HEURISTIC=off`, `LPIP_STRONG_BRANCHING=on` and `LPIP_ROOT_CUTS=1` select
+existing policies. `LPIP_PRESOLVE=off` disables several reductions and must not
+be described as an isolated propagation ablation.
+
+`prepare_diagnostic_corpus.py` retains six additional original MPS models from
+the pinned reference source and constructs fresh planted packing holdouts.
+`diagnose_mip.py --binary PATH --corpus docs/packing-mip/corpus --corpus
+docs/packing-ftran-mip-diagnostics/corpus/public --output observations.json
+--rounds 3 --ablations` runs paired tracing off/on comparisons and labelled
+single-process policy probes. Run the 0.23 frozen numerical gates with
+`run_packing_diagnostics_gates.py`, then audit retained evidence using
+`audit_packing_diagnostics.py`. Historical 0.22 evidence is not overwritten.
+
+Profile triples whose names start with `calls.` or `entries.` are untimed work
+counters: the count field is the amount, and nanoseconds are zero. New timers
+separate support handoff/export, workspace clearing, symbolic reach and output
+copy/scatter. Compare exclusive categories under the same instrumentation;
+the old `ftran_triangular` parent is no longer directly comparable by itself.
+
 The production workspace (root Cargo.toml) has no HiGHS dependency. This separate benchmark workspace adds only serde_json. An optional isolated reference workspace can reconstruct the old HiGHS adapter; it is never built by the production workspace.
 
 From the project root:

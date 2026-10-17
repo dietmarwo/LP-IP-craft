@@ -1,4 +1,4 @@
-# Native API, version 0.16.0
+# Native API
 
 ## Model and facade
 
@@ -23,12 +23,14 @@ call Python during optimization.
 | pivot_tolerance | 1e-9 | Smallest pivot-row entry accepted by the scaled dual ratio test |
 | dual_tolerance | 1e-7 | Independent LP dual acceptance threshold |
 | max_factor_entries | 4000000 | Stored LU plus eta entries of one basis factorization; a fresh factorization above it is `Unsupported` |
-| refactor_interval | 64 | Basis updates (eta columns) before the LU is rebuilt |
+| refactor_interval | 256 | Maximum updates before rebuilding; work/fill policies can rebuild sooner |
 | steepest_edge | true | Dual steepest-edge pricing; false prices by largest infeasibility |
 | presolve | true | Substitute root-fixed columns; drop free rows and feasible empty rows |
 | redundant_rows | true | Also drop rows conservatively implied by the root variable box |
 | redundant_row_min_ratio | 1.0 | Scan redundancy only if m/n >= this ratio; zero forces scanning |
 | node_reoptimization | true | Start children from the parent basis; false starts every node from the slack basis |
+| mip_diagnostics | false | Bounded observational MIP search trace in existing backend metadata; see [diagnostic contract](packing-ftran-mip-diagnostics/DIAGNOSTICS.md) |
+| mip_trace_limit | 256 | Retained trace events, 0..4096; summaries remain available at zero |
 | incumbent_heuristic | true | Root/uncertified-incumbent rounding and at most 64 unit moves per candidate |
 | objective_lattice | true | Integral-objective tightening when sufficient conditions hold |
 | decompose | true | Discover independent restricted-row components |
@@ -209,3 +211,40 @@ hypersparse solves), and product-form updates store dense eta columns when
 is an engineering guard, not a whole-process memory cap: matrix copies, work
 vectors, the open-node queue and basis snapshots need additional memory. No
 application-performance claim until the target card is supplied.
+
+## Reusable conservative bounds (Rust, 0.21)
+
+`PreparedDualBound::new(&model, &bounds, &row_duals)` prepares an owned cache.
+`set_bound(j, lower, upper)` validates and replaces one variable interval;
+`bound()` returns `SafeDualBound`. New matrix/objective/row data or multipliers
+require a new cache. Preparation is O(nnz+n+m), mutation O(log n), reading O(1),
+with O(n) storage. Its balanced outward sum can differ in last bits and failure
+precedence from the fresh API. Keep the IEEE arithmetic environment unchanged
+throughout its lifetime. See [the proof and restrictions](safe-dual-bounds.md#prepared-bounds-rust-021).
+The Python bound API is unchanged.
+
+
+## MIP search additions in 0.24
+
+All flags exist in Rust `NativeOptions` and Python `NativeOptions`. Search remains serial inside each independent component.
+
+| Setting | Default | Contract |
+| --- | --- | --- |
+| rational_certification | true | Exact binary64-data rational witness reconstruction, up to 64 free continuous columns, 1024 rows, 20000 nonzeros, 8192-bit arithmetic and 64 attempts. A 250 ms per-attempt guard is polled between bounded arithmetic operations. A certificate proves existence of a rational feasible point; the returned numerical display point remains tolerance checked. |
+| reliability_branching | false | Probe unreliable directional pseudocosts at depth at most 8 on models with at most 1024 columns/rows and 20000 nonzeros. At most two candidates per call, 32 pivots per direction. Probe outcomes never prune. |
+| reliability_threshold | 2 | Required optimal observations in each direction; valid 1..16. |
+| reliability_max_probes | 64 | Whole-search probe cap, 0..1024. Probes consume reported node/pivot/time budgets. |
+| feasibility_jump | false | One deterministic serial coordinate-jump feasibility-repair call at the root. Proposals use the existing acceptance and certification checks. |
+| feasibility_jump_steps | 2000 | Iteration cap, 0..100000; term evaluations capped at min(512*steps, 10000000). No LP solve is hidden in the heuristic. |
+| root_separation | false | Initial root LP and at most eight violated covers per round. Rebuild all caches before search. Skipped when a user warm start is supplied. |
+| root_cut_rounds | 2 | Initial LP/separation rounds, 0..4. Root LPs consume whole-call nodes/pivots/time; their work is reported separately from the internal search trace. |
+| cover_lifting | true | Sequential exact lifting of directed covers using bounded profit dynamic programming. Only applies with root_separation. Static root_cuts remains a separate legacy control. |
+| mixed_propagation | false | Outward prefix/suffix activities for finite-box rows outside the exact integer-row propagator; up to two mixed/exact passes per node. Row queue work is capped; partial deductions remain sound. |
+
+New metadata includes `diagnostics.rational_witness_attempts/successes`, `diagnostics.feasibility_jump_steps/work/candidates/weight_bumps`, and `diagnostics.mixed_propagation_rows/visits/terms/changes/infeasibilities/work_limits`. Existing `diagnostics.strong_branch_probes/pivots` counts both root strong branching and reliability lookahead. `diagnostics.certification_solves` now counts actual LP repair calls, with rational attempts reported separately.
+
+Directed root separation reports `directed_root_cuts`, `lifted_root_cuts`, `root_cut_work`, `root_separation_nodes/pivots`, and the initial relaxation objective/bound. The internal `diagnostics.mip_search` trace begins after these root prepasses. Its node/pivot coordinates exclude the separately reported prepasses; total `SolveResult.nodes/iterations` include them. Time spent on prepasses is included in preprocessing time.
+
+Mixed deductions record a bounded node-local reason trail (source row, column, old and new endpoints). All changed columns, including continuous implications, are restored through NodeBox before a sibling is entered. Reasons do not drive conflict learning.
+
+All new optional policies are opt-in because effects vary by model. Exact rational certification is enabled by default, and can be disabled for matched ablations. Failure to reconstruct a witness never weakens acceptance, pruning or stopping thresholds. Decimal-looking data are interpreted as their exact supplied binary64 values; tolerance-feasible equality points may have no exact witness.

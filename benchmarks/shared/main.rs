@@ -114,9 +114,16 @@ fn main() {
             | "multi-knapsack"
             | "graph-mip"
             | "mixed-overload"
+            | "aspect-wide"
+            | "aspect-tall"
+            | "singleton-lp"
+            | "inferred-mip"
     );
     let began = Instant::now();
     let (model, expected) = match name {
+        "singleton-lp" => {let(m,e)=extended::singleton_lp(size);(m,Some(e))},
+        "inferred-mip" => {let(m,e)=extended::inferred_mip(size);(m,Some(e))},
+        "aspect-wide" | "aspect-tall" => {let (m,e)=extended::aspect(size,name=="aspect-wide");(m,Some(e))},
         "mixed-overload" => {
             let (m, e) = extended::mixed(size);
             (m, Some(e))
@@ -172,9 +179,12 @@ fn main() {
     for run in 0..=repeats {
         #[cfg(feature = "backend_native")]
         let mut solver = lp_ip_craft_native::NativeSolver::new(lp_ip_craft_native::NativeOptions {
-            time_limit_seconds: Some(30.),
+            time_limit_seconds: Some(std::env::var("LPIP_TIME_LIMIT").map_or(30., |v| v.parse().unwrap())),
+            node_limit: Some(std::env::var("LPIP_NODE_LIMIT").map_or(100_000, |v| v.parse().unwrap())),
+            iteration_limit: Some(std::env::var("LPIP_ITERATION_LIMIT").map_or(1_000_000, |v| v.parse().unwrap())),
             component_threads: workers,
-            decompose: !is_family,
+            decompose: !is_family && std::env::var_os("LPIP_BENCH_NO_DECOMPOSE").is_none(),
+            presolve: std::env::var("LPIP_PRESOLVE").map_or(true,|v|v!="off"),
             node_reoptimization: warm,
             reduced_cost_fixing: args.get(12).is_none_or(|s| s != "no_fix"),
             strong_branching: args.get(11).is_some_and(|s| s == "strong"),
@@ -195,11 +205,35 @@ fn main() {
             },
             ..Default::default()
         });
+        #[cfg(all(feature="backend_native",feature="evolved"))]
+        {
+            solver.settings.incumbent_heuristic = std::env::var("LPIP_HEURISTIC").map_or(true, |v| v != "off");
+            solver.settings.strong_branching |= std::env::var("LPIP_STRONG_BRANCHING").is_ok_and(|v| v == "on");
+            solver.settings.singleton_presolve = std::env::var("LPIP_SINGLETON").map_or(true, |v| v != "off");
+            solver.settings.root_propagation = std::env::var("LPIP_ROOT_PROPAGATION").map_or(true, |v| v != "off");
+            solver.settings.root_cuts = std::env::var_os("LPIP_ROOT_CUTS").is_some();
+            solver.settings.factor_replay = std::env::var_os("LPIP_FACTOR_REPLAY").is_some();
+            solver.settings.adaptive_pricing = std::env::var("LPIP_PRICING").map_or(true, |v| v != "row");
+            solver.settings.devex = std::env::var_os("LPIP_DEVEX").is_some();
+            solver.settings.avoid_dominant_components = std::env::var("LPIP_COMPONENT_SPLIT").map_or(true, |v| v != "force");
+        }
+        #[cfg(all(feature="backend_native",feature="search-diagnostics"))]
+        {
+            solver.settings.rational_certification = std::env::var("LPIP_RATIONAL_CERTIFICATION").map_or(true, |v| v != "off");
+            solver.settings.reliability_branching = std::env::var_os("LPIP_RELIABILITY").is_some();
+            solver.settings.feasibility_jump = std::env::var_os("LPIP_FEASIBILITY_JUMP").is_some();
+            solver.settings.feasibility_jump_steps = std::env::var("LPIP_JUMP_STEPS").map_or(2000, |v| v.parse().unwrap());
+            solver.settings.root_separation = std::env::var_os("LPIP_ROOT_SEPARATION").is_some();
+            solver.settings.cover_lifting = std::env::var("LPIP_COVER_LIFTING").map_or(true, |v| v != "off");
+            solver.settings.mixed_propagation = std::env::var_os("LPIP_MIXED_PROPAGATION").is_some();
+            solver.settings.mip_diagnostics = std::env::var_os("LPIP_MIP_DIAGNOSTICS").is_some();
+            solver.settings.mip_trace_limit = std::env::var("LPIP_MIP_TRACE_LIMIT").map_or(256, |v| v.parse().unwrap());
+        }
         #[cfg(feature = "backend_highs")]
         let mut solver = lp_ip_craft_highs::HighsSolver::new(lp_ip_craft_highs::HighsOptions {
-            time_limit_seconds: Some(30.),
-            node_limit: mip.then_some(100_000),
-            iteration_limit: (!mip).then_some(1_000_000),
+            time_limit_seconds: Some(std::env::var("LPIP_TIME_LIMIT").map_or(30., |v| v.parse().unwrap())),
+            node_limit: mip.then(|| std::env::var("LPIP_NODE_LIMIT").map_or(100_000, |v| v.parse().unwrap())),
+            iteration_limit: (!mip).then(|| std::env::var("LPIP_ITERATION_LIMIT").map_or(1_000_000, |v| v.parse().unwrap())),
             ..Default::default()
         });
         #[cfg(feature = "kernel-profile")]

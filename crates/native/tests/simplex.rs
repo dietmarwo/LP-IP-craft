@@ -173,3 +173,33 @@ fn original_unit_checks_with_scaled_rows() {
     assert_eq!(r.status, Status::Optimal, "{r:?}");
     assert!((r.evaluation.unwrap().objective - expected).abs() < 1e-7);
 }
+
+#[test]
+fn devex_enabled_matches_planted_certificates() {
+    for size in [17, 64, 128] {
+        for fixture in [fixtures::packing, fixtures::network, fixtures::irregular] {
+            let (m, expected) = fixture(size);
+            let r = NativeSolver::new(NativeOptions {
+                devex: true,
+                decompose: false,
+                ..Default::default()
+            })
+            .solve(&m, &Options::default(), None, &CancellationToken::default())
+            .unwrap();
+            assert_eq!(r.status, Status::Optimal, "{r:?}");
+            assert!((r.evaluation.as_ref().unwrap().objective - expected).abs() < 1e-6);
+            assert!(
+                check::lp_residuals(&m, r.candidate.as_ref().unwrap(), r.duals.as_ref().unwrap())
+                    .unwrap()
+                    .max()
+                    < 1e-6
+            );
+            assert!(
+                r.backend
+                    .effective_options
+                    .iter()
+                    .any(|(k, v)| k == "devex" && v == "true")
+            );
+        }
+    }
+}

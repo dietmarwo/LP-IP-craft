@@ -4,19 +4,27 @@
 //! checked results.
 #![forbid(unsafe_code)]
 mod active;
+mod batch;
 mod boxed;
 mod components;
+mod cuts;
 mod dense;
+mod diagnostics;
 mod ft;
 mod incumbent;
+mod jump;
 mod lp;
 mod lu;
+mod mixed;
 mod ordering;
 mod presolve;
 pub mod profile;
 mod propagate;
+mod rational;
 #[cfg(feature = "basis-replay")]
 pub mod replay;
+mod root;
+mod witness;
 
 use lp::{Basis, Lp};
 use lp_ip_craft::{
@@ -101,10 +109,19 @@ pub struct NativeOptions {
     pub node_reoptimization: bool,
     /// Bounded root lookahead on eligible multi-constraint MIPs.
     pub strong_branching: bool,
+    /// Bounded early-node probes until directional pseudocosts are reliable.
+    pub reliability_branching: bool,
+    pub reliability_threshold: u32,
+    pub reliability_max_probes: u64,
     /// Fix integer bound values using conservative opposite-domain dual bounds.
     pub reduced_cost_fixing: bool,
     /// Independently checked rounding and bounded unit-move incumbents.
     pub incumbent_heuristic: bool,
+    /// Exact rational fixed-integer boundary witnesses, bounded by dimension/bit caps.
+    pub rational_certification: bool,
+    /// Bounded serial root Feasibility Jump prototype.
+    pub feasibility_jump: bool,
+    pub feasibility_jump_steps: u64,
     /// Tighten conservative bounds to a verified integral objective lattice.
     pub objective_lattice: bool,
     /// Split independent restricted-row components before solving.
@@ -116,6 +133,30 @@ pub struct NativeOptions {
     /// Solve components serially unless their average size (nonzeros plus
     /// rows plus columns) reaches this value; zero forces workers.
     pub component_parallel_min_entries: usize,
+    /// Add bounded exact binary cover cuts before building LP caches.
+    pub root_cuts: bool,
+    /// LP-directed root cover separation, rebuilding caches before search.
+    pub root_separation: bool,
+    pub root_cut_rounds: usize,
+    pub cover_lifting: bool,
+    /// Infer sound mixed MIP root bounds before finite-domain admission.
+    pub root_propagation: bool,
+    /// Conservative node propagation for finite mixed/nonintegral rows.
+    pub mixed_propagation: bool,
+    /// Remove exactly reversible singleton rows before factorization.
+    pub singleton_presolve: bool,
+    /// Keep large near-monolithic models in a single numerical solve.
+    pub avoid_dominant_components: bool,
+    /// Use bounded Devex-style approximate weights instead of exact DSE maintenance.
+    pub devex: bool,
+    /// Choose column pricing for dense BTRAN support when estimated work is lower.
+    pub adaptive_pricing: bool,
+    /// Replay validated numerical pivots for identical basis signatures.
+    pub factor_replay: bool,
+    /// Collect bounded observational MIP search diagnostics in backend metadata.
+    pub mip_diagnostics: bool,
+    /// Maximum retained search events (0 means summaries only, at most 4096).
+    pub mip_trace_limit: usize,
 }
 impl Default for NativeOptions {
     fn default() -> Self {
@@ -137,19 +178,58 @@ impl Default for NativeOptions {
             redundant_row_min_ratio: 1.0,
             node_reoptimization: true,
             strong_branching: false,
+            reliability_branching: false,
+            reliability_threshold: 2,
+            reliability_max_probes: 64,
             reduced_cost_fixing: true,
             incumbent_heuristic: true,
+            rational_certification: true,
+            feasibility_jump: false,
+            feasibility_jump_steps: 2000,
             objective_lattice: true,
             decompose: true,
             decomposition_min_variables: 32,
             component_threads: 16,
             component_parallel_min_entries: 2048,
+            root_cuts: false,
+            root_separation: false,
+            root_cut_rounds: 2,
+            cover_lifting: true,
+            root_propagation: true,
+            mixed_propagation: false,
+            singleton_presolve: true,
+            avoid_dominant_components: true,
+            devex: false,
+            adaptive_pricing: true,
+            factor_replay: false,
+            mip_diagnostics: false,
+            mip_trace_limit: 256,
         }
     }
 }
 impl NativeOptions {
     /// Validate settings before cancellation or numerical work.
     pub fn validate(&self) -> Result<()> {
+        if !(1..=16).contains(&self.reliability_threshold) || self.reliability_max_probes > 1024 {
+            return Err(Error::InvalidInput(
+                "reliability threshold must be 1..=16 and max probes at most 1024".into(),
+            ));
+        }
+        if self.feasibility_jump_steps > 100_000 {
+            return Err(Error::InvalidInput(
+                "feasibility_jump_steps must be at most 100000".into(),
+            ));
+        }
+        if self.root_cut_rounds > 4 {
+            return Err(Error::InvalidInput(
+                "root_cut_rounds must be at most 4".into(),
+            ));
+        }
+        if self.mip_trace_limit > 4096 {
+            return Err(Error::InvalidInput(
+                "mip_trace_limit must be at most 4096".into(),
+            ));
+        }
         if self
             .time_limit_seconds
             .is_some_and(|v| !v.is_finite() || v < 0.0)
@@ -272,26 +352,50 @@ fn accepted(
         && r.duality_gap <= settings.dual_tolerance
 }
 
-struct Incumbents {
+struct Incumbents<'a> {
     best: f64,
     upper: f64,
     certified: Option<(Vec<f64>, lp_ip_craft::Evaluation)>,
+    trace: Option<diagnostics::SearchDiagnostics>,
+    original_model: &'a Model,
+    pivots: u64,
 }
 fn consider(
     model: &Model,
     x: Vec<f64>,
     options: &Options,
     result: &mut SolveResult,
-    pool: &mut Incumbents,
+    pool: &mut Incumbents<'_>,
+    source: &'static str,
 ) -> Result<bool> {
     let e = check::evaluate(model, &x, &options.tolerances)?;
     if !e.feasible_candidate {
         return Ok(false);
     }
+    let previous_upper = pool.upper;
     if let Some(upper) = incumbent::upper(model, &x) {
         if upper < pool.upper {
             pool.upper = upper;
             pool.certified = Some((x.clone(), e.clone()));
+        }
+    }
+    if let Some(trace) = &mut pool.trace {
+        // Root reductions do not change columns. Check the user's model too;
+        // a diagnostic must not confuse reduced-model and original acceptance.
+        if let Ok(original) = check::evaluate(pool.original_model, &x, &options.tolerances) {
+            if original.feasible_candidate {
+                trace.candidate(
+                    original.objective,
+                    (pool.upper < previous_upper).then(|| oriented(model, pool.upper)),
+                    source,
+                    result.nodes,
+                    pool.pivots,
+                );
+            } else {
+                trace.original_check_rejections += 1;
+            }
+        } else {
+            trace.original_check_rejections += 1;
         }
     }
     let obj = oriented(model, e.objective);
@@ -312,6 +416,9 @@ struct Certifier {
     attempts: u64,
     certified: u64,
     last: Option<Vec<f64>>,
+    lp_attempts: u64,
+    witness_attempts: u64,
+    witness_successes: u64,
 }
 const MAX_CERTIFICATIONS: u64 = 64;
 
@@ -322,7 +429,7 @@ fn certify(
     settings: &NativeOptions,
     keep: &[bool],
     certifier: &mut Certifier,
-    pool: &mut Incumbents,
+    pool: &mut Incumbents<'_>,
     result: &mut SolveResult,
     budget: &mut Budget<'_>,
 ) -> Result<()> {
@@ -338,12 +445,47 @@ fn certify(
     }
     certifier.last = Some(x.clone());
     certifier.attempts += 1;
+    certifier.witness_attempts += u64::from(settings.rational_certification);
+    if let Some(witness) = settings
+        .rational_certification
+        .then(|| witness::upper(pool.original_model, x, budget))
+        .flatten()
+    {
+        let point = witness.point;
+        let upper = witness.upper;
+        let evaluation = check::evaluate(model, &point, &options.tolerances)?;
+        if upper < pool.upper
+            && evaluation.feasible_candidate
+            && check::evaluate(pool.original_model, &point, &options.tolerances)?.feasible_candidate
+        {
+            pool.upper = upper;
+            pool.certified = Some((point.clone(), evaluation.clone()));
+            let objective = oriented(model, evaluation.objective);
+            if objective < pool.best {
+                pool.best = objective;
+                result.candidate = Some(point);
+                result.evaluation = Some(evaluation);
+            }
+            certifier.witness_successes += 1;
+            if let Some(trace) = &mut pool.trace {
+                trace.candidate(
+                    oriented(model, objective),
+                    Some(oriented(model, upper)),
+                    "rational_witness",
+                    result.nodes,
+                    budget.pivots,
+                );
+            }
+            return Ok(());
+        }
+    }
     let integral: Vec<bool> = model.kinds().iter().map(|k| k.is_integral()).collect();
     let rounded: Vec<f64> = x
         .iter()
         .zip(&integral)
         .map(|(&v, &i)| if i { v.round() } else { v })
         .collect();
+    certifier.lp_attempts += 1;
     let lp = match &mut certifier.lp {
         Some(lp) => lp,
         none => {
@@ -362,7 +504,8 @@ fn certify(
         point[j] = rounded[j];
     }
     let before = pool.upper;
-    consider(model, point, options, result, pool)?;
+    pool.pivots = budget.pivots;
+    consider(model, point, options, result, pool, "certification")?;
     if pool.upper < before {
         certifier.certified += 1;
     }
@@ -375,10 +518,13 @@ fn heuristic(
     x: &[f64],
     options: &Options,
     result: &mut SolveResult,
-    pool: &mut Incumbents,
+    pool: &mut Incumbents<'_>,
     budget: &Budget<'_>,
 ) -> Result<u64> {
     let mut found = 0;
+    if let Some(trace) = &mut pool.trace {
+        trace.heuristic_calls += 1;
+    }
     let mut order: Vec<_> = (0..model.n())
         .filter(|&j| model.kinds()[j].is_integral())
         .collect();
@@ -393,6 +539,9 @@ fn heuristic(
             break;
         }
         let mut point = x.to_vec();
+        if let Some(trace) = &mut pool.trace {
+            trace.rounding_attempts += 1;
+        }
         for &j in &order {
             point[j] = match mode {
                 0 => point[j].round(),
@@ -403,7 +552,7 @@ fn heuristic(
                 .max(node_bounds.lower[j].ceil())
                 .min(node_bounds.upper[j].floor());
         }
-        if !consider(model, point.clone(), options, result, pool)? {
+        if !consider(model, point.clone(), options, result, pool, "rounding")? {
             continue;
         }
         found += 1;
@@ -419,7 +568,7 @@ fn heuristic(
             point[j] += if c < 0.0 { 1.0 } else { -1.0 };
             if point[j] < node_bounds.lower[j]
                 || point[j] > node_bounds.upper[j]
-                || !consider(model, point.clone(), options, result, pool)?
+                || !consider(model, point.clone(), options, result, pool, "unit_move")?
             {
                 point[j] = old;
             } else {
@@ -509,6 +658,27 @@ struct Open {
     serial: u64,
     node: Node,
 }
+
+/// Observational lower bound in internally minimized objective units. The
+/// heap puts every missing bound first; no scan or estimate is needed.
+fn diagnostic_frontier_bound(
+    closed: f64,
+    all_closed_known: bool,
+    open: &std::collections::BinaryHeap<Open>,
+    current: Option<Option<f64>>,
+) -> Option<f64> {
+    if !all_closed_known {
+        return None;
+    }
+    let mut bound = closed;
+    if let Some(node) = open.peek() {
+        bound = bound.min(node.node.bound?);
+    }
+    if let Some(node_bound) = current {
+        bound = bound.min(node_bound?);
+    }
+    bound.is_finite().then_some(bound)
+}
 impl PartialEq for Open {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other).is_eq()
@@ -581,13 +751,14 @@ struct Counters {
     reduced_cost_fixings: u64,
 }
 
-impl LpIpSolver for NativeSolver {
-    fn solve(
+impl NativeSolver {
+    fn solve_internal(
         &mut self,
         model: &Model,
         options: &Options,
         start: Option<&WarmStart>,
         cancel: &CancellationToken,
+        diagnostic_original: &Model,
     ) -> Result<SolveResult> {
         options.validate()?;
         self.settings.validate()?;
@@ -678,9 +849,15 @@ impl LpIpSolver for NativeSolver {
             best: f64::INFINITY,
             upper: f64::INFINITY,
             certified: None,
+            trace: (settings.mip_diagnostics && model.is_mip()).then(|| {
+                diagnostics::SearchDiagnostics::new(model, call_started, settings.mip_trace_limit)
+            }),
+            original_model: diagnostic_original,
+            pivots: 0,
         };
         let lattice = settings.objective_lattice && incumbent::integer_lattice(model);
         let mut counters = Counters::default();
+        let mut jump_stats = jump::Stats::default();
         if model.is_mip() {
             if let Some(s) = start {
                 consider(
@@ -689,10 +866,15 @@ impl LpIpSolver for NativeSolver {
                     options,
                     &mut result,
                     &mut pool,
+                    "start",
                 )?;
             }
         }
         let mut domain = propagate::Domain::new(model, settings.presolve);
+        let mut mixed = mixed::Domain::new(model, settings.presolve && settings.mixed_propagation);
+        if pool.trace.is_some() && settings.presolve {
+            domain.enable_statistics();
+        }
         let root = model.variables();
         let mut node_box = NodeBox {
             bounds: root.clone(),
@@ -714,6 +896,9 @@ impl LpIpSolver for NativeSolver {
             attempts: 0,
             certified: 0,
             last: None,
+            lp_attempts: 0,
+            witness_attempts: 0,
+            witness_successes: 0,
         };
         let keep = presolve::kept_rows(model, root, settings);
         let mut closed_bound = f64::INFINITY;
@@ -722,6 +907,20 @@ impl LpIpSolver for NativeSolver {
         let mut lp: Option<Lp> = None;
         let (mut removed_rows, mut removed_columns) = (0usize, 0usize);
         loop {
+            if let Some(trace) = &mut pool.trace {
+                trace.checkpoint(
+                    result.nodes,
+                    budget.pivots,
+                    diagnostic_frontier_bound(
+                        closed_bound,
+                        all_bounds,
+                        &open,
+                        dive.as_ref().map(|n| n.bound),
+                    )
+                    .map(|b| oriented(model, b)),
+                    open.len() + usize::from(dive.is_some()),
+                );
+            }
             let node = match dive.take() {
                 Some(node) => node,
                 None => match open.pop() {
@@ -749,9 +948,16 @@ impl LpIpSolver for NativeSolver {
                 break;
             }
             if node.bound.is_some_and(|b| b >= pool.upper) {
+                if let Some(trace) = &mut pool.trace {
+                    trace.enter_node(node.depth, open.len() + 1);
+                    trace.inherited_prunes += 1;
+                }
                 closed_bound = closed_bound.min(node.bound.unwrap());
                 counters.pruned_nodes += 1;
                 continue;
+            }
+            if let Some(trace) = &mut pool.trace {
+                trace.enter_node(node.depth, open.len() + 1);
             }
             let conversion = Instant::now();
             let fresh = lp.is_none();
@@ -772,7 +978,19 @@ impl LpIpSolver for NativeSolver {
             };
             node_box.enter(root, &node.branch, lp)?;
             let before = node_box.changed.len();
-            if !domain.apply(&mut node_box.bounds, &mut node_box.changed, &budget) {
+            let mut feasible = domain.apply(&mut node_box.bounds, &mut node_box.changed, &budget);
+            if feasible && settings.mixed_propagation {
+                for _ in 0..2 {
+                    let previous = node_box.changed.len();
+                    feasible =
+                        mixed.apply(model, &mut node_box.bounds, &mut node_box.changed, &budget)
+                            && domain.apply(&mut node_box.bounds, &mut node_box.changed, &budget);
+                    if !feasible || previous == node_box.changed.len() {
+                        break;
+                    }
+                }
+            }
+            if !feasible {
                 counters.propagated_infeasible += 1;
                 if node.depth == 0 {
                     status = if result.candidate.is_some() {
@@ -801,6 +1019,7 @@ impl LpIpSolver for NativeSolver {
             };
             result.backend.conversion_seconds += conversion.elapsed().as_secs_f64();
             let solve = Instant::now();
+            let before_pivots = budget.pivots;
             if warm {
                 counters.warm_nodes += 1;
             } else {
@@ -832,12 +1051,27 @@ impl LpIpSolver for NativeSolver {
                     checked = false;
                     lp.reset_to_slack();
                     s = lp.solve(&mut budget, true)?;
+                    if let Some(trace) = &mut pool.trace {
+                        trace.node_lp_solves += 1;
+                    }
                 }
             }
             if s == Status::Infeasible && !lp.infeasibility_verified() {
                 counters.unverified_infeasible += 1;
             }
-            result.backend.solve_seconds += solve.elapsed().as_secs_f64();
+            let node_seconds = solve.elapsed().as_secs_f64();
+            result.backend.solve_seconds += node_seconds;
+            if let Some(trace) = &mut pool.trace {
+                trace.node_lp_solves += 1;
+                trace.node_lp_pivots += budget.pivots - before_pivots;
+                trace.node_lp_seconds += node_seconds;
+                if node.depth == 0 {
+                    trace.root_lp(s, budget.pivots - before_pivots, node_seconds);
+                }
+                if s == Status::Infeasible {
+                    trace.infeasible_lps += 1;
+                }
+            }
             if model.is_mip() {
                 result.nodes += 1;
             }
@@ -877,6 +1111,13 @@ impl LpIpSolver for NativeSolver {
             let x = lp.point();
             let duals = lp.duals(model);
             if !checked && !accepted(model, node_bounds, &x, &duals, options, settings) {
+                #[cfg(feature = "kernel-profile")]
+                if std::env::var_os("LPIP_TRACE_SIMPLEX").is_some() {
+                    eprintln!(
+                        "acceptance failure {:?}",
+                        check::lp_residuals_with_bounds(model, node_bounds, &x, &duals)
+                    );
+                }
                 status = Status::NumericalFailure;
                 all_bounds = false;
                 break;
@@ -897,6 +1138,31 @@ impl LpIpSolver for NativeSolver {
                 model,
                 model.objective().iter().zip(&x).map(|(c, v)| c * v).sum(),
             );
+            pool.pivots = budget.pivots;
+            if let Some(trace) = &mut pool.trace {
+                trace.checkpoint(
+                    result.nodes,
+                    budget.pivots,
+                    diagnostic_frontier_bound(closed_bound, all_bounds, &open, Some(bound))
+                        .map(|b| oriented(model, b)),
+                    open.len() + 1,
+                );
+                if node.depth == 0 {
+                    let fractional = (0..model.n())
+                        .filter(|&j| {
+                            model.kinds()[j].is_integral()
+                                && (x[j] - x[j].round()).abs() > options.tolerances.integrality
+                        })
+                        .count();
+                    trace.root_solution(
+                        result.nodes,
+                        budget.pivots,
+                        model.objective_offset() + oriented(model, objective),
+                        bound.map(|b| oriented(model, b)),
+                        fractional,
+                    );
+                }
+            }
             if let Some(origin) = node.origin {
                 pseudocosts.record(origin, objective);
             }
@@ -915,6 +1181,30 @@ impl LpIpSolver for NativeSolver {
                     &budget,
                 )?;
             }
+            if node.depth == 0
+                && branch.is_some()
+                && settings.feasibility_jump
+                && budget.stop().is_none()
+            {
+                let (proposal, stats) = jump::search(
+                    model,
+                    node_bounds,
+                    &x,
+                    &budget,
+                    settings.feasibility_jump_steps,
+                );
+                jump_stats = stats;
+                if let Some(point) = proposal {
+                    consider(
+                        model,
+                        point,
+                        options,
+                        &mut result,
+                        &mut pool,
+                        "feasibility_jump",
+                    )?;
+                }
+            }
             certify(
                 model,
                 options,
@@ -926,6 +1216,9 @@ impl LpIpSolver for NativeSolver {
                 &mut budget,
             )?;
             if bound.is_some_and(|b| b >= pool.upper) {
+                if let Some(trace) = &mut pool.trace {
+                    trace.solved_prunes += 1;
+                }
                 closed_bound = closed_bound.min(bound.unwrap());
                 counters.pruned_nodes += 1;
                 result.backend.check_seconds += checks.elapsed().as_secs_f64();
@@ -933,11 +1226,16 @@ impl LpIpSolver for NativeSolver {
             }
             let mut probe_seconds = 0.;
             let branch = if branch.is_some()
-                && node.depth == 0
-                && settings.strong_branching
+                && ((settings.reliability_branching
+                    && node.depth <= 8
+                    && counters.strong_probes < settings.reliability_max_probes)
+                    || (node.depth == 0 && settings.strong_branching))
                 && settings.node_reoptimization
-                && eligible_strong_branching(model)
-            {
+                && (if settings.reliability_branching {
+                    model.n() <= 1024 && model.m() <= 1024 && model.nnz() <= 20000
+                } else {
+                    eligible_strong_branching(model)
+                }) {
                 let probe_started = Instant::now();
                 let chosen = strong_branch(
                     model,
@@ -1022,13 +1320,24 @@ impl LpIpSolver for NativeSolver {
                 }
                 dive = next;
             } else {
+                pool.pivots = budget.pivots;
+                if let Some(trace) = &mut pool.trace {
+                    trace.integral_leaves += 1;
+                }
                 let mut point = x;
                 for (j, v) in point.iter_mut().enumerate() {
                     if model.kinds()[j].is_integral() {
                         *v = v.round();
                     }
                 }
-                if !consider(model, point, options, &mut result, &mut pool)? {
+                if !consider(
+                    model,
+                    point,
+                    options,
+                    &mut result,
+                    &mut pool,
+                    "integral_leaf",
+                )? {
                     status = Status::NumericalFailure;
                     all_bounds = false;
                     break;
@@ -1090,6 +1399,12 @@ impl LpIpSolver for NativeSolver {
             [
                 ("factor_peak_entries", stats.peak_entries as u64),
                 ("refactorizations", stats.refactors),
+                ("phase_one_pivots", stats.phase_one_pivots),
+                ("degenerate_pivots", stats.degenerate_pivots),
+                ("weight_resets", stats.weight_resets),
+                ("row_pricings", stats.row_pricings),
+                ("column_pricings", stats.column_pricings),
+                ("replayed_pivots", stats.replayed_pivots),
                 ("basis_updates", stats.updates),
                 ("forrest_tomlin_updates", stats.ft_updates),
                 ("bound_flips", stats.bound_flips),
@@ -1108,6 +1423,16 @@ impl LpIpSolver for NativeSolver {
                     counters.unverified_infeasible,
                 ),
                 ("heuristic_candidates", counters.heuristic_candidates),
+                ("mixed_propagation_rows", mixed.stats.rows),
+                ("mixed_propagation_visits", mixed.stats.visits),
+                ("mixed_propagation_terms", mixed.stats.terms),
+                ("mixed_propagation_changes", mixed.stats.changes),
+                ("mixed_propagation_infeasibilities", mixed.stats.infeasible),
+                ("mixed_propagation_work_limits", mixed.stats.limits),
+                ("feasibility_jump_steps", jump_stats.steps),
+                ("feasibility_jump_work", jump_stats.work),
+                ("feasibility_jump_candidates", jump_stats.feasible),
+                ("feasibility_jump_weight_bumps", jump_stats.bumps),
                 ("pruned_nodes", counters.pruned_nodes),
                 (
                     "propagated_infeasible_nodes",
@@ -1117,7 +1442,9 @@ impl LpIpSolver for NativeSolver {
                 ("strong_branch_probes", counters.strong_probes),
                 ("strong_branch_pivots", counters.strong_pivots),
                 ("reduced_cost_fixings", counters.reduced_cost_fixings),
-                ("certification_solves", certifier.attempts),
+                ("certification_solves", certifier.lp_attempts),
+                ("rational_witness_attempts", certifier.witness_attempts),
+                ("rational_witness_successes", certifier.witness_successes),
                 ("certified_incumbents", certifier.certified),
             ]
             .map(|(k, v)| (format!("diagnostics.{k}"), v.to_string())),
@@ -1131,6 +1458,9 @@ impl LpIpSolver for NativeSolver {
         }
         result.status = status;
         result.iterations = budget.pivots;
+        if let Some(trace) = pool.trace.take() {
+            trace.finish(&mut result, domain.statistics(), diagnostic_original, model);
+        }
         result.message = format!(
             "Native dual simplex numerical solve: {} (not an exact certificate)",
             status.as_str()
@@ -1159,6 +1489,7 @@ fn reduced_cost_fixes(
     let Some(parent_bound) = parent_bound.filter(|_| upper.is_finite()) else {
         return Ok(Vec::new());
     };
+    let _fixing = crate::profile::enter("reduced_cost_fixing");
     let gap = (upper - parent_bound).max(0.);
     let mut trials = Vec::new();
     for (j, &value) in x.iter().enumerate() {
@@ -1185,6 +1516,16 @@ fn reduced_cost_fixes(
     if trials.is_empty() {
         return Ok(Vec::new());
     }
+    let mut prepared = if trials.len() >= 2 {
+        let _prepare = crate::profile::enter("fixing_prepare");
+        Some(lp_ip_craft::PreparedDualBound::new(
+            model,
+            bounds,
+            &duals.row_duals,
+        )?)
+    } else {
+        None
+    };
     let mut opposite = bounds.clone();
     let mut fixes = Vec::new();
     for (j, value, _) in trials {
@@ -1197,9 +1538,16 @@ fn reduced_cost_fixes(
         } else {
             opposite.upper[j] = hi - 1.;
         }
-        let proof = safe_dual_bound_with_bounds(model, &opposite, &duals.row_duals)?
-            .bound
-            .map(|v| oriented(model, v));
+        let proof = {
+            let _bound = crate::profile::enter("fixing_bound");
+            let report = if let Some(cache) = &mut prepared {
+                cache.set_bound(j, opposite.lower[j], opposite.upper[j])?;
+                cache.bound()
+            } else {
+                safe_dual_bound_with_bounds(model, &opposite, &duals.row_duals)?
+            };
+            report.bound.map(|v| oriented(model, v))
+        };
         if proof.is_some_and(|b| b >= upper) {
             opposite.lower[j] = value;
             opposite.upper[j] = value;
@@ -1207,6 +1555,9 @@ fn reduced_cost_fixes(
         } else {
             opposite.lower[j] = lo;
             opposite.upper[j] = hi;
+        }
+        if let Some(cache) = &mut prepared {
+            cache.set_bound(j, opposite.lower[j], opposite.upper[j])?;
         }
     }
     Ok(fixes)
@@ -1245,6 +1596,10 @@ fn strong_branch(
         .filter(|&j| {
             model.kinds()[j].is_integral()
                 && (x[j] - x[j].round()).abs() > options.tolerances.integrality
+                && (!budget.settings.reliability_branching
+                    || pseudocosts.count[j]
+                        .iter()
+                        .any(|&n| n < budget.settings.reliability_threshold))
         })
         .collect();
     candidates.sort_by(|&a, &b| {
@@ -1254,7 +1609,7 @@ fn strong_branch(
             .then(a.cmp(&b))
     });
     candidates.truncate(2);
-    if candidates.len() < 2 {
+    if candidates.is_empty() {
         return Ok(None);
     }
     let basis = lp.snapshot();
@@ -1265,6 +1620,8 @@ fn strong_branch(
         let mut complete = true;
         for (d, gain) in gains.iter_mut().enumerate() {
             if budget.stop().is_some()
+                || (budget.settings.reliability_branching
+                    && counters.strong_probes >= budget.settings.reliability_max_probes)
                 || budget.settings.node_limit.is_some_and(|cap| *nodes >= cap)
             {
                 complete = false;
@@ -1342,7 +1699,11 @@ fn strong_branch(
             }
         }
     }
-    Ok(best)
+    if budget.settings.reliability_branching {
+        Ok(branching_variable(model, bounds, x, options, pseudocosts).or(best))
+    } else {
+        Ok(best)
+    }
 }
 
 /// Branching variable among the fractional integer variables: best
@@ -1403,6 +1764,9 @@ fn controls(model: &Model, options: &Options, settings: &NativeOptions) -> lp::C
         factor_pivot_search: settings.factor_pivot_search,
         factor_ordering: settings.factor_ordering,
         max_factor_entries: settings.max_factor_entries,
+        factor_replay: settings.factor_replay,
+        adaptive_pricing: settings.adaptive_pricing,
+        devex: settings.devex,
         steepest_edge: settings.steepest_edge,
         feasibility: options.tolerances.feasibility,
         dual: settings.dual_tolerance * objective_scale(model),
@@ -1426,6 +1790,22 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ("factor_pivot_search", s.factor_pivot_search.to_string()),
         ("factor_ordering", s.factor_ordering.as_str().to_string()),
         ("steepest_edge", s.steepest_edge.to_string()),
+        ("root_cuts", s.root_cuts.to_string()),
+        ("root_separation", s.root_separation.to_string()),
+        ("root_cut_rounds", s.root_cut_rounds.to_string()),
+        ("cover_lifting", s.cover_lifting.to_string()),
+        ("root_propagation", s.root_propagation.to_string()),
+        ("mixed_propagation", s.mixed_propagation.to_string()),
+        ("singleton_presolve", s.singleton_presolve.to_string()),
+        (
+            "avoid_dominant_components",
+            s.avoid_dominant_components.to_string(),
+        ),
+        ("devex", s.devex.to_string()),
+        ("adaptive_pricing", s.adaptive_pricing.to_string()),
+        ("factor_replay", s.factor_replay.to_string()),
+        ("mip_diagnostics", s.mip_diagnostics.to_string()),
+        ("mip_trace_limit", s.mip_trace_limit.to_string()),
         ("component_threads", s.component_threads.to_string()),
         (
             "component_parallel_min_entries",
@@ -1449,11 +1829,38 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ),
         ("node_reoptimization", s.node_reoptimization.to_string()),
         ("strong_branching", s.strong_branching.to_string()),
+        ("reliability_branching", s.reliability_branching.to_string()),
+        ("reliability_threshold", s.reliability_threshold.to_string()),
+        (
+            "reliability_max_probes",
+            s.reliability_max_probes.to_string(),
+        ),
         ("reduced_cost_fixing", s.reduced_cost_fixing.to_string()),
         ("incumbent_heuristic", s.incumbent_heuristic.to_string()),
+        (
+            "rational_certification",
+            s.rational_certification.to_string(),
+        ),
+        ("feasibility_jump", s.feasibility_jump.to_string()),
+        (
+            "feasibility_jump_steps",
+            s.feasibility_jump_steps.to_string(),
+        ),
         ("objective_lattice", s.objective_lattice.to_string()),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
     .collect()
+}
+
+impl LpIpSolver for NativeSolver {
+    fn solve(
+        &mut self,
+        model: &Model,
+        options: &Options,
+        start: Option<&WarmStart>,
+        cancel: &CancellationToken,
+    ) -> Result<SolveResult> {
+        root::solve(self, model, options, start, cancel)
+    }
 }

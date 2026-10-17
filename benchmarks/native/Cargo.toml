@@ -4,7 +4,9 @@ version="0.1.0"
 edition="2024"
 publish=false
 [features]
-default=["backend_native"]
+default=["backend_native","evolved","search-diagnostics"]
+search-diagnostics=[]
+evolved=[]
 backend_native=[]
 backend_highs=[]
 kernel-profile=["lp-ip-craft-native/kernel-profile"]

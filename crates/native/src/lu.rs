@@ -25,12 +25,14 @@ const ABS_PIVOT: f64 = 1e-11;
 pub(crate) struct FactorOptions {
     pub search: usize,
     pub ordered: bool,
+    pub replay: bool,
 }
 impl Default for FactorOptions {
     fn default() -> Self {
         Self {
             search: 4,
             ordered: false,
+            replay: false,
         }
     }
 }
@@ -175,6 +177,11 @@ impl Reach {
         channel: usize,
         seeds: Option<&[usize]>,
     ) -> bool {
+        let _timer = crate::profile::enter(if channel < 2 {
+            "reach_ftran"
+        } else {
+            "reach_btran"
+        });
         if self.cooldown[channel] > 0 {
             self.cooldown[channel] -= 1;
             return false;
@@ -238,6 +245,11 @@ pub(crate) struct Lu {
     eta_index: Vec<usize>,
     eta_value: Vec<f64>,
     work: Vec<f64>,
+    work_index: Vec<usize>,
+    work_sparse: bool,
+    result_index: Vec<usize>,
+    result_marked: Vec<bool>,
+    result_sparse: bool,
     row_step: Vec<usize>,
     col_step: Vec<usize>,
     row_position: Vec<usize>,
@@ -252,6 +264,7 @@ pub(crate) struct Lu {
     eta_work: u64,
     dense: Option<crate::dense::DenseTail>,
     dense_dimension: usize,
+    replayed_pivots: usize,
 }
 
 impl Lu {
@@ -289,20 +302,41 @@ impl Lu {
             row_slots,
             input,
             order_cache,
+            basis_signature,
+            pivot_cache,
         } = workspace;
         if m > u32::MAX as usize {
             return Err(FactorError::TooLarge);
         }
         a.reset(m);
+        let mut signature = 0xcbf29ce484222325u64;
+        let mut hash = |word: u64| {
+            signature ^= word;
+            signature = signature.wrapping_mul(0x100000001b3);
+        };
+        if options.replay {
+            hash(m as u64);
+            hash(options.search as u64);
+            hash(u64::from(options.ordered));
+        }
         for p in 0..m {
             input.clear();
             column(p, input);
+            if options.replay {
+                hash(p as u64);
+                hash(input.len() as u64);
+            }
             for &(i, v) in input.iter() {
+                if options.replay {
+                    hash(i as u64);
+                    hash(v.to_bits());
+                }
                 if v != 0. {
                     a.insert(p, i, v);
                 }
             }
         }
+        let replay = options.replay && *basis_signature == signature;
         let mut colb = Buckets::new(m, m);
         let mut rowb = Buckets::new(m, m);
         let mut active = 0usize;
@@ -345,6 +379,11 @@ impl Lu {
             eta_index: Vec::new(),
             eta_value: Vec::new(),
             work: vec![0.0; m],
+            work_index: Vec::new(),
+            work_sparse: false,
+            result_index: Vec::new(),
+            result_marked: vec![false; m],
+            result_sparse: false,
             row_step: vec![0; m],
             col_step: vec![0; m],
             row_position: vec![0; m],
@@ -358,6 +397,7 @@ impl Lu {
             eta_work: 0,
             dense: None,
             dense_dimension: 0,
+            replayed_pivots: 0,
             reach: Reach {
                 seen: vec![false; m],
                 nodes: Vec::new(),
@@ -373,14 +413,37 @@ impl Lu {
                 break;
             }
             let _search = crate::profile::enter("factor_pivot_search");
-            let candidate = find_pivot(
-                a,
-                &colb,
-                &rowb,
-                m,
-                options.search,
-                options.ordered.then_some(order_cache.rank.as_slice()),
-            );
+            let cached = if replay {
+                pivot_cache.get(lu.prow.len()).copied().filter(|&(r, p)| {
+                    r < m && p < m && !row_done[r] && !col_done[p] && {
+                        let max = a.column_max(p);
+                        a.cols[p]
+                            .iter()
+                            .find(|e| e.row as usize == r)
+                            .is_some_and(|e| {
+                                e.value.is_finite()
+                                    && e.value.abs() > ABS_PIVOT
+                                    && max.is_finite()
+                                    && e.value.abs() >= THRESHOLD * max
+                            })
+                    }
+                })
+            } else {
+                None
+            };
+            if cached.is_some() {
+                lu.replayed_pivots += 1;
+            }
+            let candidate = cached.or_else(|| {
+                find_pivot(
+                    a,
+                    &colb,
+                    &rowb,
+                    m,
+                    options.search,
+                    options.ordered.then_some(order_cache.rank.as_slice()),
+                )
+            });
             drop(_search);
             let Some((r, p)) = candidate else {
                 singular = true;
@@ -481,7 +544,16 @@ impl Lu {
             lu.col_step[lu.pcol[k]] = k;
             lu.row_position[lu.prow[k]] = lu.pcol[k];
         }
+        if options.replay {
+            *basis_signature = signature;
+            pivot_cache.clear();
+            pivot_cache.extend(lu.prow.iter().copied().zip(lu.pcol.iter().copied()));
+        }
         Ok(lu)
+    }
+
+    pub fn replayed_pivots(&self) -> usize {
+        self.replayed_pivots
     }
 
     fn push_pivot(
@@ -656,8 +728,8 @@ impl Lu {
     pub fn ft_suitable(&self) -> bool {
         self.dense.is_none()
             && self.m >= 128
-            && self.l.value.len() <= self.m / 8
-            && self.entries() <= 16 * self.m
+            && self.l.value.len() <= 4 * self.m
+            && self.entries() <= 32 * self.m
     }
     pub fn average_update_nnz(&self) -> usize {
         self.update_nnz / self.updates().max(1)
@@ -833,19 +905,37 @@ impl Lu {
     }
     pub fn ftran_entering_indexed(&mut self, v: &mut [f64], indices: &mut Vec<usize>) {
         self.ftran_entering(v);
+        let _timer = crate::profile::enter("ftran_support_export");
         indices.clear();
-        match &self.ft {
-            Some(ft) if self.etas.is_empty() => indices.extend_from_slice(ft.column_support()),
-            _ => indices.extend(
+        // FT already records exactly the nonzero final positions. Without
+        // trailing conventional etas there is no support union to maintain.
+        if self.dense.is_none() && self.etas.is_empty() {
+            if let Some(ft) = &self.ft {
+                indices.extend_from_slice(ft.column_support());
+                return;
+            }
+        }
+        if self.result_sparse {
+            indices.extend(self.result_index.iter().copied().filter(|&i| v[i] != 0.));
+        } else {
+            indices.extend(
                 v.iter()
                     .enumerate()
                     .filter_map(|(i, &x)| (x != 0.).then_some(i)),
-            ),
+            );
         }
     }
     fn ftran_impl(&mut self, v: &mut [f64], capture: bool) {
         let _triangular = crate::profile::enter("ftran_triangular");
+        let _support = crate::profile::enter("ftran_support");
+        for &i in &self.result_index {
+            self.result_marked[i] = false;
+        }
+        self.result_index.clear();
+        self.result_sparse = false;
+        drop(_support);
         if self.dense.is_some() {
+            self.work_sparse = false;
             self.ftran_dense(v);
         } else {
             let _lower = crate::profile::enter("ftran_lower");
@@ -878,13 +968,32 @@ impl Lu {
             drop(_lower);
             let w = &mut self.work;
             if let Some(ft) = &mut self.ft {
+                self.work_sparse = false;
                 ft.ftran(v, w, capture);
+                if capture && !self.etas.is_empty() {
+                    let _timer = crate::profile::enter("ftran_support");
+                    self.result_sparse = true;
+                    self.result_index.extend_from_slice(ft.column_support());
+                    for &p in &self.result_index {
+                        self.result_marked[p] = true;
+                    }
+                }
             } else {
                 if self
                     .reach
                     .find(v, &self.u_cols, Some(&self.row_position), &self.row_step, 1)
                 {
-                    w.fill(0.);
+                    let _clear = crate::profile::enter("ftran_workspace_clear");
+                    if self.work_sparse {
+                        for &p in &self.work_index {
+                            w[p] = 0.;
+                        }
+                    } else {
+                        w.fill(0.);
+                    }
+                    self.work_index.clear();
+                    drop(_clear);
+                    let _upper = crate::profile::enter("ftran_upper");
                     for &i in self.reach.nodes.iter().rev() {
                         let k = self.row_step[i];
                         let p = self.pcol[k];
@@ -895,6 +1004,7 @@ impl Lu {
                             rhs * self.diag_inv[k]
                         };
                         w[p] = t;
+                        self.work_index.push(p);
                         if t != 0. {
                             let (index, value) = self.u_cols.get(p);
                             for (&r, &u) in index.iter().zip(value) {
@@ -902,7 +1012,28 @@ impl Lu {
                             }
                         }
                     }
+                    drop(_upper);
+                    // Reach covers every old RHS entry and every triangular
+                    // write. Clear row identities before scattering positions.
+                    let _output = crate::profile::enter("ftran_output");
+                    for &i in &self.reach.nodes {
+                        v[i] = 0.;
+                    }
+                    for &p in &self.work_index {
+                        v[p] = w[p];
+                    }
+                    drop(_output);
+                    self.work_sparse = true;
+                    if capture {
+                        self.result_sparse = true;
+                        self.result_index.extend_from_slice(&self.work_index);
+                        for &p in &self.result_index {
+                            self.result_marked[p] = true;
+                        }
+                    }
                 } else {
+                    self.work_sparse = false;
+                    let _upper = crate::profile::enter("ftran_upper");
                     for k in (0..self.m).rev() {
                         let p = self.pcol[k];
                         let rhs = v[self.prow[k]];
@@ -920,7 +1051,10 @@ impl Lu {
                         }
                     }
                 }
-                v.copy_from_slice(w);
+                if !self.work_sparse {
+                    let _timer = crate::profile::enter("ftran_output");
+                    v.copy_from_slice(w);
+                }
             }
         }
         drop(_triangular);
@@ -929,6 +1063,14 @@ impl Lu {
             let t = v[eta.position] / eta.pivot;
             v[eta.position] = t;
             if t != 0.0 {
+                if capture && self.result_sparse {
+                    for &i in &self.eta_index[eta.start..eta.end] {
+                        if !self.result_marked[i] {
+                            self.result_marked[i] = true;
+                            self.result_index.push(i);
+                        }
+                    }
+                }
                 self.eta_work = self
                     .eta_work
                     .saturating_add((eta.end - eta.start + 1) as u64);
@@ -976,6 +1118,8 @@ impl Lu {
     }
 
     fn btran_masked(&mut self, v: &mut [f64], mut support: u64, unit: bool) {
+        // BTRAN uses row identities and may expand support through L.
+        self.work_sparse = false;
         let _eta = crate::profile::enter("btran_eta");
         for eta in self.etas.iter().rev() {
             if support & eta.support == 0 {
@@ -1276,6 +1420,208 @@ mod tests {
                 col
             })
             .collect()
+    }
+
+    #[test]
+    fn indexed_forward_support_survives_cancellation_updates_and_btran_reuse() {
+        let m = 256;
+        let mut cols: Vec<Vec<(usize, f64)>> = (0..m)
+            .map(|p| vec![(p, 2.), ((p / 4 * 4 + (p + 1) % 4), 0.125)])
+            .collect();
+        let mut lu = factor(&cols, 100000).unwrap();
+        let mut sparse_calls = 0;
+        for step in 0..80 {
+            let mut rhs = vec![0.; m];
+            if step % 5 == 0 {
+                for (i, v) in rhs.iter_mut().enumerate() {
+                    *v = (i % 7) as f64 - 3.;
+                }
+            } else {
+                rhs[(step * 7) % m] = 1.;
+                rhs[(step * 7 + 1) % m] = -0.125;
+            }
+            let original = rhs.clone();
+            let mut indices = Vec::new();
+            lu.ftran_entering_indexed(&mut rhs, &mut indices);
+            sparse_calls += usize::from(lu.result_sparse);
+            let mut seen = vec![false; m];
+            for &i in &indices {
+                assert!(!seen[i]);
+                seen[i] = true;
+            }
+            assert!((0..m).all(|i| rhs[i] == 0. || seen[i]));
+            let mut back = vec![0.; m];
+            for (p, col) in cols.iter().enumerate() {
+                for &(i, a) in col {
+                    back[i] += a * rhs[p];
+                }
+            }
+            assert!(
+                back.iter()
+                    .zip(&original)
+                    .all(|(a, b)| (a - b).abs() < 1e-9)
+            );
+            if step % 3 == 0 {
+                let mut y = original.clone();
+                lu.btran(&mut y);
+            }
+            if step % 7 == 0 {
+                let p = step % m;
+                let new = vec![(p, 2.5), ((p / 4 * 4 + (p + 1) % 4), 0.1)];
+                let mut alpha = vec![0.; m];
+                for &(i, a) in &new {
+                    alpha[i] = a;
+                }
+                lu.ftran_entering_indexed(&mut alpha, &mut indices);
+                lu.update_sparse(p, &alpha, indices.into_iter());
+                cols[p] = new;
+            }
+        }
+        assert!(sparse_calls > 10, "sparse branch must be exercised");
+    }
+
+    #[test]
+    fn ft_indexed_output_handles_zero_rhs_cancellation_and_trailing_eta() {
+        let m = 256;
+        let mut columns: Vec<_> = (0..m).map(|p| vec![((p * 7 + 3) % m, 2.)]).collect();
+        let mut lu = factor(&columns, usize::MAX).unwrap();
+        lu.enable_ft();
+        let mut indices = Vec::new();
+        for step in 0..16 {
+            // Contaminate the shared workspace in the other orientation.
+            let mut transpose = vec![1.; m];
+            lu.btran(&mut transpose);
+            let expected: Vec<_> = (0..m)
+                .map(|j| {
+                    if step % 4 == 0 {
+                        0.
+                    } else if step % 4 == 1 {
+                        (j % 7) as f64 - 3.
+                    } else if j == step || j == step + 1 {
+                        1.
+                    } else {
+                        0.
+                    }
+                })
+                .collect();
+            let mut rhs = vec![0.; m];
+            for (p, col) in columns.iter().enumerate() {
+                for &(i, a) in col {
+                    rhs[i] += a * expected[p];
+                }
+            }
+            lu.ftran_entering_indexed(&mut rhs, &mut indices);
+            assert_eq!(indices.len(), rhs.iter().filter(|&&v| v != 0.).count());
+            assert!(indices.iter().all(|&i| rhs[i] != 0.));
+            assert!(
+                rhs.iter()
+                    .zip(&expected)
+                    .all(|(a, b)| (a - b).abs() < 1e-10)
+            );
+            if step == 4 || step == 8 {
+                let p = step;
+                let new = vec![((p * 7 + 3) % m, 3.), (((p + 1) * 7 + 3) % m, -0.5)];
+                let mut alpha = vec![0.; m];
+                for &(i, a) in &new {
+                    alpha[i] = a;
+                }
+                lu.ftran_entering_indexed(&mut alpha, &mut indices);
+                if step == 8 {
+                    lu.force_refactor = true;
+                }
+                let accepted = lu.update_sparse(p, &alpha, indices.iter().copied());
+                assert_eq!(accepted, step == 4);
+                columns[p] = new;
+            }
+        }
+        assert!(!lu.etas.is_empty());
+    }
+
+    #[test]
+    fn ft_accepts_general_sparse_lower_factor_without_materializing_dense_tails() {
+        let m = 256;
+        let columns: Vec<Vec<(usize, f64)>> = (0..m)
+            .map(|p| {
+                let mut c = vec![(p, 4.)];
+                for d in 1..=2 {
+                    c.push(((p + d) % m, 0.125));
+                }
+                c
+            })
+            .collect();
+        let mut lu = factor(&columns, 100000).unwrap();
+        assert!(lu.l.value.len() > m / 8);
+        assert!(lu.ft_suitable());
+        lu.enable_ft();
+        assert!(residual(&columns, &mut lu) < 1e-10);
+        let dense = random_columns(160, 341, 100);
+        let lu = factor(&dense, 100000).unwrap();
+        assert!(lu.dense.is_some());
+        assert!(!lu.ft_suitable());
+    }
+
+    #[test]
+    fn numerical_pivot_replay_checks_identity_changes_singularity_and_caps() {
+        let mut ws = FactorWorkspace::default();
+        let m = 128;
+        let mut cols: Vec<Vec<(usize, f64)>> = (0..m)
+            .map(|p| vec![(p, 4.), ((p + 1) % m, 0.125)])
+            .collect();
+        let options = FactorOptions {
+            replay: true,
+            ..Default::default()
+        };
+        let first = Lu::factor_with_workspace(
+            m,
+            |p, out| out.extend_from_slice(&cols[p]),
+            100000,
+            &mut ws,
+            options,
+        )
+        .unwrap();
+        assert_eq!(first.replayed_pivots(), 0);
+        let mut next = Lu::factor_with_workspace(
+            m,
+            |p, out| out.extend_from_slice(&cols[p]),
+            100000,
+            &mut ws,
+            options,
+        )
+        .unwrap();
+        assert!(next.replayed_pivots() > 100);
+        assert!(residual(&cols, &mut next) < 1e-10);
+        cols[0][0].1 = 4.25;
+        let mut changed = Lu::factor_with_workspace(
+            m,
+            |p, out| out.extend_from_slice(&cols[p]),
+            100000,
+            &mut ws,
+            options,
+        )
+        .unwrap();
+        assert_eq!(changed.replayed_pivots(), 0);
+        assert!(residual(&cols, &mut changed) < 1e-10);
+        cols[0].clear();
+        assert!(matches!(
+            Lu::factor_with_workspace(
+                m,
+                |p, out| out.extend_from_slice(&cols[p]),
+                100000,
+                &mut ws,
+                options
+            ),
+            Err(FactorError::Singular { .. })
+        ));
+        assert!(matches!(
+            Lu::factor_with_workspace(
+                m,
+                |p, out| out.extend_from_slice(&cols[p]),
+                1,
+                &mut ws,
+                options
+            ),
+            Err(FactorError::TooLarge)
+        ));
     }
 
     #[test]

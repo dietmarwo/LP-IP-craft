@@ -1,5 +1,6 @@
 //! Conservative integer-domain propagation with incremental exact activities.
 use crate::Budget;
+use crate::diagnostics::PropagationStats;
 use lp_ip_craft::{Bounds, Model};
 use std::collections::VecDeque;
 
@@ -24,6 +25,7 @@ pub(crate) struct Domain {
     marked: Vec<bool>,
     first: bool,
     work_limit: usize,
+    statistics: Option<PropagationStats>,
 }
 fn floor_div(a: i128, b: i128) -> i128 {
     debug_assert!(b > 0);
@@ -64,6 +66,7 @@ impl Domain {
             marked: vec![false; n],
             first: true,
             work_limit: 4096,
+            statistics: None,
         };
         if !enabled || !model.is_mip() {
             return domain;
@@ -128,6 +131,16 @@ impl Domain {
             .max(4096);
         domain
     }
+    pub fn enable_statistics(&mut self) {
+        self.statistics = Some(PropagationStats {
+            eligible_rows: self.rows.len(),
+            eligible_terms: self.rows.iter().map(|r| r.terms.len()).sum(),
+            ..Default::default()
+        });
+    }
+    pub fn statistics(&self) -> Option<PropagationStats> {
+        self.statistics
+    }
     fn enqueue(&mut self, row: usize) {
         if !self.queued[row] {
             self.queued[row] = true;
@@ -161,12 +174,18 @@ impl Domain {
         for &j in &self.integers {
             let (l, u) = (bounds.lower[j].ceil(), bounds.upper[j].floor());
             if l > u {
+                if let Some(stats) = &mut self.statistics {
+                    stats.infeasibilities += 1;
+                }
                 return false;
             }
             if l != bounds.lower[j] || u != bounds.upper[j] {
                 bounds.lower[j] = l;
                 bounds.upper[j] = u;
                 changed.push(j);
+                if let Some(stats) = &mut self.statistics {
+                    stats.bound_changes += 1;
+                }
             }
         }
         if self.rows.is_empty() {
@@ -199,10 +218,19 @@ impl Domain {
         while let Some(i) = self.pending.pop_front() {
             self.queued[i] = false;
             if work >= self.work_limit || budget.stop().is_some() {
+                if let Some(stats) = &mut self.statistics {
+                    stats.work_limit_exits += u64::from(work >= self.work_limit);
+                }
                 return true;
+            }
+            if let Some(stats) = &mut self.statistics {
+                stats.rows_dequeued += 1;
             }
             let row = &self.rows[i];
             if row.lower.is_some_and(|l| row.max < l) || row.upper.is_some_and(|u| row.min > u) {
+                if let Some(stats) = &mut self.statistics {
+                    stats.infeasibilities += 1;
+                }
                 return false;
             }
             // Root domain widths are conservative upper bounds at every child.
@@ -210,11 +238,20 @@ impl Domain {
             if row.upper.is_none_or(|b| b - row.min >= row.max_width)
                 && row.lower.is_none_or(|b| row.max - b >= row.max_width)
             {
+                if let Some(stats) = &mut self.statistics {
+                    stats.slack_skips += 1;
+                }
                 continue;
             }
             for k in 0..self.rows[i].terms.len() {
                 work = work.saturating_add(1);
+                if let Some(stats) = &mut self.statistics {
+                    stats.terms_examined += 1;
+                }
                 if work % 1024 == 0 && (work >= self.work_limit || budget.stop().is_some()) {
+                    if let Some(stats) = &mut self.statistics {
+                        stats.work_limit_exits += u64::from(work >= self.work_limit);
+                    }
                     return true;
                 }
                 let row = &self.rows[i];
@@ -240,12 +277,18 @@ impl Domain {
                     }
                 }
                 if lo > hi {
+                    if let Some(stats) = &mut self.statistics {
+                        stats.infeasibilities += 1;
+                    }
                     return false;
                 }
                 if lo != l || hi != u {
                     bounds.lower[j] = lo as f64;
                     bounds.upper[j] = hi as f64;
                     changed.push(j);
+                    if let Some(stats) = &mut self.statistics {
+                        stats.bound_changes += 1;
+                    }
                     self.last_changed.push(j);
                     self.synchronize(j, lo, hi);
                 }

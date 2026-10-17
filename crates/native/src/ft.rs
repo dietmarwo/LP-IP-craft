@@ -14,6 +14,7 @@ struct SparseReach {
     cooldown: [usize; 2],
 }
 impl SparseReach {
+    #[allow(clippy::too_many_arguments)]
     fn find(
         &mut self,
         v: &[f64],
@@ -21,8 +22,14 @@ impl SparseReach {
         graph: &[Vec<(usize, f64)>],
         rank: &[usize],
         unit: Option<usize>,
+        seeds: Option<&[(usize, f64)]>,
         channel: usize,
     ) -> bool {
+        let _timer = crate::profile::enter(if channel == 0 {
+            "reach_ft_ftran"
+        } else {
+            "reach_ft_btran"
+        });
         if self.cooldown[channel] > 0 {
             self.cooldown[channel] -= 1;
             return false;
@@ -35,8 +42,12 @@ impl SparseReach {
         }
         self.nodes.clear();
         let limit = v.len() / 8;
-        for at in 0..if unit.is_some() { 1 } else { v.len() } {
-            let p = unit.unwrap_or(at);
+        for at in 0..if unit.is_some() {
+            1
+        } else {
+            seeds.map_or(v.len(), |s| s.len())
+        } {
+            let p = unit.unwrap_or_else(|| seeds.map_or(at, |s| s[at].0));
             let r = row_of.map_or(p, |rows| rows[p]);
             if v[r] != 0. {
                 self.seen[p] = true;
@@ -157,15 +168,34 @@ impl Ft {
                 }
             }
         }
-        let sparse = self
-            .reach
-            .find(v, Some(&self.row_of), &self.cols, &self.rank, None, 0);
+        let sparse = self.reach.find(
+            v,
+            Some(&self.row_of),
+            &self.cols,
+            &self.rank,
+            None,
+            capture.then_some(&self.spike),
+            0,
+        );
+        crate::profile::count(
+            if sparse {
+                "calls.ft_ftran_sparse"
+            } else {
+                "calls.ft_ftran_dense"
+            },
+            1,
+        );
         let order = if sparse {
-            out.fill(0.);
+            {
+                let _timer = crate::profile::enter("ftran_workspace_clear");
+                out.fill(0.);
+            }
+            crate::profile::count("entries.ftran_workspace_clear", out.len());
             &self.reach.nodes
         } else {
             &self.order
         };
+        let _upper = crate::profile::enter("ftran_ft_upper");
         for &p in order.iter().rev() {
             let rhs = v[self.row_of[p]];
             let t = if rhs == 0. {
@@ -183,7 +213,10 @@ impl Ft {
                 }
             }
         }
+        drop(_upper);
+        let _timer = crate::profile::enter("ftran_output");
         v.copy_from_slice(out);
+        crate::profile::count("entries.ftran_output", out.len());
     }
     pub fn column_support(&self) -> &[usize] {
         &self.column_support
@@ -193,7 +226,9 @@ impl Ft {
             self.ep.clear();
             self.ep_position = unit;
         }
-        self.sparse_btran = self.reach.find(v, None, &self.rows, &self.rank, unit, 1);
+        self.sparse_btran = self
+            .reach
+            .find(v, None, &self.rows, &self.rank, unit, None, 1);
         let order = if self.sparse_btran {
             out.fill(0.);
             &self.reach.nodes

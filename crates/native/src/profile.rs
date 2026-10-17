@@ -52,6 +52,17 @@ mod enabled {
     pub fn snapshot() -> Vec<(&'static str, u64, u64)> {
         DATA.with(|d| d.borrow().totals.clone())
     }
+    /// Untimed work counter, reported in the snapshot's count column.
+    pub fn count(name: &'static str, amount: usize) {
+        DATA.with(|d| {
+            let mut d = d.borrow_mut();
+            if let Some(entry) = d.totals.iter_mut().find(|e| e.0 == name) {
+                entry.2 += amount as u64;
+            } else {
+                d.totals.push((name, 0, amount as u64));
+            }
+        });
+    }
 }
 #[cfg(feature = "kernel-profile")]
 pub use enabled::*;
@@ -62,3 +73,6 @@ pub(crate) struct Guard;
 pub(crate) fn enter(_: &'static str) -> Guard {
     Guard
 }
+#[cfg(not(feature = "kernel-profile"))]
+#[inline(always)]
+pub(crate) fn count(_: &'static str, _: usize) {}

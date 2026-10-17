@@ -1,0 +1,28 @@
+diff --git a/crates/native/src/ft.rs b/crates/native/src/ft.rs
+index faa4ae1..be59c19 100644
+--- a/crates/native/src/ft.rs
++++ b/crates/native/src/ft.rs
+@@ -42,6 +42,14 @@ impl SparseReach {
+         }
+         self.nodes.clear();
+         let limit = v.len() / 8;
++        // Captured spikes contain unique, exact nonzero positions. The
++        // unchanged seed-count limit would reject this input before walking
++        // any graph edges; do not rediscover that fact one position at a time.
++        if seeds.is_some_and(|s| s.len() > limit) {
++            self.cooldown[channel] = 8;
++            crate::profile::count("calls.ft_known_seed_reject", 1);
++            return false;
++        }
+         for at in 0..if unit.is_some() {
+             1
+         } else {
+@@ -49,7 +57,7 @@ impl SparseReach {
+         } {
+             let p = unit.unwrap_or_else(|| seeds.map_or(at, |s| s[at].0));
+             let r = row_of.map_or(p, |rows| rows[p]);
+-            if v[r] != 0. {
++            if seeds.is_some() || v[r] != 0. {
+                 self.seen[p] = true;
+                 self.nodes.push(p);
+             }

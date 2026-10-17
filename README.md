@@ -1,3 +1,9 @@
+> Native 0.24: bounded exact rational incumbent witnesses, reliability branching, serial Feasibility Jump, LP-directed lifted covers, and reversible mixed-row node propagation. See [the implementation plan](docs/mip-search-024/PLAN.md), [results](docs/mip-search-024/RESULTS.md), and [reproduction instructions](docs/mip-search-024/REPRODUCE.md).
+
+> Native 0.23: reuse FT output support and captured spike seeds to remove redundant scans; add opt-in bounded MIP search diagnostics and six additional public MIPs. See [the plan](docs/packing-ftran-mip-diagnostics/PLAN.md), [diagnostic contract](docs/packing-ftran-mip-diagnostics/DIAGNOSTICS.md) and [results](docs/packing-ftran-mip-diagnostics/RESULTS.md).
+
+> Native 0.22: sparse-support propagation, broader guarded FT updates, selectable replay/Devex/column pricing, reversible singleton presolve, sound MIP root bounds, exact root cover cuts and ordered Rust/Python batch solving. See [the implementation plan](docs/highs-lessons-implementation/PLAN.md) and [results](docs/highs-lessons-implementation/RESULTS.md).
+
 > Native 0.20: faster packing basis arithmetic and exact block pricing, incremental integer propagation, certified reduced-cost fixing, and broader public/seeded coverage. See [the staged plan](docs/packing-mip/PLAN.md) and [full results](docs/packing-mip/RESULTS.md), including remaining failures and regressions.
 
 > Native 0.19: captured-basis replay, compact indexed elimination, retained blocked dense LU tails, bounded minimum-degree ordering and work-based rebuilds. See [the five plans](docs/irregular-lu/STEPS.md) and [results and validation](docs/irregular-lu/RESULTS.md). The production solver remains pure Rust with no HiGHS or BLAS dependency.
@@ -8,7 +14,7 @@
 
 # LP-IP-craft — native Rust LP/MIP solver
 
-Version **0.20.0** extends the 0.16 architecture, which replaced both 0.15
+Version **0.24.0** extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine
@@ -43,7 +49,8 @@ cases, where 0.15 failed on up to 2 of 550 per seed, and its MIP search needs
 20–29× fewer nodes and 13–27× less time than dense 0.15.
 
 MIPs still require finite bounds on **all** variables, including continuous
-variables, of magnitude at most 2^53-1. Each connected solve uses one thread;
+variables, of magnitude at most 2^53-1 after justified root inference; unresolved
+infinities remain unsupported. Each connected solve uses one thread;
 independent components can use up to 16 workers. No real GTOC formulation has
 been supplied; application readiness remains unverified.
 
@@ -161,3 +168,32 @@ calculation. `strong_branching` defaults to false: optional bounded root probes
 can guide branching, and all probe nodes/pivots consume the global limits.
 Public finite-bound restrictions and known numerical failures are documented
 alongside the measured gains and regressions.
+
+## Independent-job batches (0.22)
+
+```python
+from lp_ip_craft import NativeOptions, solve_batch
+results = solve_batch(models, workers=4,
+                      backend_options=NativeOptions(time_limit_seconds=30.0))
+for result in results:
+    if isinstance(result, Exception):
+        print(result)  # one failed job does not discard the others
+    else:
+        print(result.status, result.evaluation)
+```
+
+`models` is an iterable of immutable `Model` objects. Results keep input order;
+limits apply per job. `workers` is 1–16; each worker owns its numerical state,
+and component threading is disabled inside the batch. The interpreter is
+released. A shared `Cancellation` stops running and queued jobs at cooperative
+checkpoints. There are no warm starts in this batch API. Rust callers use
+`NativeSolver::solve_batch(&[&Model], &Options, workers, &CancellationToken)`.
+
+New native controls are `singleton_presolve`, `root_propagation`, `root_cuts`,
+`factor_replay`, `adaptive_pricing`, `devex`, and `avoid_dominant_components`.
+Replay, approximate Devex weights and root cover cuts default to false. Root
+inference can make an initially unbounded MIP box admissible when constraints
+prove finite bounds; unresolved infinities and magnitudes beyond 2^53-1 still
+return `Unsupported`. Presolve reconstructs singleton LP duals and checks them
+against the original model. Root cuts are restricted to verified positive
+integer binary covers, inserted before factorization; no dynamic local cuts.

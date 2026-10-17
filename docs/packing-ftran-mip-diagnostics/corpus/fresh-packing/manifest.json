@@ -1,0 +1,26 @@
+[
+  {
+    "file": "packing-d3-1024-seed20261017.json",
+    "sha256": "5fa0efe88a02c504c089427df0c1be4d39510e772d4d5fd6b38c3fd8d05f2a0f"
+  },
+  {
+    "file": "packing-d3-4096-seed20261017.json",
+    "sha256": "fe5d18063b29853f03b1a4703ec59744837a33880e9ffb421612cea614603123"
+  },
+  {
+    "file": "packing-d9-1024-seed20261017.json",
+    "sha256": "ba1d29e1799068bc9c286fe5933682f1b8659f9fdebfd39f6d0ef5a472e06956"
+  },
+  {
+    "file": "packing-d3-1024-seed20261123.json",
+    "sha256": "2327bf5ea41e07d3cbe88079445681345768504b60db3851d0f3310698703b43"
+  },
+  {
+    "file": "packing-d3-4096-seed20261123.json",
+    "sha256": "1b8970fa1f11605c9998684b737415cf972b8ae676f14030ec38e6d37f471f6d"
+  },
+  {
+    "file": "packing-d9-1024-seed20261123.json",
+    "sha256": "b4393ef0842cc26008320e49b8b85d974263c052c8cc95229c23ca8f526b8424"
+  }
+]
