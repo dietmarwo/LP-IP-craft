@@ -95,14 +95,14 @@ struct Eta {
 
 /// Compressed lists: `index[start[k]..start[k + 1]]` with matching values.
 #[derive(Default)]
-struct Lists {
+pub(super) struct Lists {
     start: Vec<usize>,
     index: Vec<usize>,
     value: Vec<f64>,
 }
 
 impl Lists {
-    fn get(&self, k: usize) -> (&[usize], &[f64]) {
+    pub(super) fn get(&self, k: usize) -> (&[usize], &[f64]) {
         let range = self.start[k]..self.start[k + 1];
         (&self.index[range.clone()], &self.value[range])
     }
@@ -230,6 +230,8 @@ pub(crate) struct Lu {
     reach: Reach,
     eta_support: Vec<usize>,
     eta_marked: Vec<bool>,
+    ft: Option<super::ft::Ft>,
+    force_refactor: bool,
 }
 
 impl Lu {
@@ -289,6 +291,8 @@ impl Lu {
             row_position: vec![0; m],
             eta_support: Vec::new(),
             eta_marked: vec![false; m],
+            ft: None,
+            force_refactor: false,
             reach: Reach {
                 seen: vec![false; m],
                 nodes: Vec::new(),
@@ -514,24 +518,34 @@ impl Lu {
         Ok(())
     }
 
-    /// Stored numerical entries: diagonal, L, U and etas.
+    pub fn enable_ft(&mut self) {
+        self.ft = Some(super::ft::Ft::new(
+            &self.prow, &self.pcol, &self.diag, &self.u,
+        ));
+        self.u = Lists::default();
+        self.u_cols = Lists::default();
+    }
+
+    /// Stored numerical entries: diagonal, L, U and update files.
     pub fn entries(&self) -> usize {
-        self.diag.len()
+        self.ft
+            .as_ref()
+            .map_or(self.diag.len() + self.u.value.len(), |f| f.entries())
             + self.l.value.len()
-            + self.u.value.len()
             + self.eta_value.len()
             + self.etas.len()
     }
 
     /// Number of eta updates since factorization.
     pub fn updates(&self) -> usize {
-        self.etas.len()
+        self.etas.len() + self.ft.as_ref().map_or(0, |f| f.updates())
     }
 
     /// Bound update-file work relative to the sparse base factor. The
     /// caller's interval and memory cap remain hard upper limits.
     pub fn needs_refactor(&self, interval: usize, cap: usize) -> bool {
-        self.updates() >= interval
+        self.force_refactor
+            || self.updates() >= interval
             || self.entries() > cap
             || (self.m >= 128
                 && self.updates() >= 16
@@ -541,6 +555,12 @@ impl Lu {
     /// Solves `B x = v` in place: `v` is indexed by row on entry and by
     /// basis position on return.
     pub fn ftran(&mut self, v: &mut [f64]) {
+        self.ftran_impl(v, false);
+    }
+    pub fn ftran_entering(&mut self, v: &mut [f64]) {
+        self.ftran_impl(v, true);
+    }
+    fn ftran_impl(&mut self, v: &mut [f64], capture: bool) {
         let _triangular = crate::profile::enter("ftran_triangular");
         if self
             .reach
@@ -567,37 +587,41 @@ impl Lu {
             }
         }
         let w = &mut self.work;
-        if self
-            .reach
-            .find(v, &self.u_cols, Some(&self.row_position), &self.row_step, 1)
-        {
-            w.fill(0.);
-            for &i in self.reach.nodes.iter().rev() {
-                let k = self.row_step[i];
-                let p = self.pcol[k];
-                let t = v[i] / self.diag[k];
-                w[p] = t;
-                if t != 0. {
-                    let (index, value) = self.u_cols.get(p);
-                    for (&r, &u) in index.iter().zip(value) {
-                        v[r] -= u * t;
-                    }
-                }
-            }
+        if let Some(ft) = &mut self.ft {
+            ft.ftran(v, w, capture);
         } else {
-            for k in (0..self.m).rev() {
-                let p = self.pcol[k];
-                let t = v[self.prow[k]] / self.diag[k];
-                w[p] = t;
-                if t != 0.0 {
-                    let (index, value) = self.u_cols.get(p);
-                    for (&i, &u) in index.iter().zip(value) {
-                        v[i] -= u * t;
+            if self
+                .reach
+                .find(v, &self.u_cols, Some(&self.row_position), &self.row_step, 1)
+            {
+                w.fill(0.);
+                for &i in self.reach.nodes.iter().rev() {
+                    let k = self.row_step[i];
+                    let p = self.pcol[k];
+                    let t = v[i] / self.diag[k];
+                    w[p] = t;
+                    if t != 0. {
+                        let (index, value) = self.u_cols.get(p);
+                        for (&r, &u) in index.iter().zip(value) {
+                            v[r] -= u * t;
+                        }
+                    }
+                }
+            } else {
+                for k in (0..self.m).rev() {
+                    let p = self.pcol[k];
+                    let t = v[self.prow[k]] / self.diag[k];
+                    w[p] = t;
+                    if t != 0.0 {
+                        let (index, value) = self.u_cols.get(p);
+                        for (&i, &u) in index.iter().zip(value) {
+                            v[i] -= u * t;
+                        }
                     }
                 }
             }
+            v.copy_from_slice(w);
         }
-        v.copy_from_slice(w);
         drop(_triangular);
         let _eta = crate::profile::enter("ftran_eta");
         for eta in &self.etas {
@@ -658,34 +682,38 @@ impl Lu {
         drop(_eta);
         let _triangular = crate::profile::enter("btran_triangular");
         let w = &mut self.work;
-        if self.reach.find_seeded(
-            v,
-            &self.u,
-            Some(&self.col_step),
-            &self.col_step,
-            2,
-            unit.then_some(&self.eta_support),
-        ) {
-            w.fill(0.);
-            for &p in &self.reach.nodes {
-                let k = self.col_step[p];
-                let t = v[p] / self.diag[k];
-                w[self.prow[k]] = t;
-                if t != 0. {
-                    let (index, value) = self.u.get(k);
-                    for (&q, &u) in index.iter().zip(value) {
-                        v[q] -= u * t;
+        if let Some(ft) = &mut self.ft {
+            ft.btran(v, w, unit.then(|| self.eta_support[0]));
+        } else {
+            if self.reach.find_seeded(
+                v,
+                &self.u,
+                Some(&self.col_step),
+                &self.col_step,
+                2,
+                unit.then_some(&self.eta_support),
+            ) {
+                w.fill(0.);
+                for &p in &self.reach.nodes {
+                    let k = self.col_step[p];
+                    let t = v[p] / self.diag[k];
+                    w[self.prow[k]] = t;
+                    if t != 0. {
+                        let (index, value) = self.u.get(k);
+                        for (&q, &u) in index.iter().zip(value) {
+                            v[q] -= u * t;
+                        }
                     }
                 }
-            }
-        } else {
-            for k in 0..self.m {
-                let t = v[self.pcol[k]] / self.diag[k];
-                w[self.prow[k]] = t;
-                if t != 0.0 {
-                    let (index, value) = self.u.get(k);
-                    for (&q, &u) in index.iter().zip(value) {
-                        v[q] -= u * t;
+            } else {
+                for k in 0..self.m {
+                    let t = v[self.pcol[k]] / self.diag[k];
+                    w[self.prow[k]] = t;
+                    if t != 0.0 {
+                        let (index, value) = self.u.get(k);
+                        for (&q, &u) in index.iter().zip(value) {
+                            v[q] -= u * t;
+                        }
                     }
                 }
             }
@@ -726,8 +754,14 @@ impl Lu {
         position: usize,
         alpha: &[f64],
         indices: impl Iterator<Item = usize>,
-    ) {
+    ) -> bool {
         let _profile = crate::profile::enter("basis_update");
+        if let Some(ft) = &mut self.ft {
+            if !self.force_refactor && ft.update(position, alpha[position]) {
+                return true;
+            }
+            self.force_refactor = true;
+        }
         let start = self.eta_index.len();
         let mut support = 1u64 << (position & 63);
         for i in indices {
@@ -745,6 +779,7 @@ impl Lu {
             start,
             end: self.eta_index.len(),
         });
+        !self.force_refactor
     }
 }
 
@@ -986,6 +1021,66 @@ mod tests {
             assert!(residual(&columns, &mut lu) < 1e-8, "step {step}");
         }
         assert_eq!(lu.updates(), updates);
+    }
+
+    #[test]
+    fn forrest_tomlin_updates_match_rebuilt_bases() {
+        for m in [2, 17, 64, 256] {
+            let mut columns = random_columns(m, 11, 2);
+            let mut lu = factor(&columns, usize::MAX).unwrap();
+            lu.enable_ft();
+            for step in 0..80 {
+                let p = (step * 11 + 1) % m;
+                let mut new = columns[p].clone();
+                for (_, v) in &mut new {
+                    *v *= 1.01;
+                }
+                let row = (step * 13 + 3) % m;
+                if let Some((_, v)) = new.iter_mut().find(|(i, _)| *i == row) {
+                    *v += 0.001;
+                } else {
+                    new.push((row, 0.001));
+                }
+                // Exercise cached unit BTRAN and the restoration path without it.
+                if step % 2 == 0 {
+                    let mut unit = vec![0.; m];
+                    unit[p] = 1.;
+                    lu.btran_unit(p, &mut unit);
+                }
+                let mut alpha = vec![0.; m];
+                for &(i, v) in &new {
+                    alpha[i] = v;
+                }
+                lu.ftran_entering(&mut alpha);
+                // An intervening edge-weight FTRAN must not overwrite the spike.
+                let mut other = vec![1.; m];
+                lu.ftran(&mut other);
+                assert!(lu.update_sparse(p, &alpha, 0..m), "m={m} step={step}");
+                columns[p] = new;
+                assert!(residual(&columns, &mut lu) < 1e-8, "m={m} step={step}");
+            }
+            assert_eq!(lu.updates(), 80);
+        }
+    }
+
+    #[test]
+    fn rejected_ft_update_keeps_valid_eta_fallback() {
+        let mut columns = vec![vec![(0, 1.)], vec![(1, 1.)]];
+        let mut lu = factor(&columns, usize::MAX).unwrap();
+        lu.enable_ft();
+        columns[0] = vec![(0, 1e-12), (1, 1.)];
+        let mut a = vec![1e-12, 1.];
+        lu.ftran_entering(&mut a);
+        assert!(!lu.update_sparse(0, &a, 0..2));
+        assert!(lu.needs_refactor(64, usize::MAX));
+        // Known exact RHS avoids an ill-conditioning-dependent residual threshold.
+        let mut rhs = vec![1e-12, 2.];
+        lu.ftran(&mut rhs);
+        assert_eq!(rhs, vec![1., 1.]);
+        let mut rhs = vec![1e-12 + 1., 1.];
+        lu.btran(&mut rhs);
+        assert!((rhs[0] - 1.).abs() < 1e-3);
+        assert_eq!(rhs[1], 1.);
     }
 
     #[test]

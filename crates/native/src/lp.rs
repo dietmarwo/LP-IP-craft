@@ -46,6 +46,7 @@ pub(crate) enum State {
 pub(crate) struct Controls {
     pub pivot_tolerance: f64,
     pub refactor_interval: usize,
+    pub forrest_tomlin: bool,
     pub max_factor_entries: usize,
     pub steepest_edge: bool,
     /// Primal tolerance target in original units.
@@ -529,7 +530,9 @@ impl Lp {
                 return false;
             }
             let lu = self.lu.as_mut().expect("factorized basis");
-            lu.update_sparse(p, &self.column, self.column_index.iter().copied());
+            if !lu.update_sparse(p, &self.column, self.column_index.iter().copied()) {
+                return false;
+            }
             self.stats.updates += 1;
             self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
             let leaving = self.basic[p];
@@ -716,7 +719,10 @@ impl Lp {
                 }
             };
             match Lu::factor(self.m, column, self.controls.max_factor_entries) {
-                Ok(lu) => {
+                Ok(mut lu) => {
+                    if self.controls.forrest_tomlin {
+                        lu.enable_ft();
+                    }
                     self.stats.refactors += 1;
                     self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
                     self.lu = Some(lu);
@@ -1027,7 +1033,7 @@ impl Lp {
             &mut self.column,
         );
         let lu = self.lu.as_mut().expect("factorized basis");
-        lu.ftran(&mut self.column);
+        lu.ftran_entering(&mut self.column);
         self.column_index.clear();
         self.column_index.extend(
             self.column
@@ -1469,6 +1475,7 @@ mod tests {
         Controls {
             pivot_tolerance: 1e-9,
             refactor_interval: 16,
+            forrest_tomlin: true,
             max_factor_entries: usize::MAX,
             steepest_edge: true,
             feasibility: 1e-7,

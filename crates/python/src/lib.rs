@@ -398,6 +398,7 @@ fn native_settings(
             "presolve" => settings.presolve = field(&value, &key)?,
             "max_factor_entries" => settings.max_factor_entries = field(&value, &key)?,
             "refactor_interval" => settings.refactor_interval = field(&value, &key)?,
+            "forrest_tomlin" => settings.forrest_tomlin = field(&value, &key)?,
             _ => {
                 return Err(PyValueError::new_err(format!(
                     "backend_options: unknown native option {key:?}"
