@@ -117,3 +117,14 @@ def test_infeasible_root_cannot_certify_tolerance_start_as_optimal():
     m=make(c=[1.],a=[[1.],[1.]],up=[1.],rl=[-math.inf,1.],ru=[0.99999995,math.inf],kinds=["integer"])
     r=solve(m,backend="native",start=[1.])
     assert r.status=="numerical_failure" and r.candidate==[1.]
+
+
+def test_strengthened_integer_rows_do_not_block_continuous_certification():
+    import json
+    from pathlib import Path
+    case = json.loads((Path(__file__).parent / "data/mip_integer_row_certification.json").read_text())
+    m = Model(**case["model"])
+    r = solve(m, backend="native")
+    assert r.status == "optimal"
+    assert abs(r.evaluation.objective - case["objective"]) < 1e-6
+    assert r.nodes < 1000

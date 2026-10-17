@@ -34,7 +34,7 @@ pub struct NativeOptions {
     pub dual_tolerance: f64,
     /// Cap on stored LU and eta entries of one basis factorization.
     pub max_factor_entries: usize,
-    /// Basis updates (eta columns) before the LU is rebuilt.
+    /// Maximum basis updates before rebuilding LU; excessive eta fill rebuilds sooner.
     pub refactor_interval: usize,
     /// Dual steepest-edge pricing; false prices by largest infeasibility.
     pub steepest_edge: bool,
@@ -281,7 +281,7 @@ fn certify(
         none => {
             let columns = presolve::kept_columns(model, model.variables(), settings);
             let mut lp = Lp::new(model, keep, &columns, controls(model, options, settings))?;
-            lp.shrink_rows();
+            lp.shrink_rows(model);
             none.insert(lp)
         }
     };
@@ -552,13 +552,24 @@ impl LpIpSolver for NativeSolver {
             None
         };
         let model = strengthened.as_ref().unwrap_or(model);
+        // A tolerance-feasible start can violate an exact MIP strengthening.
+        // Preserve it under the original contract and classify any conflict
+        // in the single solve, rather than losing it in component conversion.
+        let preserve_start = match (strengthened.as_ref(), start) {
+            (Some(_), Some(s)) => {
+                check::evaluate(original_model, &s.primal, &options.tolerances)?.feasible_candidate
+                    && !check::evaluate(model, &s.primal, &options.tolerances)?.feasible_candidate
+            }
+            _ => false,
+        };
         if self.settings.decompose
+            && !preserve_start
             && model.nnz() > 0
             && model.n() >= self.settings.decomposition_min_variables
             && !cancel.is_cancelled()
             && self.settings.time_limit_seconds != Some(0.)
         {
-            if let Some(out) = components::solve_if_separable(
+            if let Some(mut out) = components::solve_if_separable(
                 &self.settings,
                 model,
                 options,
@@ -566,6 +577,12 @@ impl LpIpSolver for NativeSolver {
                 cancel,
                 call_started,
             )? {
+                if strengthened.is_some() {
+                    if let Some(x) = &out.candidate {
+                        out.evaluation =
+                            Some(check::evaluate(original_model, x, &options.tolerances)?);
+                    }
+                }
                 return Ok(out);
             }
         }
@@ -594,7 +611,13 @@ impl LpIpSolver for NativeSolver {
         let mut counters = Counters::default();
         if model.is_mip() {
             if let Some(s) = start {
-                consider(model, s.primal.clone(), options, &mut result, &mut pool)?;
+                consider(
+                    original_model,
+                    s.primal.clone(),
+                    options,
+                    &mut result,
+                    &mut pool,
+                )?;
             }
         }
         let domain = propagate::Domain::new(model, settings.presolve);

@@ -29,7 +29,7 @@ from ._native import lp_residuals as _lp_residuals
 from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 
-__version__ = "0.14.0"
+__version__ = "0.17.0"
 
 __all__ = [
     "BACKENDS",

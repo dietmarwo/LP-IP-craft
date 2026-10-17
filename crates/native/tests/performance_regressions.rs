@@ -122,3 +122,34 @@ fn integer_propagation_matches_enumeration_with_signed_rows() {
         }
     }
 }
+
+#[test]
+fn integer_strengthening_preserves_original_tolerance_start() {
+    for n in [1, 40] {
+        let mut values = vec![0.; 2 * n];
+        values[0] = 1.;
+        values[n] = 1.;
+        let model = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![1.; n],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; n], vec![1.; n]),
+            kinds: vec![VariableKind::Integer; n],
+            matrix: CsrMatrix::from_dense(2, n, &values).unwrap(),
+            rows: Bounds::new(vec![f64::NEG_INFINITY, 1.], vec![0.99999995, f64::INFINITY]),
+        })
+        .unwrap();
+        let mut x = vec![0.; n];
+        x[0] = 1.;
+        let r = NativeSolver::default()
+            .solve(
+                &model,
+                &Options::default(),
+                Some(&WarmStart::from_primal(x.clone())),
+                &CancellationToken::default(),
+            )
+            .unwrap();
+        assert_eq!(r.status, Status::NumericalFailure);
+        assert_eq!(r.candidate, Some(x));
+    }
+}

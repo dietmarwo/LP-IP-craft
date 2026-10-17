@@ -1,0 +1,16 @@
+[package]
+name="performance-native"
+version="0.1.0"
+edition="2024"
+publish=false
+[features]
+default=["backend_native"]
+backend_native=[]
+backend_highs=[]
+[dependencies]
+lp-ip-craft={path="../../crates/core"}
+lp-ip-craft-native={path="../../crates/native"}
+serde_json="1"
+[[bin]]
+name="performance-native"
+path="../shared/main.rs"

@@ -1,0 +1,16 @@
+[package]
+name="comparison-highs"
+version="0.1.0"
+edition="2024"
+publish=false
+[features]
+default=["backend_highs"]
+backend_highs=[]
+backend_native=[]
+[dependencies]
+lp-ip-craft={path="../../highs-0.4.0/LP-IP-craft/crates/core"}
+lp-ip-craft-highs={path="../../highs-0.4.0/LP-IP-craft/crates/highs"}
+serde_json="1"
+[[bin]]
+name="comparison-highs"
+path="../shared/main.rs"

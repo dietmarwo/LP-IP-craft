@@ -527,6 +527,16 @@ impl Lu {
         self.etas.len()
     }
 
+    /// Bound update-file work relative to the sparse base factor. The
+    /// caller's interval and memory cap remain hard upper limits.
+    pub fn needs_refactor(&self, interval: usize, cap: usize) -> bool {
+        self.updates() >= interval
+            || self.entries() > cap
+            || (self.m >= 128
+                && self.updates() >= 16
+                && self.eta_value.len() > 8 * (self.m + self.l.value.len() + self.u.value.len()))
+    }
+
     /// Solves `B x = v` in place: `v` is indexed by row on entry and by
     /// basis position on return.
     pub fn ftran(&mut self, v: &mut [f64]) {
@@ -912,6 +922,21 @@ mod tests {
             lu.ftran(&mut alpha);
             lu.update(p, &alpha);
         }
+    }
+
+    #[test]
+    fn update_fill_trigger_preserves_interval_and_entry_caps() {
+        let columns: Vec<_> = (0..128).map(|i| vec![(i, 1.)]).collect();
+        let mut lu = factor(&columns, usize::MAX).unwrap();
+        let alpha = vec![1.; 128];
+        for p in 0..15 {
+            lu.update(p, &alpha);
+        }
+        assert!(!lu.needs_refactor(64, usize::MAX));
+        assert!(lu.needs_refactor(1, usize::MAX));
+        assert!(lu.needs_refactor(64, 128));
+        lu.update(15, &alpha);
+        assert!(lu.needs_refactor(64, usize::MAX));
     }
 
     #[test]

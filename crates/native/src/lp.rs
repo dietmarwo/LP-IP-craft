@@ -325,12 +325,20 @@ impl Lp {
         Ok(lp)
     }
 
-    /// Shrinks every finite row bound inward by a margin well above the
-    /// primal tolerance (for an incumbent-certification LP). A row whose
+    /// Shrinks bounds on rows containing continuous columns inward by a margin
+    /// above primal tolerance (for incumbent certification). A row whose
     /// interval is too narrow keeps its bounds.
-    pub fn shrink_rows(&mut self) {
+    pub fn shrink_rows(&mut self, model: &Model) {
+        let a = model.matrix();
         for k in self.n..self.n + self.m {
-            self.shrink(k);
+            let i = self.rows[k - self.n];
+            // Certification fixes integer columns. Shrinking a tight
+            // all-integer row would make that fixed point infeasible.
+            if (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
+                .any(|e| a.values[e] != 0. && !model.kinds()[a.pattern.indices[e]].is_integral())
+            {
+                self.shrink(k);
+            }
         }
         self.primal_stale = true;
     }
@@ -1167,7 +1175,7 @@ impl Lp {
                 self.controls.max_factor_entries,
             );
             let lu = self.lu();
-            if (lu.updates() >= interval || lu.entries() > cap) && self.refresh()? {
+            if lu.needs_refactor(interval, cap) && self.refresh()? {
                 return Ok(Outcome::Restart);
             }
             let Some(r) = self.choose_row() else {
