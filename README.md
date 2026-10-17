@@ -1,10 +1,12 @@
+> Native 0.19: captured-basis replay, compact indexed elimination, retained blocked dense LU tails, bounded minimum-degree ordering and work-based rebuilds. See [the five plans](docs/irregular-lu/STEPS.md) and [results and validation](docs/irregular-lu/RESULTS.md). The production solver remains pure Rust with no HiGHS or BLAS dependency.
+
 > Native 0.18: measured kernel profiling, Forrest–Tomlin basis updates with checked fallback, and indexed sparse pricing. See [the plan and implementation](docs/basis-updates/PLAN.md) and [benchmarks and validation](docs/basis-updates/RESULTS.md). Choose `basis_update="auto"` (default), `"eta"`, or `"forrest_tomlin"` in Python; Rust uses `BasisUpdate`. The production solver remains pure Rust without HiGHS.
 
 > Native 0.17 performance update: ten measured iterations add integral row strengthening, short-row integer propagation, a direct box-LP path, reachability-based sparse triangular solves, sparse eta work and adaptive refactorization. See [the iteration plans](docs/performance-ten/ITERATIONS.md) and [the complete results](docs/performance-ten/RESULTS.md). The core and native solver remain dependency-free Rust.
 
 # LP-IP-craft — native Rust LP/MIP solver
 
-Version **0.18.0** extends the 0.16 architecture, which replaced both 0.15
+Version **0.19.0** extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine

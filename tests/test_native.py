@@ -139,3 +139,20 @@ def test_basis_update_controls(method):
 def test_unknown_basis_update_is_rejected():
     with pytest.raises(ValueError, match="basis_update"):
         solve(make(), backend="native", backend_options=NativeOptions(basis_update="unknown"))
+
+@pytest.mark.parametrize("ordering", ["auto", "natural", "min_degree"])
+@pytest.mark.parametrize("adaptive", [False, True])
+def test_factorization_controls(ordering, adaptive):
+    r = solve(make(), backend="native", backend_options=NativeOptions(
+        factor_ordering=ordering, factor_pivot_search=8, adaptive_refactor=adaptive))
+    assert r.status == "optimal" and r.evaluation.objective == pytest.approx(9.)
+    assert dict(r.backend.effective_options)["factor_ordering"] == ordering
+
+@pytest.mark.parametrize("search", [0, 65])
+def test_invalid_factor_pivot_search(search):
+    with pytest.raises(ValueError, match="factor_pivot_search"):
+        solve(make(), backend="native", backend_options=NativeOptions(factor_pivot_search=search))
+
+def test_invalid_factor_ordering():
+    with pytest.raises(ValueError, match="factor_ordering"):
+        solve(make(), backend="native", backend_options=NativeOptions(factor_ordering="unknown"))

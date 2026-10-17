@@ -247,6 +247,8 @@ pub(crate) struct Lu {
     force_refactor: bool,
     sparse_btran: bool,
     update_nnz: usize,
+    factor_work: u64,
+    eta_work: u64,
     dense: Option<crate::dense::DenseTail>,
     dense_dimension: usize,
 }
@@ -350,6 +352,8 @@ impl Lu {
             force_refactor: false,
             sparse_btran: false,
             update_nnz: 0,
+            factor_work: 0,
+            eta_work: 0,
             dense: None,
             dense_dimension: 0,
             reach: Reach {
@@ -411,6 +415,9 @@ impl Lu {
             row_done[r] = true;
             drop(_extract);
             let _eliminate = crate::profile::enter("factor_sparse_eliminate");
+            lu.factor_work = lu
+                .factor_work
+                .saturating_add((pivot_row.len() as u64).saturating_mul(pivot_col.len() as u64));
             // Schur complement update; scatter map is per column, O(m) memory.
             for &(q, u) in pivot_row.iter() {
                 if u == 0. {
@@ -523,6 +530,9 @@ impl Lu {
             let _profile = crate::profile::enter("factor_dense");
             if let Some(tail) = crate::dense::DenseTail::factor(cols, rows, positions, self.m) {
                 self.dense_dimension = n;
+                self.factor_work = self
+                    .factor_work
+                    .saturating_add((n as u64).saturating_pow(3) / 3);
                 for k in 0..n {
                     let (r, p) = (tail.rows[k], tail.cols[k]);
                     row_done[r] = true;
@@ -679,8 +689,17 @@ impl Lu {
 
     /// Bound update-file work relative to the sparse base factor. The
     /// caller's interval and memory cap remain hard upper limits.
-    pub fn needs_refactor(&self, interval: usize, cap: usize) -> bool {
+    pub fn needs_refactor(&self, interval: usize, cap: usize, adaptive: bool) -> bool {
+        let dense_work = adaptive
+            && self.m >= 2048
+            && self.dense.as_ref().is_some_and(|d| d.len() >= self.m / 8);
+        let interval = if adaptive && !dense_work {
+            interval.min(64)
+        } else {
+            interval
+        };
         self.force_refactor
+            || (dense_work && self.updates() >= 32 && self.eta_work > self.factor_work / 4)
             || self.updates() >= interval
             || self.entries() > cap
             || (self.m >= 128
@@ -892,6 +911,9 @@ impl Lu {
             let t = v[eta.position] / eta.pivot;
             v[eta.position] = t;
             if t != 0.0 {
+                self.eta_work = self
+                    .eta_work
+                    .saturating_add((eta.end - eta.start + 1) as u64);
                 let range = eta.start..eta.end;
                 for (&i, &a) in self.eta_index[range.clone()]
                     .iter()
@@ -941,6 +963,9 @@ impl Lu {
             if support & eta.support == 0 {
                 continue;
             }
+            self.eta_work = self
+                .eta_work
+                .saturating_add((eta.end - eta.start + 1) as u64);
             let range = eta.start..eta.end;
             let mut s = v[eta.position];
             for (&i, &a) in self.eta_index[range.clone()]
@@ -1080,7 +1105,7 @@ impl Lu {
 }
 
 /// Markowitz search over columns and rows by increasing active count. Stops
-/// at a zero-cost pivot, after `SEARCH` candidates once one is acceptable, or
+/// at a zero-cost pivot, after the configured candidate budget once one is acceptable, or
 /// when no remaining count class can beat the best cost found.
 fn find_pivot(
     a: &mut Active,
@@ -1355,6 +1380,39 @@ mod tests {
     }
 
     #[test]
+    fn work_rebuild_trigger_respects_minimum_spacing_and_hard_caps() {
+        let m = 2048;
+        let columns: Vec<Vec<_>> = (0..m)
+            .map(|p| {
+                if p < 256 {
+                    (0..256)
+                        .map(|i| (i, if i == p { 4. } else { 0.001 }))
+                        .collect()
+                } else {
+                    vec![(p, 1.)]
+                }
+            })
+            .collect();
+        let mut lu = factor(&columns, usize::MAX).unwrap();
+        assert!(lu.dense.is_some());
+        for p in 0..31 {
+            let mut a = vec![0.; m];
+            a[p] = 1.;
+            lu.update(p, &a);
+        }
+        lu.eta_work = u64::MAX;
+        assert!(!lu.needs_refactor(256, usize::MAX, true));
+        let mut a = vec![0.; m];
+        a[31] = 1.;
+        lu.update(31, &a);
+        assert!(lu.needs_refactor(256, usize::MAX, true));
+        assert!(!lu.needs_refactor(256, usize::MAX, false));
+        lu.eta_work = 0;
+        assert!(lu.needs_refactor(32, usize::MAX, true));
+        assert!(lu.needs_refactor(256, lu.entries() - 1, true));
+    }
+
+    #[test]
     fn update_fill_trigger_preserves_interval_and_entry_caps() {
         let columns: Vec<_> = (0..128).map(|i| vec![(i, 1.)]).collect();
         let mut lu = factor(&columns, usize::MAX).unwrap();
@@ -1362,11 +1420,11 @@ mod tests {
         for p in 0..15 {
             lu.update(p, &alpha);
         }
-        assert!(!lu.needs_refactor(64, usize::MAX));
-        assert!(lu.needs_refactor(1, usize::MAX));
-        assert!(lu.needs_refactor(64, 128));
+        assert!(!lu.needs_refactor(64, usize::MAX, true));
+        assert!(lu.needs_refactor(1, usize::MAX, true));
+        assert!(lu.needs_refactor(64, 128, true));
         lu.update(15, &alpha);
-        assert!(lu.needs_refactor(64, usize::MAX));
+        assert!(lu.needs_refactor(64, usize::MAX, true));
     }
 
     #[test]
@@ -1497,7 +1555,7 @@ mod tests {
         let mut a = vec![1e-12, 1.];
         lu.ftran_entering(&mut a);
         assert!(!lu.update_sparse(0, &a, 0..2));
-        assert!(lu.needs_refactor(64, usize::MAX));
+        assert!(lu.needs_refactor(64, usize::MAX, true));
         // Known exact RHS avoids an ill-conditioning-dependent residual threshold.
         let mut rhs = vec![1e-12, 2.];
         lu.ftran(&mut rhs);

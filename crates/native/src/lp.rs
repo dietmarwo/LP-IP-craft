@@ -46,6 +46,7 @@ pub(crate) enum State {
 pub(crate) struct Controls {
     pub pivot_tolerance: f64,
     pub refactor_interval: usize,
+    pub adaptive_refactor: bool,
     pub basis_update: crate::BasisUpdate,
     pub factor_pivot_search: usize,
     pub factor_ordering: crate::FactorOrdering,
@@ -733,7 +734,7 @@ impl Lp {
                 crate::FactorOrdering::Natural => false,
                 crate::FactorOrdering::MinDegree => true,
                 crate::FactorOrdering::Auto => {
-                    self.m >= 256
+                    self.m >= 2048
                         && self
                             .lu
                             .as_ref()
@@ -1243,12 +1244,13 @@ impl Lp {
             if *iterations > self.iteration_guard {
                 return Ok(Outcome::Failure);
             }
+            let adaptive = self.controls.adaptive_refactor;
             let (interval, cap) = (
                 self.controls.refactor_interval,
                 self.controls.max_factor_entries,
             );
             let lu = self.lu();
-            if lu.needs_refactor(interval, cap) && self.refresh()? {
+            if lu.needs_refactor(interval, cap, adaptive) && self.refresh()? {
                 return Ok(Outcome::Restart);
             }
             let Some(r) = self.choose_row() else {
@@ -1535,6 +1537,7 @@ mod tests {
         Controls {
             pivot_tolerance: 1e-9,
             refactor_interval: 16,
+            adaptive_refactor: true,
             basis_update: crate::BasisUpdate::ForrestTomlin,
             factor_pivot_search: 4,
             factor_ordering: crate::FactorOrdering::Auto,

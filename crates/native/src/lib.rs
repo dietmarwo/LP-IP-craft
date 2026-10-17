@@ -81,6 +81,8 @@ pub struct NativeOptions {
     pub max_factor_entries: usize,
     /// Maximum basis updates before rebuilding LU; excessive eta fill rebuilds sooner.
     pub refactor_interval: usize,
+    /// Rebuild large dense bases using accumulated update-work estimates.
+    pub adaptive_refactor: bool,
     /// Basis-update strategy; auto adapts to observed update and factor fill.
     pub basis_update: BasisUpdate,
     /// Markowitz candidates examined after a feasible pivot is found (1..=64).
@@ -120,7 +122,8 @@ impl Default for NativeOptions {
             pivot_tolerance: 1e-9,
             dual_tolerance: 1e-7,
             max_factor_entries: 4_000_000,
-            refactor_interval: 64,
+            refactor_interval: 256,
+            adaptive_refactor: true,
             basis_update: BasisUpdate::Auto,
             factor_pivot_search: 4,
             factor_ordering: FactorOrdering::Auto,
@@ -1135,6 +1138,7 @@ fn controls(model: &Model, options: &Options, settings: &NativeOptions) -> lp::C
     lp::Controls {
         pivot_tolerance: settings.pivot_tolerance,
         refactor_interval: settings.refactor_interval,
+        adaptive_refactor: settings.adaptive_refactor,
         basis_update: settings.basis_update,
         factor_pivot_search: settings.factor_pivot_search,
         factor_ordering: settings.factor_ordering,
@@ -1157,6 +1161,7 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ),
         ("max_factor_entries", s.max_factor_entries.to_string()),
         ("refactor_interval", s.refactor_interval.to_string()),
+        ("adaptive_refactor", s.adaptive_refactor.to_string()),
         ("basis_update", s.basis_update.as_str().to_string()),
         ("factor_pivot_search", s.factor_pivot_search.to_string()),
         ("factor_ordering", s.factor_ordering.as_str().to_string()),

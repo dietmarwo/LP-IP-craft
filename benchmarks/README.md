@@ -60,3 +60,36 @@ update support to stderr at refactorization.
 `--variant eta` exercises the retained product-form implementation. Automatic
 selection is deterministic and uses observed update support and factor fill,
 not benchmark names or measured wall-clock timings. See `docs/basis-updates`.
+
+## Irregular LU work (0.19)
+
+Capture is opt-in and absent from normal builds:
+
+```sh
+cargo build --release --manifest-path benchmarks/Cargo.toml --features basis-replay
+LPIP_CAPTURE_DIR=corpus/irregular-4096 LPIP_CAPTURE_AT=0,1,16,32,48,64,66 \
+  benchmarks/target/release/performance-native irregular 4096 warm 1 1
+benchmarks/target/release/basis-replay corpus/irregular-4096/basis-0066.bin 3 4 natural
+python benchmarks/replay_compare.py --binary new=benchmarks/target/release/basis-replay \
+  --corpus docs/irregular-lu/corpus --output replay.json --rounds 3
+```
+
+The binary basis files include matrix values and recent pricing/dual vectors,
+plus deterministic sparse and dense controls. Capture each fixture in a fresh
+directory/process. Replay validates normalized backward errors in both orientations;
+loading and independent residual calculations are outside the timers. The retained
+corpus is from 0.18, so matrix inputs do not change with new pivot trajectories.
+
+Extra performance-native arguments after the earlier fixture/size/warm/workers/repeats:
+`basis_method interval search ordering rebuild_mode` (e.g. `auto 256 4 auto adaptive`).
+`basis_method` is auto/eta/ft, `ordering` auto/natural/min_degree, and rebuild_mode
+adaptive/fixed. The configured interval is a hard maximum. Defaults use 256 with
+work-based dense rebuilding; sparse/small bases rebuild within 64 updates.
+Force `adaptive_refactor=False` in Python for interval ablations. All entry caps,
+pivot tests and original-model acceptance checks remain enabled.
+
+`factor_ordering="min_degree"` enables a project-owned bounded merged-row
+minimum-degree heuristic; it is not the COLAMD reference implementation. Dense
+rows and a symbolic-work cap limit ordering overhead. Auto uses it only on large
+bases after substantial dense fill was observed. `factor_pivot_search` accepts
+1..64; the default remains 4 after the measured search-budget sweep.

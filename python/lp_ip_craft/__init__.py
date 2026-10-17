@@ -29,7 +29,7 @@ from ._native import lp_residuals as _lp_residuals
 from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"
 
 __all__ = [
     "BACKENDS",
@@ -102,7 +102,8 @@ class NativeOptions:
     pivot_tolerance: float = 1e-9
     dual_tolerance: float = 1e-7
     max_factor_entries: int = 4_000_000
-    refactor_interval: int = 64
+    refactor_interval: int = 256
+    adaptive_refactor: bool = True
     basis_update: Literal["auto", "eta", "forrest_tomlin"] = "auto"
     factor_pivot_search: int = 4
     factor_ordering: Literal["auto", "natural", "min_degree"] = "auto"

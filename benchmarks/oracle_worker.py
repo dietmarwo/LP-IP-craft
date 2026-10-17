@@ -8,8 +8,8 @@ import time
 import lp_ip_craft as lp
 
 p=argparse.ArgumentParser();p.add_argument('dataset');p.add_argument('backend',choices=['native','highs']);p.add_argument('output')
-p.add_argument('--variant',choices=['default','dantzig','refactor1','refactor8','workers4','ft','eta'],default='default')
-p.add_argument('--suite',choices=['random','exact','components']);p.add_argument('--seed',type=int);a=p.parse_args()
+p.add_argument('--variant',choices=['default','dantzig','refactor1','refactor8','workers4','ft','eta','ordering','fixed128','fixed256'],default='default')
+p.add_argument('--basis-update',choices=['auto','eta','forrest_tomlin']);p.add_argument('--suite',choices=['random','exact','components']);p.add_argument('--seed',type=int);a=p.parse_args()
 data=Path(a.dataset).read_bytes();dataset=json.loads(data)
 records=[]
 for entry in dataset['records']:
@@ -18,8 +18,10 @@ for entry in dataset['records']:
     model=lp.Model(**entry['model'])
     mip=any(k!='continuous' for k in entry['model']['kinds'])
     if a.backend=='native':
-        settings=lp.NativeOptions(basis_update="forrest_tomlin" if a.variant=="ft" else "eta" if a.variant=="eta" else "auto",time_limit_seconds=30.,component_threads=4 if a.variant=='workers4' else 1,
-                                  steepest_edge=a.variant!='dantzig',refactor_interval=1 if a.variant=='refactor1' else 8 if a.variant=='refactor8' else 64,
+        settings=lp.NativeOptions(basis_update=a.basis_update or ("forrest_tomlin" if a.variant=="ft" else "eta" if a.variant=="eta" else "auto"),
+                                  factor_ordering="min_degree" if a.variant=="ordering" else "auto",
+                                  adaptive_refactor=a.variant not in ["fixed128","fixed256"],time_limit_seconds=30.,component_threads=4 if a.variant=='workers4' else 1,
+                                  steepest_edge=a.variant!='dantzig',refactor_interval=1 if a.variant=='refactor1' else 8 if a.variant=='refactor8' else 128 if a.variant=="fixed128" else 256 if a.variant=="fixed256" else lp.NativeOptions().refactor_interval,
                                   decomposition_min_variables=1 if entry['suite']=='components' else 32,
                                   component_parallel_min_entries=0 if entry['suite']=='components' else 2048)
     else:settings=lp.HighsOptions(time_limit_seconds=30.,node_limit=100_000 if mip else None,iteration_limit=None if mip else 1_000_000)

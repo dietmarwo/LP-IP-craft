@@ -147,7 +147,8 @@ fn main() {
                 "auto" => lp_ip_craft_native::BasisUpdate::Auto,
                 _ => panic!("basis method must be auto, eta, or ft"),
             },
-            refactor_interval: args.get(7).map_or(64, |s| s.parse().unwrap()),
+            refactor_interval: args.get(7).map_or(256, |s| s.parse().unwrap()),
+            adaptive_refactor: args.get(10).is_none_or(|s| s != "fixed"),
             factor_pivot_search: args.get(8).map_or(4, |s| s.parse().unwrap()),
             factor_ordering: match args.get(9).map(String::as_str).unwrap_or("auto") {
                 "auto" => lp_ip_craft_native::FactorOrdering::Auto,

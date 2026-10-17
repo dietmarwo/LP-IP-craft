@@ -397,6 +397,7 @@ fn native_settings(
             }
             "presolve" => settings.presolve = field(&value, &key)?,
             "max_factor_entries" => settings.max_factor_entries = field(&value, &key)?,
+            "adaptive_refactor" => settings.adaptive_refactor = field(&value, &key)?,
             "refactor_interval" => settings.refactor_interval = field(&value, &key)?,
             "factor_pivot_search" => settings.factor_pivot_search = field(&value, &key)?,
             "factor_ordering" => {

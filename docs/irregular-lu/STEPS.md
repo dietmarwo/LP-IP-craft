@@ -106,3 +106,26 @@ oracles, forced FT and natural/min-degree controls, independent LP KKT checks,
 conservative-bound fixtures, Rust/Python/Clippy gates. Final comparisons use fresh
 uninstrumented 0.18/new/HiGHS processes, including the large irregular fixture.
 Package complete source, plans, raw evidence and reproducible benchmark tools.
+
+Step 4 outcome: all ordered replays and full policy solves pass their checks.
+Search 8/16 and forced minimum-degree advice do not give a robust overall win.
+Keep search=4. Auto ordering is restricted to m>=2048 after a prior dense tail
+larger than m/8; smaller cases retain natural order. Forced ordering remains
+available and is covered by a complete 6330-model oracle pass.
+
+Step 5 outcome: fixed intervals 32/64/128/256 and two work budgets were measured.
+The first adaptive policy regressed the smaller irregular fixture; corrected by
+restricting work-based rebuilding to m>=2048 and dense tail >=m/8. Final policy
+requires at least 32 updates and rebuilds when visited eta work exceeds one
+quarter of estimated factor work. The hard maximum is 256; other bases retain
+an internal maximum of 64. Existing entry/fill limits and numerical fallbacks
+still override these estimates. The corrected large development case uses 60
+rather than 67 rebuilds and runs in 6.78–7.01 s (final fresh comparisons in RESULTS).
+
+Final gates: 104 Rust/all-feature tests, 169 Python tests, strict Clippy,
+four complete 6330-model oracle passes (default/FT/ordering/fixed128), 1200 exact
+frequent-refactor forced-FT cases, 180 parallel-component cases, and 400 exact
+conservative-bound safety checks. The 19 known oracle disagreements in each
+full pass are the identical previously adjudicated cases; no new discrepancy.
+Twelve medium dense LP solves with planted primal/dual certificates exercise
+retained dense tails, ordering and forced FT through the full solver.
