@@ -15,6 +15,20 @@ fn partition_columns(model: &Model, hint: Option<&[f64]>, depth: usize) -> Vec<u
     free.truncate(depth);
     free
 }
+/// The more informative of two unfinished-subtree statuses: a numerical
+/// failure or an exhausted wall clock must not be hidden by a later subtree
+/// that merely reached its node share.
+fn worse(a: Status, b: Status) -> Status {
+    let rank = |s: Status| match s {
+        Status::NumericalFailure => 5,
+        Status::Cancelled => 4,
+        Status::TimeLimit => 3,
+        Status::IterationLimit => 2,
+        Status::NodeLimit => 1,
+        _ => 0,
+    };
+    if rank(b) > rank(a) { b } else { a }
+}
 fn share(limit: Option<u64>, index: usize, count: usize) -> Option<u64> {
     limit.map(|v| v / (count as u64) + u64::from((index as u64) < v % (count as u64)))
 }
@@ -55,15 +69,24 @@ pub(crate) fn solve(
     }
     let workers = settings.tree_threads.min(count);
     let columns = &columns;
+    // Subtrees differ a lot in size, so workers take the next one as they
+    // finish. Shares depend on the subtree index and results are combined in
+    // index order, so fixed-work outcomes do not depend on the schedule.
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let next = &next;
     let mut outputs = std::thread::scope(|scope| -> Result<Vec<_>> {
         let mut handles = Vec::new();
-        for worker in 0..workers {
+        for _ in 0..workers {
             handles.push(
                 std::thread::Builder::new()
                     .name("lpip-tree".into())
                     .spawn_scoped(scope, move || {
                         let mut out = Vec::new();
-                        for index in (worker..count).step_by(workers) {
+                        loop {
+                            let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if index >= count {
+                                break;
+                            }
                             let r = (|| -> Result<SolveResult> {
                                 let mut controls = packing::child_settings(settings, began);
                                 controls.node_limit = share(settings.node_limit, index, count);
@@ -130,10 +153,12 @@ pub(crate) fn solve(
     }
     let (mut bound, mut missing, mut closed, mut errors) = (None::<f64>, false, 0usize, 0usize);
     let mut terminal = Status::Unknown;
+    let mut first_error = None;
     for (index, outcome) in outputs {
         match outcome {
-            Err(_) => {
+            Err(e) => {
                 errors += 1;
+                first_error.get_or_insert_with(|| format!("subtree {index}: {e}"));
                 result.nodes += share(settings.node_limit, index, count).unwrap_or(0);
                 result.iterations += share(settings.iteration_limit, index, count).unwrap_or(0);
                 missing |= inherited.is_none();
@@ -153,7 +178,7 @@ pub(crate) fn solve(
                 if r.status == Status::Optimal || r.status == Status::Infeasible {
                     closed += 1;
                 } else {
-                    terminal = r.status;
+                    terminal = worse(terminal, r.status);
                 }
                 if r.status != Status::Infeasible {
                     match r.best_bound.or(inherited) {
@@ -214,8 +239,9 @@ pub(crate) fn solve(
         .is_some_and(|t| result.backend.total_seconds > t);
     result.backend.raw_status = Some(result.status.as_str().into());
     result.message = format!(
-        "Parallel disjoint binary frontier: {} (numerical status)",
-        result.status.as_str()
+        "Parallel disjoint binary frontier: {} (numerical status){}",
+        result.status.as_str(),
+        first_error.map_or_else(String::new, |e| format!("; first error in {e}"))
     );
     Ok(Some(result))
 }
@@ -251,6 +277,35 @@ fn consider_candidate(
 mod tests {
     use super::*;
     use lp_ip_craft::{CsrMatrix, ModelData, VariableKind};
+    #[test]
+    fn unfinished_status_keeps_the_most_informative_reason() {
+        let all = [
+            Status::Unknown,
+            Status::NodeLimit,
+            Status::IterationLimit,
+            Status::TimeLimit,
+            Status::Cancelled,
+            Status::NumericalFailure,
+        ];
+        for (i, &a) in all.iter().enumerate() {
+            for (j, &b) in all.iter().enumerate() {
+                let expect = all[i.max(j)];
+                assert_eq!(worse(a, b), expect);
+                assert_eq!(worse(b, a), expect);
+            }
+        }
+        // Frontier order no longer matters: a numerical failure in an early
+        // subtree survives later node-limited ones.
+        let order = [
+            Status::NumericalFailure,
+            Status::NodeLimit,
+            Status::NodeLimit,
+        ];
+        assert_eq!(
+            order.iter().fold(Status::Unknown, |t, &s| worse(t, s)),
+            Status::NumericalFailure
+        );
+    }
     fn cycle(n: usize, extra: usize) -> Model {
         let mut a = vec![0.; n * (n + extra)];
         for i in 0..n {

@@ -159,31 +159,61 @@ pub struct NativeOptions {
     pub mip_diagnostics: bool,
     /// Maximum retained search events (0 means summaries only, at most 4096).
     pub mip_trace_limit: usize,
-    /// Opt-in SpOC4 packing, bounded probing and disjoint-frontier controls.
+    // Opt-in controls for binary unit-packing models (maximize, nonnegative
+    // weights, rows `sum x <= 1`), bounded probing and the disjoint frontier.
+    // All are off by default; docs/spoc4-025 and docs/spoc4-026 give details.
+    /// Greedy incumbent plus a factorization-free primal-dual root pass whose
+    /// prices give a checked upper bound. Also enables the packing driver.
     pub packing_root: bool,
+    /// First-order root steps, at most 100000.
     pub packing_root_iterations: usize,
+    /// Root work cap in matrix/vector units, `2*nnz+4*n+4*m` per step.
     pub packing_root_work: u64,
+    /// Residual repair tasks per round, at most 4096; positive enables the
+    /// packing driver.
     pub packing_neighborhoods: usize,
+    /// Maximum columns per residual, 4..=1024.
     pub packing_neighborhood_size: usize,
+    /// Residual workers, 1..=16. Fixed-work results do not depend on it.
     pub packing_workers: usize,
+    /// Node ceiling per residual task, at most 100000.
     pub packing_neighborhood_nodes: u64,
+    /// Hint-directed triangle and odd-cycle cuts before the proof search.
     pub packing_cuts: bool,
+    /// Edge-visit cap of that separator, at most 100000000.
     pub packing_cut_work: u64,
+    /// Merge compatible improving repairs of one snapshot batch.
     pub packing_combine_repairs: bool,
+    /// Repair rounds, 1..=32; `packing_neighborhoods * packing_rounds <= 4096`.
     pub packing_rounds: usize,
+    /// Extra residual columns per round, at most 1024 (capacity saturates at 1024).
     pub packing_neighborhood_growth: usize,
+    /// Repair seeds: `"incumbent"`, `"rejected"` or `"mixed"`.
     pub packing_seed_strategy: String,
+    /// Local clique cuts inside each residual before it is solved.
     pub packing_residual_cliques: bool,
+    /// Operation cap of the local clique separator per task, at most 1000000.
     pub packing_clique_work: u64,
+    /// Report the best checked root prices as `diagnostics.packing_root_prices`.
     pub packing_price_diagnostics: bool,
+    /// Wall-time cap of the repair phase (finite, nonnegative; 0 skips it).
     pub packing_repair_seconds: Option<f64>,
+    /// Wall-time cap of the exact search after repairs (finite,
+    /// nonnegative; 0 skips it and returns `time_limit`).
     pub packing_proof_seconds: Option<f64>,
+    /// Conservative bound from current prices of an interrupted simplex solve.
     pub partial_dual_bounds: bool,
+    /// Reliability probing on a bounded shortlist, without the old size gate.
     pub scalable_branching: bool,
+    /// Shortlist size of scalable probing, 1..=16.
     pub branch_probe_candidates: usize,
+    /// Pivots reserved per probe direction, at most 1024.
     pub branch_probe_pivots: u64,
+    /// Cumulative probe-work reservation per serial search, at most 1e10.
     pub branch_probe_work: u64,
+    /// Workers for the disjoint binary frontier, 1..=16 (1 disables it).
     pub tree_threads: usize,
+    /// Frontier depth, at most 8: `2^depth` disjoint subtrees (0 disables it).
     pub tree_split_depth: usize,
 }
 impl Default for NativeOptions {
@@ -263,39 +293,90 @@ impl Default for NativeOptions {
 impl NativeOptions {
     /// Validate settings before cancellation or numerical work.
     pub fn validate(&self) -> Result<()> {
-        if !(1..=32).contains(&self.packing_rounds)
-            || self
-                .packing_neighborhoods
-                .saturating_mul(self.packing_rounds)
-                > 4096
-            || self.packing_neighborhood_growth > 1024
-            || self.packing_clique_work > 1_000_000
-            || !["incumbent", "rejected", "mixed"].contains(&self.packing_seed_strategy.as_str())
-            || [self.packing_repair_seconds, self.packing_proof_seconds]
-                .into_iter()
-                .flatten()
-                .any(|t| !t.is_finite() || t < 0.)
-        {
-            return Err(Error::InvalidInput(
-                "invalid packing repair/phase controls".into(),
-            ));
-        }
-        if self.packing_root_iterations > 100_000
-            || self.packing_root_work > 10_000_000_000
-            || self.packing_neighborhoods > 4096
-            || !(4..=1024).contains(&self.packing_neighborhood_size)
-            || !(1..=16).contains(&self.packing_workers)
-            || self.packing_neighborhood_nodes > 100_000
-            || self.packing_cut_work > 100_000_000
-            || !(1..=16).contains(&self.branch_probe_candidates)
-            || self.branch_probe_pivots > 1024
-            || self.branch_probe_work > 10_000_000_000
-            || !(1..=16).contains(&self.tree_threads)
-            || self.tree_split_depth > 8
-        {
-            return Err(Error::InvalidInput(
-                "invalid bounded packing/probe/tree controls".into(),
-            ));
+        let phase = |t: Option<f64>| t.is_none_or(|t| t.is_finite() && t >= 0.);
+        for (ok, message) in [
+            (
+                (1..=32).contains(&self.packing_rounds),
+                "packing_rounds must lie in 1..=32",
+            ),
+            (
+                self.packing_neighborhoods
+                    .saturating_mul(self.packing_rounds)
+                    <= 4096,
+                "packing_neighborhoods * packing_rounds must be at most 4096",
+            ),
+            (
+                self.packing_neighborhood_growth <= 1024,
+                "packing_neighborhood_growth must be at most 1024",
+            ),
+            (
+                self.packing_clique_work <= 1_000_000,
+                "packing_clique_work must be at most 1000000",
+            ),
+            (
+                ["incumbent", "rejected", "mixed"].contains(&self.packing_seed_strategy.as_str()),
+                "packing_seed_strategy must be incumbent, rejected or mixed",
+            ),
+            (
+                phase(self.packing_repair_seconds),
+                "packing_repair_seconds must be finite and nonnegative",
+            ),
+            (
+                phase(self.packing_proof_seconds),
+                "packing_proof_seconds must be finite and nonnegative",
+            ),
+            (
+                self.packing_root_iterations <= 100_000,
+                "packing_root_iterations must be at most 100000",
+            ),
+            (
+                self.packing_root_work <= 10_000_000_000,
+                "packing_root_work must be at most 10000000000",
+            ),
+            (
+                self.packing_neighborhoods <= 4096,
+                "packing_neighborhoods must be at most 4096",
+            ),
+            (
+                (4..=1024).contains(&self.packing_neighborhood_size),
+                "packing_neighborhood_size must lie in 4..=1024",
+            ),
+            (
+                (1..=16).contains(&self.packing_workers),
+                "packing_workers must lie in 1..=16",
+            ),
+            (
+                self.packing_neighborhood_nodes <= 100_000,
+                "packing_neighborhood_nodes must be at most 100000",
+            ),
+            (
+                self.packing_cut_work <= 100_000_000,
+                "packing_cut_work must be at most 100000000",
+            ),
+            (
+                (1..=16).contains(&self.branch_probe_candidates),
+                "branch_probe_candidates must lie in 1..=16",
+            ),
+            (
+                self.branch_probe_pivots <= 1024,
+                "branch_probe_pivots must be at most 1024",
+            ),
+            (
+                self.branch_probe_work <= 10_000_000_000,
+                "branch_probe_work must be at most 10000000000",
+            ),
+            (
+                (1..=16).contains(&self.tree_threads),
+                "tree_threads must lie in 1..=16",
+            ),
+            (
+                self.tree_split_depth <= 8,
+                "tree_split_depth must be at most 8",
+            ),
+        ] {
+            if !ok {
+                return Err(Error::InvalidInput(message.into()));
+            }
         }
         if !(1..=16).contains(&self.reliability_threshold) || self.reliability_max_probes > 1024 {
             return Err(Error::InvalidInput(
@@ -2099,5 +2180,126 @@ impl LpIpSolver for NativeSolver {
             }
         }
         root::solve(self, model, options, start, cancel)
+    }
+}
+
+#[cfg(test)]
+mod option_validation_tests {
+    use super::*;
+    #[test]
+    fn invalid_packing_controls_name_the_field() {
+        let cases: Vec<(NativeOptions, &str)> = vec![
+            (
+                NativeOptions {
+                    packing_rounds: 0,
+                    ..Default::default()
+                },
+                "packing_rounds",
+            ),
+            (
+                NativeOptions {
+                    packing_neighborhoods: 4096,
+                    packing_rounds: 2,
+                    ..Default::default()
+                },
+                "packing_neighborhoods * packing_rounds",
+            ),
+            (
+                NativeOptions {
+                    packing_neighborhood_growth: 1025,
+                    ..Default::default()
+                },
+                "packing_neighborhood_growth",
+            ),
+            (
+                NativeOptions {
+                    packing_clique_work: 1_000_001,
+                    ..Default::default()
+                },
+                "packing_clique_work",
+            ),
+            (
+                NativeOptions {
+                    packing_seed_strategy: "best".into(),
+                    ..Default::default()
+                },
+                "packing_seed_strategy",
+            ),
+            (
+                NativeOptions {
+                    packing_repair_seconds: Some(f64::NAN),
+                    ..Default::default()
+                },
+                "packing_repair_seconds",
+            ),
+            (
+                NativeOptions {
+                    packing_proof_seconds: Some(-1.),
+                    ..Default::default()
+                },
+                "packing_proof_seconds",
+            ),
+            (
+                NativeOptions {
+                    packing_root_iterations: 100_001,
+                    ..Default::default()
+                },
+                "packing_root_iterations",
+            ),
+            (
+                NativeOptions {
+                    packing_neighborhood_size: 3,
+                    ..Default::default()
+                },
+                "packing_neighborhood_size",
+            ),
+            (
+                NativeOptions {
+                    packing_workers: 17,
+                    ..Default::default()
+                },
+                "packing_workers",
+            ),
+            (
+                NativeOptions {
+                    branch_probe_candidates: 0,
+                    ..Default::default()
+                },
+                "branch_probe_candidates",
+            ),
+            (
+                NativeOptions {
+                    tree_threads: 0,
+                    ..Default::default()
+                },
+                "tree_threads",
+            ),
+            (
+                NativeOptions {
+                    tree_split_depth: 9,
+                    ..Default::default()
+                },
+                "tree_split_depth",
+            ),
+        ];
+        for (settings, field) in cases {
+            match settings.validate() {
+                Err(Error::InvalidInput(message)) => {
+                    assert!(message.starts_with(field), "{message} should name {field}")
+                }
+                other => panic!("{field}: expected InvalidInput, got {other:?}"),
+            }
+        }
+        assert!(
+            NativeOptions {
+                packing_neighborhoods: 4096,
+                packing_rounds: 1,
+                packing_repair_seconds: Some(0.),
+                packing_proof_seconds: Some(0.),
+                ..Default::default()
+            }
+            .validate()
+            .is_ok()
+        );
     }
 }

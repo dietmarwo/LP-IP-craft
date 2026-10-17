@@ -168,7 +168,6 @@ class NativeOptions:
     tree_split_depth: int = 2
 
 
-
 @dataclass(frozen=True)
 class Evaluation:
     """Independently recomputed values at a point. ``feasible_candidate``
