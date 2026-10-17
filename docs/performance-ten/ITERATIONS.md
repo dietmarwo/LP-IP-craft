@@ -13,3 +13,7 @@ Outcome: all Rust workspace tests pass. Selection-64 fell 9,311 -> 1 node and 17
 
 ## 2. Skip vacuous component discovery — plan
 For a model with no stored matrix entries, independent-component graph construction cannot produce a useful nontrivial component. Skip its O(n) singleton allocations, leaving the existing LP path and all checks intact. Test the complete workspace and compare the 100,000-column box case plus LP/MIP regressions.
+Outcome: workspace tests pass; box-100k 15.82 -> 12.17 ms (1.30x) in three rotated paired runs. Other fixtures retain their pivot/node counts.
+
+## 3. Direct row-free LP solve — plan
+Choose each bound from the objective sign for continuous models with zero rows. Construct original-unit duals and run the same independent KKT, candidate and conservative bound checks as simplex. Preserve validation, starts and budget/cancellation semantics; decline the fast path when presolve is off. Test mixed signs, infinite bounds, zero costs and limits. Benchmark box-100k and all development regressions.

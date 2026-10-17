@@ -546,6 +546,7 @@ impl LpIpSolver for NativeSolver {
         };
         let model = strengthened.as_ref().unwrap_or(model);
         if self.settings.decompose
+            && model.nnz() > 0
             && model.n() >= self.settings.decomposition_min_variables
             && !cancel.is_cancelled()
             && self.settings.time_limit_seconds != Some(0.)
