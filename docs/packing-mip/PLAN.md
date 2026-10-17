@@ -124,3 +124,22 @@ recomputation, basis restoration/reset and bound changes. Bound flips use full
 invalidation. Scan block winners with the original strict-greater comparison
 and ascending order, preserving exact ties. Verify cached and uncached choices
 directly under sparse changes, resets and bound changes before benchmarking.
+
+### Step 3 completed
+
+Exact block pricing retained with direct-scan fallback below 512 rows. In a
+five-round comparison against step 2: packing4096 239.30 -> 222.25 ms (-7.1%),
+packing1024 35.93 -> 28.28 ms, wide1024 449.11 -> 425.55 ms, network512
+6.04 -> 5.79 ms. Every accepted trajectory retained identical pivot counts.
+A shortcut invalidating all blocks for moderately dense transformed columns
+lost gains and was removed. A direct cached-versus-full-scan test exercises
+300 sparse primal/weight changes, repeated choices and resets. Earlier mixed
+runs retained in data/; final paired measurement will determine release claims.
+
+### Step 4 implementation decision
+
+Use exact i128 min/max activities plus variable-to-row incidence. Synchronize
+both the previous node's changed variables and the current path, including
+restored implied bounds, then queue only affected rows. The root queues every
+eligible row. Retain coefficient/bound eligibility limits; use a per-call work
+cap and cancellation checks. No change to conservative incumbent pruning.

@@ -31,6 +31,7 @@ const NIL: usize = usize::MAX;
 const DEGENERATE_STREAK: usize = 25;
 /// Smallest steepest-edge weight kept after an update.
 const MIN_WEIGHT: f64 = 1e-6;
+const PRICE_BLOCK: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum State {
@@ -127,6 +128,9 @@ pub(crate) struct Lp {
     d: Vec<f64>,
     pi: Vec<f64>,
     weight: Vec<f64>,
+    price_dirty: Vec<bool>,
+    price_score: Vec<f64>,
+    price_row: Vec<Option<usize>>,
     lu: Option<Lu>,
     factor_workspace: crate::active::FactorWorkspace,
     rho: Vec<f64>,
@@ -304,6 +308,9 @@ impl Lp {
             d: vec![0.0; n + m],
             pi: vec![0.0; m],
             weight: vec![1.0; m],
+            price_dirty: vec![true; m.div_ceil(PRICE_BLOCK)],
+            price_score: vec![0.; m.div_ceil(PRICE_BLOCK)],
+            price_row: vec![None; m.div_ceil(PRICE_BLOCK)],
             lu: None,
             factor_workspace: Default::default(),
             rho: vec![0.0; m],
@@ -433,6 +440,7 @@ impl Lp {
         let l = scaled(lower, 1.0 / self.col_scale[j])?;
         let u = scaled(upper, 1.0 / self.col_scale[j])?;
         if l != self.lower[j] || u != self.upper[j] {
+            self.price_dirty.fill(true);
             self.lower[j] = l;
             self.upper[j] = u;
             if self.state[j] != State::Basic {
@@ -459,6 +467,7 @@ impl Lp {
             self.state[j] = self.valid_state(j, preferred);
         }
         self.weight.fill(1.0);
+        self.price_dirty.fill(true);
         self.lu = None;
         self.primal_stale = true;
         self.basis_id = None;
@@ -499,6 +508,7 @@ impl Lp {
         self.basic.clone_from(&basis.basic);
         self.state.clone_from(&basis.state);
         self.weight.clone_from(&basis.weight);
+        self.price_dirty.fill(true);
         for j in 0..self.n + self.m {
             if self.state[j] != State::Basic {
                 self.state[j] = self.valid_state(j, self.state[j]);
@@ -551,6 +561,7 @@ impl Lp {
         }
         self.state.clone_from(&basis.state);
         self.weight.clone_from(&basis.weight);
+        self.price_dirty.fill(true);
         for j in 0..self.n + self.m {
             if self.state[j] != State::Basic {
                 self.state[j] = self.valid_state(j, self.state[j]);
@@ -840,6 +851,7 @@ impl Lp {
             self.x[self.basic[p]] = -self.work[p];
         }
         self.primal_stale = false;
+        self.price_dirty.fill(true);
     }
 
     /// Row prices `π = B⁻ᵀ c_B` and reduced costs `d = c − [Ã −I]ᵀ π`.
@@ -916,23 +928,51 @@ impl Lp {
     }
 
     /// Dual steepest-edge pricing over the primal infeasible basic variables.
-    fn choose_row(&self) -> Option<usize> {
+    fn row_score(&self, p: usize) -> f64 {
+        let j = self.basic[p];
+        let v = self.x[j];
+        let infeasibility = if v < self.lower[j] - self.ptol[j] {
+            self.lower[j] - v
+        } else if v > self.upper[j] + self.ptol[j] {
+            v - self.upper[j]
+        } else {
+            return 0.;
+        };
+        infeasibility * infeasibility / self.weight[p]
+    }
+
+    fn choose_row(&mut self) -> Option<usize> {
         let _profile = crate::profile::enter("pricing_choose");
         let mut best = None;
-        let mut score = 0.0;
-        for (p, &j) in self.basic.iter().enumerate() {
-            let v = self.x[j];
-            let infeasibility = if v < self.lower[j] - self.ptol[j] {
-                self.lower[j] - v
-            } else if v > self.upper[j] + self.ptol[j] {
-                v - self.upper[j]
-            } else {
-                continue;
-            };
-            let s = infeasibility * infeasibility / self.weight[p];
-            if s > score {
-                score = s;
-                best = Some(p);
+        let mut score = 0.;
+        if self.m < 512 {
+            for p in 0..self.m {
+                let s = self.row_score(p);
+                if s > score {
+                    score = s;
+                    best = Some(p);
+                }
+            }
+            return best;
+        }
+        for block in 0..self.price_dirty.len() {
+            if self.price_dirty[block] {
+                let mut winner = None;
+                let mut value = 0.;
+                for p in block * PRICE_BLOCK..((block + 1) * PRICE_BLOCK).min(self.m) {
+                    let s = self.row_score(p);
+                    if s > value {
+                        value = s;
+                        winner = Some(p);
+                    }
+                }
+                self.price_score[block] = value;
+                self.price_row[block] = winner;
+                self.price_dirty[block] = false;
+            }
+            if self.price_score[block] > score {
+                score = self.price_score[block];
+                best = self.price_row[block];
             }
         }
         best
@@ -953,6 +993,7 @@ impl Lp {
         let lu = self.lu.as_mut().expect("factorized basis");
         lu.btran_unit_indexed(r, &mut self.rho, &mut self.rho_index);
         if self.controls.steepest_edge {
+            self.price_dirty[r / PRICE_BLOCK] = true;
             self.weight[r] = self
                 .rho_index
                 .iter()
@@ -1180,6 +1221,14 @@ impl Lp {
         self.stats.ft_updates += u64::from(lu.uses_ft());
         self.stats.updates += 1;
         self.stats.peak_entries = self.stats.peak_entries.max(lu.entries());
+        if self.m >= 512 && self.flips.is_empty() {
+            for &i in &self.column_index {
+                self.price_dirty[i / PRICE_BLOCK] = true;
+            }
+            self.price_dirty[r / PRICE_BLOCK] = true;
+        } else if self.m >= 512 {
+            self.price_dirty.fill(true);
+        }
         self.basic[r] = q;
         self.state[q] = State::Basic;
         self.state[p] = if to_upper { State::Upper } else { State::Lower };
@@ -1566,6 +1615,45 @@ mod tests {
         .unwrap();
         let status = lp.solve(&mut budget, true).unwrap();
         (status, lp)
+    }
+
+    #[test]
+    fn cached_pricing_matches_full_scan_after_sparse_changes_and_reset() {
+        let m = 1025;
+        let model = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![0.; m],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; m], vec![2.; m]),
+            kinds: vec![VariableKind::Continuous; m],
+            matrix: CsrMatrix::new(m, m, (0..=m).collect(), (0..m).collect(), vec![1.; m]),
+            rows: Bounds::new(vec![0.; m], vec![1.; m]),
+        })
+        .unwrap();
+        let mut lp = Lp::new(&model, &vec![true; m], &vec![true; m], controls()).unwrap();
+        for step in 0..300 {
+            let p = (step * 67) % m;
+            lp.x[lp.basic[p]] = (step % 7) as f64 - 3.;
+            lp.weight[p] = 1. + (step % 3) as f64;
+            lp.price_dirty[p / PRICE_BLOCK] = true;
+            let mut expected = None;
+            let mut score = 0.;
+            for r in 0..m {
+                let s = lp.row_score(r);
+                if s > score {
+                    score = s;
+                    expected = Some(r);
+                }
+            }
+            assert_eq!(lp.choose_row(), expected);
+            assert_eq!(lp.choose_row(), expected);
+            if step % 17 == 0 {
+                lp.reset_to_slack();
+            }
+            if step % 23 == 0 {
+                lp.set_bound(p, 0., 1.).unwrap();
+            }
+        }
     }
 
     #[test]

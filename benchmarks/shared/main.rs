@@ -132,6 +132,7 @@ fn main() {
             };
             (m, e)
         }
+        _ if name.starts_with("json=") => { let (m,e)=extended::json_file(&name[5..]); (m,Some(e)) },
         _ => imports::fixture(name),
     };
     let construction = began.elapsed().as_secs_f64();

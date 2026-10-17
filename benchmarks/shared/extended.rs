@@ -71,3 +71,20 @@ pub fn binary(n: usize, graph: bool) -> Model {
     Model::new(ModelData {sense:Sense::Maximize,objective:c,objective_offset:0.,variables:Bounds::new(vec![0.;n],vec![1.;n]),
         kinds:vec![VariableKind::Binary;n], matrix:matrix(n,&rows),rows:Bounds::new(vec![f64::NEG_INFINITY;rows.len()],upper)}).unwrap()
 }
+
+/// Benchmark-only JSON input; null bounds preserve infinity.
+pub fn json_file(path: &str) -> (Model, f64) {
+    let d: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let m = &d["model"];
+    let floats = |key: &str, infinity: f64| m[key].as_array().unwrap().iter().map(|v| v.as_f64().unwrap_or(infinity)).collect::<Vec<_>>();
+    let ints = |key: &str| m[key].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect::<Vec<_>>();
+    let c = floats("objective", f64::NAN);
+    let rl = floats("row_lower", f64::NEG_INFINITY);
+    let model = Model::new(ModelData {sense:if m["sense"]=="maximize" {Sense::Maximize} else {Sense::Minimize},
+        objective_offset:m["objective_offset"].as_f64().unwrap(),
+        variables:Bounds::new(floats("lower",f64::NEG_INFINITY),floats("upper",f64::INFINITY)),
+        kinds:m["kinds"].as_array().unwrap().iter().map(|v| match v.as_str().unwrap() {"continuous"=>VariableKind::Continuous,"binary"=>VariableKind::Binary,"integer"=>VariableKind::Integer,_=>panic!()}).collect(),
+        matrix:CsrMatrix::new(rl.len(),c.len(),ints("indptr"),ints("indices"),floats("values",f64::NAN)),objective:c,
+        rows:Bounds::new(rl,floats("row_upper",f64::INFINITY))}).unwrap();
+    (model,d["expected"].as_f64().unwrap())
+}
