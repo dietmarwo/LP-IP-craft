@@ -129,3 +129,7 @@ conservative-bound safety checks. The 19 known oracle disagreements in each
 full pass are the identical previously adjudicated cases; no new discrepancy.
 Twelve medium dense LP solves with planted primal/dual certificates exercise
 retained dense tails, ordering and forced FT through the full solver.
+
+A final focused test verifies the blocked-tail singularity fallback and the
+tight-cap path where sparse legacy storage fits but a retained dense block does
+not. Both pass; the final complete Rust gate contains 105 checks.

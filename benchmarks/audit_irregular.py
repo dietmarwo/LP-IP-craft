@@ -6,6 +6,7 @@ raw=(old/'oracle-inputs.json').read_bytes();inputs={r['case_id']:r for r in json
 adj={r['case_id']:r for r in json.loads((old/'oracle-adjudication.json').read_text())['records']}
 out={'oracle_runs':[]}
 for p in sorted(data.glob('oracle-*.json')):
+ if p.name=='oracle-audit.json':continue
  d=json.loads(p.read_text());assert d['dataset_sha256']==hashlib.sha256(raw).hexdigest();bad=[]
  for r in d['records']:
   e=inputs[r['case_id']];a=adj.get(r['case_id'],{});expected=a.get('adjudicated_status',e['expected_status']);ref=a.get('reference',e['reference'])

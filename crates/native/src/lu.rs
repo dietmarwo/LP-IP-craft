@@ -1261,6 +1261,39 @@ mod tests {
     }
 
     #[test]
+    fn blocked_tail_singularity_and_tight_cap_use_valid_legacy_fallback() {
+        let m = 97;
+        let mut singular: Vec<Vec<_>> = (0..m)
+            .map(|p| {
+                (0..m)
+                    .map(|i| (i, if i == p { 4. } else { 0.01 }))
+                    .collect()
+            })
+            .collect();
+        singular[71] = singular[7].clone();
+        match factor(&singular, usize::MAX) {
+            Err(FactorError::Singular { positions, rows }) => {
+                assert_eq!(positions.len(), 1);
+                assert_eq!(rows.len(), 1);
+            }
+            _ => panic!("dependent dense columns must be detected"),
+        }
+        let m = 96;
+        let block: Vec<Vec<_>> = (0..m)
+            .map(|p| {
+                (0..m)
+                    .filter(|&i| i / 48 == p / 48)
+                    .map(|i| (i, if i == p { 4. } else { 0.01 }))
+                    .collect()
+            })
+            .collect();
+        let mut lu = factor(&block, 5000).unwrap();
+        assert!(lu.dense.is_none());
+        assert!(lu.entries() <= 5000);
+        assert!(residual(&block, &mut lu) < 1e-10);
+    }
+
+    #[test]
     fn retained_dense_tail_and_updates_match_full_basis() {
         for m in [64, 97, 257] {
             let mut columns: Vec<Vec<_>> = (0..m)
