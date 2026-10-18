@@ -93,3 +93,20 @@ Iteration 0 (main) on this host:
   bell5 drops from 4.40 to 3.58 s and rgn from 0.70 to 0.57 s. Nothing is
   lost or slower beyond the flag threshold, and only combined/heuristics
   records change. Oracle gates: 0 failures, default and combined.
+
+### 3. No heap traffic for inline-size sums — accepted
+
+- **Plan.** After iterations 1–2, gap-2 combined still spent 44% of its
+  instructions in the in-place sums, mostly allocating: a vector for each
+  addend's limbs and another for each column read back. Use stack arrays
+  when the multiplier and the column value fit in 128 bits. Pure
+  efficiency, so records must not change.
+- **Result.** All records are search-identical. Wall-clock means moved
+  within noise (±4%, as did the untouched default), so the deterministic
+  instruction counts decide:
+
+  | Case (combined) | Iteration 2 | Iteration 3 | Change |
+  |---|---:|---:|---:|
+  | gap-2 | 1.288 G | 1.159 G | −10% |
+  | p0548 | 2.760 G | 2.641 G | −4% |
+  | lseu | 3.462 G | 3.321 G | −4% |

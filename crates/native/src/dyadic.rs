@@ -569,6 +569,14 @@ impl Wide {
         let Some((negative, mantissa, e)) = parts(v) else {
             return v == 0.;
         };
+        if let Repr::Small(k) = &g.0 {
+            // Inline multiplier: the product has at most 3 limbs.
+            let k = k.unsigned_abs();
+            let low = u128::from(k as u64) * u128::from(mantissa);
+            let high = u128::from((k >> 64) as u64) * u128::from(mantissa) + (low >> 64);
+            let product = [low as u64, high as u64, (high >> 64) as u64];
+            return self.add_magnitude(j, negative != g.is_negative(), &product, e);
+        }
         let magnitude = g.magnitude_u64();
         let mut product = Vec::with_capacity(magnitude.len() + 1);
         let mut carry = 0u128;
@@ -592,6 +600,10 @@ impl Wide {
                 *limb = v;
                 carry = c;
             }
+        }
+        if magnitude[2..].iter().all(|&v| v == 0) && magnitude[1] >> 63 == 0 {
+            let v = (i128::from(magnitude[1]) << 64) | i128::from(magnitude[0]);
+            return Dy::new(Int(Repr::Small(if negative { -v } else { v })), self.base);
         }
         let digits = magnitude
             .iter()
