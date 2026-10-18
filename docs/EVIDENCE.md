@@ -126,3 +126,7 @@ inputs). The other 39 were not in the upload: `pilot.json`,
 vectors (`spoc4-*`) and all 21 logs under `validation/`. The review
 re-measured instead of relying on them; see
 [ripsolve-027/REVIEW.md](ripsolve-027/REVIEW.md).
+
+## Eight-worker 0.28 evidence
+
+The 0.28 archive contains all tracked source, 30 checkpoint plans/results, raw `docs/parallel-028/data/` journals and failed/excluded campaigns, independent audit vectors/certificates, SHA-checked application points and validation logs. `data/validation-summary.json` identifies numerical checkpoint, baseline, executable/extension hashes, frozen inputs, each iteration test count and final campaigns. [Results](parallel-028/RESULTS.md) distinguish within-solver latency, existing outer throughput and fixed-work root progress. An exact base-to-release patch and complete git bundle preserve development/reversions. The new root `MANIFEST.sha256` covers every delivered file other than itself. This does not recreate historical raw evidence already missing from upstream.

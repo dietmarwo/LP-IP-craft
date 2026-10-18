@@ -1,18 +1,7 @@
 # Dependencies
 
-`lp-ip-craft` and `lp-ip-craft-native` depend only on each other and Rust's
-standard library. There is no third-party optimization or linear algebra crate.
-Both numerical crates forbid unsafe code.
+`lp-ip-craft` depends only on Rust's standard library. The owned native LP/MIP algorithms and independent checks remain Rust. Native execution uses exactly Rayon 1.12.0 (MIT OR Apache-2.0), with locked rayon-core, crossbeam-deque/epoch/utils and either. These supply local thread scheduling; no external optimization or linear algebra engine is used. Both project numerical crates forbid unsafe code. Rayon and its dependencies have their own internal implementation and licenses.
 
-The optional `lp-ip-craft-python` extension depends on PyO3 0.30.1
-(MIT OR Apache-2.0) and its Rust build/macro dependencies. Python remains a
-separate runtime, and the wheel uses the system C runtime through Rust/Python.
-Pure Rust describes the numerical implementation and its dependency graph.
+The optional Python extension uses PyO3 0.30.1 (MIT OR Apache-2.0) and its Rust macro/build dependencies. Cargo.lock is authoritative. SciPy/HiGHS are external test oracles only, never native runtime dependencies. The checked-in comparison/vendor material and ESA SpOC4 data retain their original license/attribution files; they are not linked into the solver.
 
-HiGHS, highs-sys, highs, bindgen, CMake and their solver sources were removed
-from the workspace and lockfile. SciPy is used only by the optional external
-oracle script; it is neither imported by the library nor declared as a package
-dependency. Tests use pytest and NumPy. `Cargo.lock` is authoritative.
-
-Independent components use scoped Rust standard-library threads. The numerical
-crates still have no third-party dependencies.
+Existing independent batches/components/residuals/frontiers use scoped standard-library threads. Numerical pools use pinned pure-Rust Rayon, with no global pool mutation. See `docs/parallel-028/THIRD-PARTY.md` for scheduler references/licenses and `REPRODUCE.md` for actual executed toolchains.

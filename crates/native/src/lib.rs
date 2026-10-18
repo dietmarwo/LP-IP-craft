@@ -1,4 +1,4 @@
-//! Owned, dependency-free Rust LP/MIP solver: a bounded-variable dual
+//! Owned Rust LP/MIP solver (pure-Rust Rayon supplies bounded scheduling): a bounded-variable dual
 //! revised simplex on a sparse LU basis factorization, inside best-bound
 //! branch and bound with diving, pseudocost branching and independently
 //! checked results.
@@ -19,8 +19,13 @@ mod lp;
 mod lu;
 mod mip_presolve;
 mod mixed;
+mod ordered;
 mod ordering;
 mod packing;
+pub mod parallel;
+#[cfg(feature = "parallel-bench")]
+#[doc(hidden)]
+pub mod parallel_bench;
 mod presolve;
 mod primal;
 pub mod profile;
@@ -2155,6 +2160,7 @@ fn branching_variable(
 
 fn controls(model: &Model, options: &Options, settings: &NativeOptions) -> lp::Controls {
     lp::Controls {
+        threads: options.threads,
         pivot_tolerance: settings.pivot_tolerance,
         refactor_interval: settings.refactor_interval,
         adaptive_refactor: settings.adaptive_refactor,
@@ -2331,6 +2337,7 @@ impl LpIpSolver for NativeSolver {
         start: Option<&WarmStart>,
         cancel: &CancellationToken,
     ) -> Result<SolveResult> {
+        let began = Instant::now();
         options.validate()?;
         self.settings.validate()?;
         if let Some(s) = start {
@@ -2340,20 +2347,87 @@ impl LpIpSolver for NativeSolver {
                 ));
             }
         }
-        if self.settings.packing_root
-            || self.settings.packing_neighborhoods > 0
-            || self.settings.packing_cuts
-        {
-            if let Some(result) = packing::solve(self, model, options, start, cancel)? {
-                return Ok(result);
-            }
+        if options.threads == 1 {
+            let mut result = (|| {
+                if self.settings.packing_root
+                    || self.settings.packing_neighborhoods > 0
+                    || self.settings.packing_cuts
+                {
+                    if let Some(r) = packing::solve(self, model, options, start, cancel)? {
+                        return Ok(r);
+                    }
+                }
+                if self.settings.tree_threads > 1 {
+                    if let Some(r) = tree::solve(self, model, options, start, cancel, None, None)? {
+                        return Ok(r);
+                    }
+                }
+                root::solve(self, model, options, start, cancel)
+            })()?;
+            result
+                .backend
+                .effective_options
+                .retain(|(k, _)| k != "numeric_threads");
+            result
+                .backend
+                .effective_options
+                .push(("numeric_threads".into(), "1".into()));
+            return Ok(result);
         }
-        if self.settings.tree_threads > 1 {
-            if let Some(result) = tree::solve(self, model, options, start, cancel, None, None)? {
-                return Ok(result);
-            }
+        let eligible = options.threads > 1
+            && model.nnz() >= 65_536
+            && !(self.settings.packing_root
+                && self.settings.packing_proof_seconds == Some(0.)
+                && model.nnz() < 131_072)
+            && !cancel.is_cancelled()
+            && !self
+                .settings
+                .time_limit_seconds
+                .is_some_and(|t| began.elapsed().as_secs_f64() >= t)
+            && self.settings.node_limit != Some(0)
+            && self.settings.iteration_limit != Some(0);
+        let _execution = if eligible {
+            parallel::Execution::new(options.threads).map_err(Error::Backend)?
+        } else {
+            parallel::Execution::default()
+        };
+        let mut settings = self.settings.clone();
+        if options.threads > 1 {
+            settings.component_threads = 1;
+            settings.packing_workers = 1;
+            settings.tree_threads = 1;
         }
-        root::solve(self, model, options, start, cancel)
+        settings.time_limit_seconds = settings
+            .time_limit_seconds
+            .map(|t| (t - began.elapsed().as_secs_f64()).max(0.));
+        let mut solver = NativeSolver::new(settings);
+        let mut result = (|| {
+            if solver.settings.packing_root
+                || solver.settings.packing_neighborhoods > 0
+                || solver.settings.packing_cuts
+            {
+                if let Some(result) = packing::solve(&mut solver, model, options, start, cancel)? {
+                    return Ok(result);
+                }
+            }
+            if solver.settings.tree_threads > 1 {
+                if let Some(result) =
+                    tree::solve(&mut solver, model, options, start, cancel, None, None)?
+                {
+                    return Ok(result);
+                }
+            }
+            root::solve(&mut solver, model, options, start, cancel)
+        })()?;
+        result
+            .backend
+            .effective_options
+            .retain(|(k, _)| k != "numeric_threads");
+        result
+            .backend
+            .effective_options
+            .push(("numeric_threads".into(), options.threads.to_string()));
+        Ok(result)
     }
 }
 

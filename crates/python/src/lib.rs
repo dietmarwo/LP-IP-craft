@@ -626,10 +626,11 @@ fn solve_batch_native<'py>(
     workers: usize,
     feasibility_tolerance: f64,
     integrality_tolerance: f64,
+    threads: i64,
     cancellation: &Bound<'py, Cancellation>,
     backend_options: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Vec<Py<PyAny>>> {
-    let options = options(feasibility_tolerance, integrality_tolerance, 1)?;
+    let options = options(feasibility_tolerance, integrality_tolerance, threads)?;
     let solver = lp_ip_craft_native::NativeSolver::new(native_settings(backend_options)?);
     let refs: Vec<&Model> = models.iter().map(|m| &m.bind(py).get().inner).collect();
     let token = cancellation.get().inner.clone();

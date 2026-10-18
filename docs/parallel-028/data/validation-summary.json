@@ -1,0 +1,520 @@
+{
+  "base_commit": "a1180e06a85685fa82ca977d521ef33f285f8f51",
+  "numerical_checkpoint": "4c8df12f693505bad1205b7eb056e4d9eca54384",
+  "version": "0.28.0",
+  "environment": {
+    "os": "Linux x86_64",
+    "rust": "1.99.1",
+    "python": "3.12.14",
+    "visible_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "timed_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "cpu_max": "800000 100000",
+    "blas_threads": 1
+  },
+  "checks": {
+    "release-debug": {
+      "passed": 197,
+      "sha256": "9afae3b64bc5f83ed4fe9c3910ac11a036506b9f3c0d9c30b847bf7e03979783"
+    },
+    "release-all-features": {
+      "passed": 199,
+      "sha256": "a07689a060bdcb81f9578d97cc0105f244ebe2497718559ceef9951064a8d5ff"
+    },
+    "release-all-targets": {
+      "passed": 198,
+      "sha256": "77ae0227d21aea2d976a35acc31a37ab576d61faaeccfcc7573347e91fd5eb3c"
+    },
+    "iteration-30-tests": {
+      "passed": 198,
+      "sha256": "0f2b104192323a8082406ef4ce9d4adc8e47b1cf50d349440941672719c17f6b"
+    },
+    "compiled-python": {
+      "passed": 289,
+      "sha256": "be8d3ed40dd38cfc55c7c513c3f0fa1238b7b714f43f019cfb04646017f40dca"
+    },
+    "release-clippy": {
+      "status": "passed",
+      "sha256": "ad84c93c1c9acb0a951191f1b2a0d07db3814e40bfcb58c0343ab9dca6b26a8d"
+    },
+    "release-fmt": {
+      "status": "passed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "release-rustdoc": {
+      "status": "passed",
+      "sha256": "20c30e1355d6571c62063b8f97fc1de49c8df4835528feb2e180ac9ac4d8af7a"
+    },
+    "profile-guard-clippy": {
+      "status": "passed",
+      "sha256": "54bdaf54dff843a811e410a34d4becf5e7c12dff9a6d65f8b4503f466d754862"
+    }
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "tag": "lp-parallel-01",
+      "commit": "5efa96f5a6d4a3118abaddc9bd5d8cc7235fa39a",
+      "rust_tests": 182,
+      "test_log_sha256": "270c596d627a15f264f515e2f7c5a63afba86088f4cbb30c07961a03cd97cba1",
+      "timing_cases": 5,
+      "timing_records": 20,
+      "timing_sha256": "b625a2461340ebe56594dbaeadc872dff32984651647838b0604cb5a9c72b2b7",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 2,
+      "tag": "lp-parallel-02",
+      "commit": "ca1354684bb05a35dda64ba5625c8e589e34ac76",
+      "rust_tests": 183,
+      "test_log_sha256": "f971f507adfa555abfe7a0d482b9b930f1255aa7ec94bededa7b3f9a8174a446",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "c2469ee0becdb10c47ba98f619e97d9e4231844df135174130d5bed3270089bf",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 3,
+      "tag": "lp-parallel-03",
+      "commit": "85928b297962686f1c448c600b1f5433338afd26",
+      "rust_tests": 183,
+      "test_log_sha256": "1c29e54c2a82a107ef80ffb0e23fa8852fe27fdb22f52590d0b823986c41540d",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "510805f92e9cbc1550cc9a2bfbf90eac0fa6c86d434edc2552e1657697557de5",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 4,
+      "tag": "lp-parallel-04",
+      "commit": "79c0e7ce7c077ec9f30dd2e260ce1114c3105755",
+      "rust_tests": 183,
+      "test_log_sha256": "20b485ecbdd3917a0ba7c4b80c2a45cb8e1ce4ca93a6bc92b027c0726bacbd3c",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "4c65d1e1f8f1a6f678784b344350a62ad80a3eea7ec2dca93ed73c6b735657e7",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 5,
+      "tag": "lp-parallel-05",
+      "commit": "716329a1664182a23a3e7351ebcdadd766a31c3c",
+      "rust_tests": 183,
+      "test_log_sha256": "bb245cc200874ce8687644481bcc71dd2facff85bcfd6d5d08e97abe20ee2b0e",
+      "timing_cases": 3,
+      "timing_records": 24,
+      "timing_sha256": "ce87daaf0475b5e829e0fe0dc6fd6fe2cb1e167c120ded97ad761a35c1248c58",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 6,
+      "tag": "lp-parallel-06",
+      "commit": "dd40df64a2a9d4254e4fdfe51414c08aa2ee5f08",
+      "rust_tests": 183,
+      "test_log_sha256": "0825db81ef5bad8df756319df4f9e401e2a54d059e6303490c7d8d9f7b3c680b",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "d77f6f0a30727d57e0111a96c097c620b4fd1763bb767aef7216ebe104fa484a",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 7,
+      "tag": "lp-parallel-07",
+      "commit": "f5115943ef64e036bbe5cdcea1cbf7a87a2181de",
+      "rust_tests": 183,
+      "test_log_sha256": "c9cf41c84c51617c0b239f8fdce22133e0d12d5e1aeb43251d37a44febaf5188",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "8ed502776012242f649554ef6b491c94fd17ba4122facd59c75b1da39044b92c",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 8,
+      "tag": "lp-parallel-08",
+      "commit": "c132b399d105f75cbc9dfd9489fc06990c4a9ead",
+      "rust_tests": 183,
+      "test_log_sha256": "a0b088a71ac433d7c4d94d6e2a33c45b130db5b2c7c9463ffa51d25365c36178",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "6efd546b485ade8328664675a4b4d4e8fb102532f072a682fd925df3c5a61a42",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 9,
+      "tag": "lp-parallel-09",
+      "commit": "7ca0e6aeab5ca3d8a2b750354d2914642a2f8c32",
+      "rust_tests": 184,
+      "test_log_sha256": "1429e5461fe6c7c2c08da897f359a8fdcfbaf43fbbad3c8955408146f143481a",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "218df1166ff5e6d4b06c068d692fb6ab5f1dd9bde048f33f07853e7cdb5a5ae8",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 10,
+      "tag": "lp-parallel-10",
+      "commit": "5a910955946baa20b99868994b5fd25bfdbf82b0",
+      "rust_tests": 184,
+      "test_log_sha256": "f3ac3c15a3239c4c986dc6258a6f27fa01976600071684add4e3c09f5d8a9cf4",
+      "timing_cases": 3,
+      "timing_records": 24,
+      "timing_sha256": "22b5dcc3fa91f43c7d9ef446b1b95b6b94fe500f3c502a1aabedf449de298d33",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 11,
+      "tag": "lp-parallel-11",
+      "commit": "6ee70933b20bcc97fe7016a303460ef8a1edabee",
+      "rust_tests": 189,
+      "test_log_sha256": "eb34902e78ce594c3a33474ef832680ef871a45bd395a5255c6f713b9248a675",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "136d17ce8b7a5081797f034078caae8c7ce8dd68612114e9c07509ebee7746d0",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 12,
+      "tag": "lp-parallel-12",
+      "commit": "0eb6b23d1a481e9644497702bf3090db4c13f6ae",
+      "rust_tests": 191,
+      "test_log_sha256": "62a3d9d0c217e0072f6f8e6ee371a286a672d8e8c6245074b7a76e9fae7711f3",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "17eef87614183c42b9d5ce26631b60449cad48b6d863eaf510ed488ac0227268",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 13,
+      "tag": "lp-parallel-13",
+      "commit": "2d01323be87b527a47423fdb6113ed94c97f3509",
+      "rust_tests": 192,
+      "test_log_sha256": "2e549f106e5fbc314ae535ede1ddb72bc0d68f3bf3d10013448d63933dd6f22c",
+      "timing_cases": 3,
+      "timing_records": 24,
+      "timing_sha256": "c9cf9f797aacf2c1c3d0af6a290cb47cc920e9029d1107ca9f7a31ca55850e1e",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 14,
+      "tag": "lp-parallel-14",
+      "commit": "7390849bba65423eeace35dbd4f0db038410a406",
+      "rust_tests": 192,
+      "test_log_sha256": "ff8eb63a330664df9d0d7bb520b1690ceb3335f5346311d44a56ddeee66f883e",
+      "timing_cases": 3,
+      "timing_records": 24,
+      "timing_sha256": "de2bd8c0d48ad821f5445d8629fd42669ec7ae1de3daf387216ee52093862091",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 15,
+      "tag": "lp-parallel-15",
+      "commit": "cc83c590ae2219395c7d0df1e3234aafd8b0c1e5",
+      "rust_tests": 192,
+      "test_log_sha256": "b2671c389dd19c964c30cf7f306a1dc266763fcebc6afe89b6c13216b9f6834a",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "4911b5a2ec82ab056f8335421967fa2d978f4b90d98efe42f5b1370e7fa10b08",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 16,
+      "tag": "lp-parallel-16",
+      "commit": "e02f0e3a58a97ab30c34768612cc9f5ec1bff18a",
+      "rust_tests": 193,
+      "test_log_sha256": "675daa66846a49267b6e05b334868b64f3f7c06f4d6b62588cc0b2aa21a47b82",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "5504a6375796e9c8ab24e4f69feeb0164ca6b9ba9aec96a3edbfc0299c97f4fa",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 17,
+      "tag": "lp-parallel-17",
+      "commit": "5236fe1cc2bb3e8bf9c02d5482817ce3c5d7a540",
+      "rust_tests": 193,
+      "test_log_sha256": "46eb14c4df0470d6e64dd6e12acd2345f5517c53b0dfa051d3712366127df859",
+      "timing_cases": 3,
+      "timing_records": 24,
+      "timing_sha256": "bd17cfad2a6c923af3c04411485c17b24e9c6dafea2875763074a6f3848ee9a3",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 18,
+      "tag": "lp-parallel-18",
+      "commit": "1db04876003a62702bca219bfa20991fd4b363cd",
+      "rust_tests": 193,
+      "test_log_sha256": "520f08f9290504238f8ea06c8b396984eb5726750b6419b7f891aa7bb3802187",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "793d2a8fc879ec555a54c4bfffc6e4588edb43430b1185813afe636868218ebd",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 19,
+      "tag": "lp-parallel-19",
+      "commit": "f6d47b29880b39efd392d81d6e49a54ae0c48290",
+      "rust_tests": 193,
+      "test_log_sha256": "d002cd7106d260c0deb167728563d70fd994c84eea5b85bc9520807df58fe3d8",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "a0f2094cb1bb6d99fc0b6bc4206e1e6f24d52a3f159af19538dfc99e522cc69c",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 20,
+      "tag": "lp-parallel-20",
+      "commit": "7ab4188a6c97018a90464269e5f715f7345503ff",
+      "rust_tests": 193,
+      "test_log_sha256": "31902e02d1cc4fd0dba0b55746035004c70dfa6766d4aa3ba2726bfa9d0c414f",
+      "timing_cases": 3,
+      "timing_records": 24,
+      "timing_sha256": "1762b0ddda67d91d1238bc4c68985f5460defa0a963b86bd82a8aa1398228c52",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 21,
+      "tag": "lp-parallel-21",
+      "commit": "3d0954246e71e241494a30a8db38c49a9edd916d",
+      "rust_tests": 194,
+      "test_log_sha256": "cd44a05ed209583ba336704b6422ef286c45b370d62c838c69e70ccbe91dc16b",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "6691c307d6a28d1f540956de5d20a155257c83a8aaceecf61149b939926a9d67",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 22,
+      "tag": "lp-parallel-22",
+      "commit": "ac4ee6989d9d9174b3339914f64c7c584ea75c2d",
+      "rust_tests": 195,
+      "test_log_sha256": "f0b72db629b2eb1bacbce7404f8da9e15613297abc897a51d196d597ef62c5cb",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "0a7f541e3e3ee8379a33575328b2ee6dded6cb0a9b99a318655ba6572cc76691",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 23,
+      "tag": "lp-parallel-23",
+      "commit": "2b328f8d78725de3c61cf49c8bd19cc2c97a3e61",
+      "rust_tests": 196,
+      "test_log_sha256": "1f3ffea0914b17c2f1d4786d0e727a558549389c5f468151b5e450d8fadf19e9",
+      "timing_cases": 3,
+      "timing_records": 24,
+      "timing_sha256": "ecd77392c2792e6a89b64e1790d88e9abdb43b4abfa62249a8e9da6398591cf0",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 24,
+      "tag": "lp-parallel-24",
+      "commit": "3897bda4818bd391cb8c2066ac4bb066e4c141e1",
+      "rust_tests": 197,
+      "test_log_sha256": "f61a7842cdc65493c7120917904d326736062799f80c34830282ef1f4b7ee673",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "198cb3d259c06e20990b8360a5b3f6a2cd658199fbba03f34d0e52ed33d7dc2d",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 25,
+      "tag": "lp-parallel-25",
+      "commit": "1d64b5420050ce436497474056a012fae3969986",
+      "rust_tests": 197,
+      "test_log_sha256": "668015fd42cd07bb2403145b009ec7a3a1aa14aca78ffd2b056756d7c2ce72aa",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "d836a861ead145c4ce9137c3f8a593ca11737157c3decd0c0ceebc2b14d9149a",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 26,
+      "tag": "lp-parallel-26",
+      "commit": "dffdc29265332fc468139f876c2f0c6f134ded2e",
+      "rust_tests": 197,
+      "test_log_sha256": "e61d1b0f51c7f5550fc09ccc414a066abcefdb3a4e5cc4ebf82ea2c170cbf67c",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "c2b3a417e41da7dff3188fd25ca3c486253f0138a16782f801fb67745cc59b2f",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 27,
+      "tag": "lp-parallel-27",
+      "commit": "e560ab315343c882de48d7135c0a5734b1a3fe65",
+      "rust_tests": 198,
+      "test_log_sha256": "ed6f4f5dfc7c193e7c2c1a7ec77d7db82ada527efe76991d760fc91ff14952ae",
+      "timing_cases": 4,
+      "timing_records": 32,
+      "timing_sha256": "b124a6c8b1d88502fe3f47f9614a472f78c43fc220f9bc19b135249502935db9",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 28,
+      "tag": "lp-parallel-28",
+      "commit": "4f8e7eabf6d726094ea6d601a3d29676cca90ae0",
+      "rust_tests": 198,
+      "test_log_sha256": "a50678c23d3324406367bf1b0ba3496010a878d351545332cecad3dbedc28a6e",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "cf67a367c1c7ebf7470de68670c9ccc2e7cd749cc38e4a3a75dfe42ab75282ad",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 29,
+      "tag": "lp-parallel-29",
+      "commit": "ba22d0a66a260392d83a8011cfae8673ab638df2",
+      "rust_tests": 198,
+      "test_log_sha256": "e849a6f29b7fd23979ea6bacc03b2524b3b4c2f1f103f36a66c4e6aa52ca5caf",
+      "timing_cases": 2,
+      "timing_records": 16,
+      "timing_sha256": "ef0a3c0cf8587353b9173300a1251925b6b1cf4fd472826b224b89f72d55d709",
+      "production_timing_claims": true
+    },
+    {
+      "iteration": 30,
+      "tag": "lp-parallel-30",
+      "commit": "4c8df12f693505bad1205b7eb056e4d9eca54384",
+      "rust_tests": 198,
+      "test_log_sha256": "0f2b104192323a8082406ef4ce9d4adc8e47b1cf50d349440941672719c17f6b",
+      "timing_cases": 3,
+      "timing_records": 24,
+      "timing_sha256": "a1c778529b6d53af4e36031b9fe00226fbcf483917a6696d080214d23bcfa1f2",
+      "production_timing_claims": false
+    }
+  ],
+  "frozen_sources": {
+    "examples/validate_random.py": "20369c56c940427c080052509d78063cadf86e060fc8999d2fd291afa42b4474",
+    "examples/validate_native.py": "7ea122bda695e8f47c0b01e53e1a7df05ba882d38b461cda8414e2718900769f",
+    "crates/native/examples/family_benchmark.rs": "8a7d9c60b4eeff227787107bc464869fd45b08569b1dbc71d52169a47880c225"
+  },
+  "campaigns": {
+    "final-matrix": {
+      "cases": 56,
+      "records": 224,
+      "measured_repeats": 3,
+      "sha256": "e4e3fffb5f8acaca93c6e3eb408887e62df5f788269f9582150d6a4ccd1e32a0",
+      "binary_hashes": {
+        "final": "ddce69b2837efe88fe4dd305371812ed8fb580e3eb347894a1900e3b92528d3d"
+      }
+    },
+    "common-upstream": {
+      "cases": 18,
+      "records": 144,
+      "measured_repeats": 3,
+      "sha256": "6e7aa188ec3f7b46ff484db8ff4c703e1fea59be737df29036b17ef45a368ff7",
+      "binary_hashes": {
+        "final": "ddce69b2837efe88fe4dd305371812ed8fb580e3eb347894a1900e3b92528d3d",
+        "baseline": "af699ddd6978c1d1bbcea7a1de0b6495ce08ba42807a1b9476179fcc9c4bad9f"
+      }
+    },
+    "heldout": {
+      "cases": 24,
+      "records": 96,
+      "measured_repeats": 3,
+      "sha256": "edb89210bd99775893a85db967cb14909d49e11f7010f62849e0baefcae889a0",
+      "binary_hashes": {
+        "final": "ddce69b2837efe88fe4dd305371812ed8fb580e3eb347894a1900e3b92528d3d"
+      }
+    },
+    "factor-scaling": {
+      "cases": 16,
+      "records": 128,
+      "measured_repeats": 7,
+      "sha256": "c382bf48cb0953c8c5982cebde0af7afef1b2f253ce178a9f6a9109a267004e5",
+      "binary_hashes": {
+        "final": "ddce69b2837efe88fe4dd305371812ed8fb580e3eb347894a1900e3b92528d3d"
+      }
+    },
+    "large-solver-scaling": {
+      "cases": 8,
+      "records": 32,
+      "measured_repeats": 3,
+      "sha256": "c331f941f297de3fce3d687bb910da4a20013e1cf57b21ba8d8dda348340c582",
+      "binary_hashes": {
+        "final": "ddce69b2837efe88fe4dd305371812ed8fb580e3eb347894a1900e3b92528d3d"
+      }
+    },
+    "mixed-batches": {
+      "cases": 7,
+      "records": 28,
+      "measured_repeats": 3,
+      "sha256": "b1ebe1572f747b9a7376d571919e145d9624e9d3ae623ee8a1809a8b5634619f",
+      "binary_hashes": {
+        "final": "ddce69b2837efe88fe4dd305371812ed8fb580e3eb347894a1900e3b92528d3d"
+      }
+    },
+    "scheduling-confirmation": {
+      "cases": 3,
+      "records": 48,
+      "measured_repeats": 7,
+      "sha256": "e081f9f43f6870768f722b65fcdcaddd8e3960d49c38a27e3fe41771e9d4eb62",
+      "binary_hashes": {
+        "final": "ddce69b2837efe88fe4dd305371812ed8fb580e3eb347894a1900e3b92528d3d",
+        "baseline": "af699ddd6978c1d1bbcea7a1de0b6495ce08ba42807a1b9476179fcc9c4bad9f"
+      }
+    },
+    "scalar-isolation-production": {
+      "cases": 5,
+      "records": 120,
+      "measured_repeats": 7,
+      "sha256": "71c5d338c62f5c819441cc3eefca6764aaf56455e4f93ffd1c97c05baa33e127",
+      "binary_hashes": {
+        "baseline": "af699ddd6978c1d1bbcea7a1de0b6495ce08ba42807a1b9476179fcc9c4bad9f",
+        "before": "9bf210e0c3113ea6350897e485dff936442d8d64affac52d08c050f8761a44ef",
+        "final": "ddce69b2837efe88fe4dd305371812ed8fb580e3eb347894a1900e3b92528d3d"
+      }
+    },
+    "applications-public": {
+      "configurations": 60,
+      "records": 240,
+      "sha256": "b741284ee84b88e897cd6ba0dafac0636449e4c715cde76580f005534b75ec34"
+    },
+    "applications-spoc": {
+      "configurations": 16,
+      "records": 64,
+      "sha256": "82432abc8eca93f8ec3deb0998cd2726af2ac197a217c23dd3cea8d45eb7d26e"
+    }
+  },
+  "audit": {
+    "actual_calls": 15255,
+    "calls_per_mode": 5085,
+    "unique_models_per_mode": 1797,
+    "statuses_per_mode": {
+      "optimal": 3153,
+      "infeasible": 372,
+      "unbounded": 1560
+    },
+    "skipped_oracle_ambiguities_per_mode": 18,
+    "bounds_identical": true,
+    "summary_sha256": "dd15091db7809312e7846f9b9e5b5f1096a36a8f69b9731f4772cb18c7d9d1ce"
+  },
+  "negative_profile_test": {
+    "status": "rejected-as-required",
+    "log_sha256": "1a4b3997c83268afed5ca93083c55d3cc66502b18595992db4f70c15f6bc2b56"
+  },
+  "notes": [
+    "Iteration30 original Rust campaign used kernel-profile: excluded from production performance claims.",
+    "Checkpoints24-27 include corrected staging of exact executed Python tests; original refs retained.",
+    "Source checks/generators/tolerances unchanged.",
+    "Auxiliary native comparison lock updated; ripsolve comparison lock resolution updated but its uncached bitflags dependency prevented a complete offline metadata check.",
+    "Historical reference/harness native-0.16.0 path requires its original bootstrap and was not built."
+  ]
+}

@@ -136,8 +136,8 @@ impl Tolerances {
 pub struct Options {
     /// Tolerances of the candidate check.
     pub tolerances: Tolerances,
-    /// Threads per numerical kernel. Only `1` is supported here; a backend
-    /// may expose separate independent-component controls.
+    /// Maximum numerical kernel workers, 1 through 8. Backends may reject
+    /// widths they do not implement; native defaults to one.
     pub threads: usize,
 }
 
@@ -156,10 +156,9 @@ impl Options {
     pub fn validate(&self) -> Result<()> {
         self.tolerances.validate()?;
         ensure(self.threads > 0, || "threads must be at least 1".into())?;
-        if self.threads != 1 {
+        if self.threads > 8 {
             return Err(Error::Unsupported(format!(
-                "threads = {}: only single-threaded numerical kernels are implemented; \
-                 use backend component controls or independent solves",
+                "threads = {}: maximum numerical budget is 8",
                 self.threads
             )));
         }

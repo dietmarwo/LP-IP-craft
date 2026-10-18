@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 from ._native import solve_batch_native as _solve_batch_native
 
-__version__ = "0.27.0"
+__version__ = "0.28.0"
 
 __all__ = [
     "BACKENDS",
@@ -90,7 +90,8 @@ class Options:
     integrality_tolerance: float = DEFAULT_INTEGRALITY_TOLERANCE
     """Largest accepted distance of an integer variable to an integer, in (0, 0.5)."""
     threads: int = 1
-    """Threads per numerical kernel; use NativeOptions.component_threads for blocks."""
+    """Maximum native numerical workers, 1 through 8. A width above 1 serializes
+    the outer mechanisms (component, residual and tree workers)."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -347,18 +348,20 @@ def solve_batch(models: Iterable[Model], *, workers: int = 1, options: Optional[
     """Solve independent native jobs in order with 1..16 Rust workers.
 
     Budgets apply per job. Nested component, residual and tree workers are disabled inside the pool.
+    ``options.threads`` is each job's numerical width; above 1, ``workers * threads`` must not
+    exceed 8.
     Returns an exception value for a failed job; batch argument errors raise.
     Cancellation is shared, and queued jobs report cancellation too.
     """
     options = options or Options()
-    if options.threads != 1:
-        raise NotImplementedError("batch numerical kernels require options.threads = 1")
     if isinstance(workers, bool) or not isinstance(workers, int):
         raise TypeError("workers must be an integer")
     if not 1 <= workers <= 16:
         raise ValueError("workers must be in 1..16")
+    if options.threads > 1 and options.threads * workers > 8:
+        raise ValueError("batch outer workers times numerical threads must not exceed 8")
     raw = _solve_batch_native(list(models), workers, options.feasibility_tolerance,
-                             options.integrality_tolerance,
+                             options.integrality_tolerance, options.threads,
                              cancellation if cancellation is not None else Cancellation(),
                              None if backend_options is None else asdict(backend_options))
     return [r if isinstance(r, Exception) else _result_from_raw(r) for r in raw]

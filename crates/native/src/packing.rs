@@ -149,7 +149,18 @@ struct RootStats {
     work: u64,
     prices: Vec<f64>,
 }
+#[cfg(test)]
 fn relaxation(
+    pack: &Packing,
+    model: &Model,
+    settings: &NativeOptions,
+    cancel: &CancellationToken,
+    began: Instant,
+    seed: &[f64],
+) -> Result<(Vec<f64>, Option<f64>, RootStats)> {
+    relaxation_scalar(pack, model, settings, cancel, began, seed)
+}
+fn relaxation_scalar(
     pack: &Packing,
     model: &Model,
     settings: &NativeOptions,
@@ -223,6 +234,138 @@ fn relaxation(
             }
         }
     }
+    if stats.iterations == 0 {
+        avg = x;
+    }
+    Ok((avg, bound, stats))
+}
+
+fn relaxation_with_execution(
+    pack: &Packing,
+    model: &Model,
+    settings: &NativeOptions,
+    cancel: &CancellationToken,
+    began: Instant,
+    seed: &[f64],
+    execution: &crate::parallel::Execution,
+) -> Result<(Vec<f64>, Option<f64>, RootStats)> {
+    if execution.threads() == 1 {
+        return relaxation_scalar(pack, model, settings, cancel, began, seed);
+    }
+    let mut stats = RootStats::default();
+    let mut initial = vec![0f64; model.m()];
+    // Assign each column to one incident row: its maximum weight is a dual
+    // cover. Uncovered columns are handled by the variable-bound residual.
+    for j in 0..model.n() {
+        if let Some(&i) = pack.cols[j].first() {
+            initial[i] = initial[i].max(pack.weights[j]);
+        }
+    }
+    let mut bound = checked_bound(model, &initial, settings.objective_lattice)?;
+    stats.prices = initial;
+    let scale = pack.weights.iter().copied().fold(1., f64::max);
+    let max_row = pack.rows.iter().map(Vec::len).max().unwrap_or(1).max(1);
+    let max_col = pack.cols.iter().map(Vec::len).max().unwrap_or(1).max(1);
+    let step = 0.9 / ((max_row as f64) * (max_col as f64)).sqrt();
+    let mut x = seed.to_vec();
+    let mut avg = vec![0.; model.n()];
+    let mut y = vec![0.; model.m()];
+    let mut avg_y = y.clone();
+    let mut grad = if execution.threads() == 1 {
+        vec![0.; model.n()]
+    } else {
+        Vec::new()
+    };
+    let mut extrapolated = x.clone();
+    let step_work = (2 * model.nnz() + 4 * model.n() + 4 * model.m()) as u64;
+    execution.in_context(|| -> Result<()> {
+        for iteration in 0..if settings.packing_root {
+            settings.packing_root_iterations
+        } else {
+            0
+        } {
+            if stopped(settings, cancel, began)
+                || step_work > settings.packing_root_work.saturating_sub(stats.work)
+            {
+                break;
+            }
+            if execution.threads() == 1 {
+                grad.fill(0.);
+                for (i, row) in pack.rows.iter().enumerate() {
+                    for &j in row {
+                        grad[j] += y[i];
+                    }
+                }
+                for j in 0..model.n() {
+                    let next = (x[j] + step * (pack.weights[j] / scale - grad[j]))
+                        .clamp(model.variables().lower[j], model.variables().upper[j]);
+                    extrapolated[j] = 2. * next - x[j];
+                    x[j] = next;
+                    avg[j] += (next - avg[j]) / ((iteration + 1) as f64);
+                }
+                for (i, row) in pack.rows.iter().enumerate() {
+                    let activity: f64 = row.iter().map(|&j| extrapolated[j]).sum();
+                    y[i] = (y[i] + step * (activity - 1.)).max(0.);
+                    avg_y[i] += (y[i] - avg_y[i]) / ((iteration + 1) as f64);
+                }
+            } else {
+                execution.zip3_mut(
+                    &mut x,
+                    &mut avg,
+                    &mut extrapolated,
+                    2048,
+                    model.nnz().saturating_add(model.n().saturating_mul(8)),
+                    |first, x, avg, ext| {
+                        for (local, ((x, avg), ext)) in x.iter_mut().zip(avg).zip(ext).enumerate() {
+                            let j = first + local;
+                            let mut gradient = 0.;
+                            for &i in &pack.cols[j] {
+                                gradient += y[i];
+                            }
+                            let next = (*x + step * (pack.weights[j] / scale - gradient))
+                                .clamp(model.variables().lower[j], model.variables().upper[j]);
+                            *ext = 2. * next - *x;
+                            *x = next;
+                            *avg += (next - *avg) / ((iteration + 1) as f64);
+                        }
+                    },
+                );
+                execution.zip2_mut(
+                    &mut y,
+                    &mut avg_y,
+                    512,
+                    model.nnz().saturating_add(model.m().saturating_mul(4)),
+                    |first, y, avg_y| {
+                        for (local, (y, avg)) in y.iter_mut().zip(avg_y).enumerate() {
+                            let activity: f64 = pack.rows[first + local]
+                                .iter()
+                                .map(|&j| extrapolated[j])
+                                .sum();
+                            *y = (*y + step * (activity - 1.)).max(0.);
+                            *avg += (*y - *avg) / ((iteration + 1) as f64);
+                        }
+                    },
+                );
+            }
+            stats.iterations += 1;
+            stats.work += step_work;
+            if iteration % 32 == 31 || iteration + 1 == settings.packing_root_iterations {
+                for prices in [&y, &avg_y] {
+                    let prices: Vec<_> = prices.iter().map(|v| v * scale).collect();
+                    if prices.iter().all(|v| v.is_finite()) {
+                        if let Some(b) = checked_bound(model, &prices, settings.objective_lattice)?
+                        {
+                            if bound.is_none_or(|old| b < old) {
+                                bound = Some(b);
+                                stats.prices = prices;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    })?;
     if stats.iterations == 0 {
         avg = x;
     }
@@ -643,100 +786,103 @@ fn residual_search(
             // depend on which worker ran what.
             let next = std::sync::atomic::AtomicUsize::new(0);
             let next = &next;
-            let mut results = std::thread::scope(|scope| -> Result<Vec<_>> {
-                let mut handles = Vec::new();
-                for _ in 0..workers {
-                    handles.push(
-                        std::thread::Builder::new()
-                            .name("lpip-residual".into())
-                            .spawn_scoped(scope, move || {
-                                let mut out = Vec::new();
-                                loop {
-                                    let at =
-                                        next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                    if at >= count || stopped(settings, cancel, began) {
-                                        break;
-                                    }
-                                    let result = (|| -> Result<Option<_>> {
-                                        let Some((mut residual, columns, start)) =
-                                            neighborhood_seed(
-                                                pack,
-                                                model,
-                                                incumbent,
-                                                hint,
-                                                round * settings.packing_neighborhoods + base + at,
-                                                size,
-                                                plan[at],
-                                                settings,
-                                                cancel,
-                                                began,
-                                            )?
-                                        else {
-                                            return Ok(None);
-                                        };
-                                        let cut_began = Instant::now();
-                                        let (cliques, work) = if settings.packing_residual_cliques {
-                                            let (m, cuts, work) =
-                                                local_cliques(&residual, settings, cancel, began)?;
-                                            residual = m;
-                                            (cuts, work)
-                                        } else {
-                                            (0, 0)
-                                        };
-                                        let cut_seconds = cut_began.elapsed().as_secs_f64();
-                                        let mut controls = child_settings(settings, began);
-                                        controls.node_limit = Some(node_share);
-                                        controls.iteration_limit = Some(pivot_share);
-                                        controls.reliability_branching = true;
-                                        controls.scalable_branching = true;
-                                        let r = NativeSolver::new(controls).solve(
-                                            &residual,
-                                            options,
-                                            Some(&start),
-                                            cancel,
-                                        )?;
-                                        // Most residuals return their warm start, which is
-                                        // the snapshot and cannot improve on it. A changed
-                                        // point gets its full-model check here, in parallel;
-                                        // the ordered merge only reads the outcome.
-                                        let checked = r
-                                            .candidate
-                                            .as_ref()
-                                            .filter(|x| {
-                                                columns
-                                                    .iter()
-                                                    .zip(x.iter())
-                                                    .any(|(&j, &v)| incumbent[j] != v)
-                                            })
-                                            .map(|x| {
-                                                let mut point = incumbent.clone();
-                                                for (&j, &v) in columns.iter().zip(x) {
-                                                    point[j] = v;
-                                                }
-                                                let value = admit(model, options, &point);
-                                                (point, value)
-                                            });
-                                        Ok(Some((r, cliques, work, cut_seconds, checked)))
-                                    })();
-                                    out.push((at, result));
-                                }
-                                out
-                            })
-                            .map_err(|e| {
-                                Error::Backend(format!("residual worker creation: {e}"))
-                            })?,
-                    );
-                }
+            let work = || {
                 let mut out = Vec::new();
-                for h in handles {
-                    out.extend(
-                        h.join()
-                            .map_err(|_| Error::Backend("residual worker panicked".into()))?,
-                    );
+                loop {
+                    let at = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if at >= count || stopped(settings, cancel, began) {
+                        break;
+                    }
+                    let result = (|| -> Result<Option<_>> {
+                        let Some((mut residual, columns, start)) = neighborhood_seed(
+                            pack,
+                            model,
+                            incumbent,
+                            hint,
+                            round * settings.packing_neighborhoods + base + at,
+                            size,
+                            plan[at],
+                            settings,
+                            cancel,
+                            began,
+                        )?
+                        else {
+                            return Ok(None);
+                        };
+                        let cut_began = Instant::now();
+                        let (cliques, work) = if settings.packing_residual_cliques {
+                            let (m, cuts, work) =
+                                local_cliques(&residual, settings, cancel, began)?;
+                            residual = m;
+                            (cuts, work)
+                        } else {
+                            (0, 0)
+                        };
+                        let cut_seconds = cut_began.elapsed().as_secs_f64();
+                        let mut controls = child_settings(settings, began);
+                        controls.node_limit = Some(node_share);
+                        controls.iteration_limit = Some(pivot_share);
+                        controls.reliability_branching = true;
+                        controls.scalable_branching = true;
+                        let r = NativeSolver::new(controls).solve(
+                            &residual,
+                            options,
+                            Some(&start),
+                            cancel,
+                        )?;
+                        // Most residuals return their warm start, which is
+                        // the snapshot and cannot improve on it. A changed
+                        // point gets its full-model check here, in parallel;
+                        // the ordered merge only reads the outcome.
+                        let checked = r
+                            .candidate
+                            .as_ref()
+                            .filter(|x| {
+                                columns
+                                    .iter()
+                                    .zip(x.iter())
+                                    .any(|(&j, &v)| incumbent[j] != v)
+                            })
+                            .map(|x| {
+                                let mut point = incumbent.clone();
+                                for (&j, &v) in columns.iter().zip(x) {
+                                    point[j] = v;
+                                }
+                                let value = admit(model, options, &point);
+                                (point, value)
+                            });
+                        Ok(Some((r, cliques, work, cut_seconds, checked)))
+                    })();
+                    out.push((at, result));
                 }
-                Ok(out)
-            })?;
-            results.sort_by_key(|v| v.0);
+                out
+            };
+            let results = if workers == 1 {
+                crate::ordered::inline("residual", work)?
+            } else {
+                std::thread::scope(|scope| -> Result<Vec<_>> {
+                    let mut handles = Vec::new();
+                    for _ in 0..workers {
+                        handles.push(
+                            std::thread::Builder::new()
+                                .name("lpip-residual".into())
+                                .spawn_scoped(scope, work)
+                                .map_err(|e| {
+                                    Error::Backend(format!("residual worker creation: {e}"))
+                                })?,
+                        );
+                    }
+                    let mut out = Vec::new();
+                    for h in handles {
+                        out.extend(
+                            h.join()
+                                .map_err(|_| Error::Backend("residual worker panicked".into()))?,
+                        );
+                    }
+                    Ok(out)
+                })?
+            };
+            let results = crate::ordered::gather(count, results)?;
             let snapshot_objective = objective(model, &snapshot);
             let mut merged = snapshot.clone();
             let mut touched = vec![false; model.n()];
@@ -1158,7 +1304,15 @@ pub(crate) fn solve(
             .sum::<f64>();
     let greedy_seconds = began.elapsed().as_secs_f64();
     let t = Instant::now();
-    let (hint, bound, root_stats) = relaxation(&pack, model, settings, cancel, began, seed)?;
+    // The root loop is one long pool task: exclusive workers keep it from
+    // holding up other owners of the same width (see `Execution::new`).
+    let execution = if model.nnz() >= 131_072 {
+        crate::parallel::Execution::exclusive(options.threads).map_err(Error::Backend)?
+    } else {
+        crate::parallel::Execution::default()
+    };
+    let (hint, bound, root_stats) =
+        relaxation_with_execution(&pack, model, settings, cancel, began, seed, &execution)?;
     let relaxation_seconds = t.elapsed().as_secs_f64();
     if let Some(x) = pack.greedy(model, Some(&hint)) {
         improve(model, options, &mut best, x)?;
@@ -1874,6 +2028,75 @@ mod tests {
                 if feasible(&m, &x) {
                     assert!(feasible(&cut, &x));
                 }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod parallel_root_tests {
+    use super::*;
+    #[test]
+    fn projected_root_has_bit_identical_hints_prices_bounds_and_work() {
+        let n = 32768;
+        let m = 4096;
+        let mut rows = vec![Vec::new(); m];
+        for j in 0..n {
+            for i in [j % m, (j + 1) % m, (j + 5) % m] {
+                rows[i].push(j);
+            }
+        }
+        let mut indptr = vec![0];
+        let mut indices = Vec::new();
+        for row in rows {
+            indices.extend(row);
+            indptr.push(indices.len());
+        }
+        let nnz = indices.len();
+        let model = Model::new(ModelData {
+            sense: Sense::Maximize,
+            objective: (0..n).map(|j| (1 + j % 31) as f64).collect(),
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; n], vec![1.; n]),
+            kinds: vec![VariableKind::Binary; n],
+            matrix: CsrMatrix::new(m, n, indptr, indices, vec![1.; nnz]),
+            rows: Bounds::new(vec![f64::NEG_INFINITY; m], vec![1.; m]),
+        })
+        .unwrap();
+        let pack = Packing::new(&model).unwrap();
+        let seed = pack.greedy(&model, None).unwrap();
+        let settings = NativeOptions {
+            packing_root: true,
+            packing_root_iterations: 35,
+            packing_root_work: 100_000_000,
+            time_limit_seconds: None,
+            ..Default::default()
+        };
+        let mut expected = None;
+        for threads in [1, 2, 4, 8] {
+            let execution = crate::parallel::Execution::new(threads).unwrap();
+            let (hint, bound, stats) = relaxation_with_execution(
+                &pack,
+                &model,
+                &settings,
+                &CancellationToken::default(),
+                Instant::now(),
+                &seed,
+                &execution,
+            )
+            .unwrap();
+            assert_eq!(stats.iterations, 35);
+            let actual = (
+                hint.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                bound.map(f64::to_bits),
+                stats.prices.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                stats.iterations,
+                stats.work,
+            );
+            if let Some(e) = &expected {
+                assert_eq!(&actual, e, "root width{threads}");
+            } else {
+                expected = Some(actual);
             }
         }
     }

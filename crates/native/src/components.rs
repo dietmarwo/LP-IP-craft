@@ -205,18 +205,28 @@ fn run_parts(
         }
         return Ok((slots, workers));
     }
-    use std::sync::{
-        Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    };
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let mut order: Vec<_> = (0..parts.len()).collect();
+    // Work reservations remain tied to the original part, never queue order.
+    if settings.node_limit.is_none() && settings.iteration_limit.is_none() {
+        order.sort_by_key(|&i| {
+            std::cmp::Reverse(
+                parts[i]
+                    .model
+                    .nnz()
+                    .saturating_add(parts[i].model.n())
+                    .saturating_add(parts[i].model.m()),
+            )
+        });
+    }
     let next = AtomicUsize::new(0);
     let stop = AtomicBool::new(false);
-    let results = Mutex::new(vec![None; parts.len()]);
-    std::thread::scope(|scope| -> Result<()> {
+    let results = std::thread::scope(|scope| -> Result<Vec<_>> {
         let mut handles = Vec::new();
         for _ in 0..workers {
             let handle = std::thread::Builder::new()
-                .spawn_scoped(scope, || -> Result<()> {
+                .spawn_scoped(scope, || {
+                    let mut out = Vec::with_capacity(parts.len() / workers);
                     loop {
                         if stop.load(Ordering::Relaxed) {
                             break;
@@ -225,6 +235,7 @@ fn run_parts(
                         if i >= parts.len() {
                             break;
                         }
+                        let i = order[i];
                         let part = &parts[i];
                         let mut c = controls(settings, started);
                         c.node_limit = quota(settings.node_limit, i, parts.len());
@@ -241,24 +252,27 @@ fn run_parts(
                         {
                             stop.store(true, Ordering::Relaxed);
                         }
-                        results.lock().map_err(|_| {
-                            Error::Backend("component result lock poisoned".into())
-                        })?[i] = Some(r);
+                        out.push((i, r));
                     }
-                    Ok(())
+                    out
                 })
                 .map_err(|e| Error::Backend(format!("component worker creation failed: {e}")))?;
             handles.push(handle);
         }
+        let mut out = Vec::with_capacity(parts.len());
         for h in handles {
-            h.join()
-                .map_err(|_| Error::Backend("component worker panicked".into()))??;
+            out.extend(
+                h.join()
+                    .map_err(|_| Error::Backend("component worker panicked".into()))?,
+            );
         }
-        Ok(())
+        Ok(out)
     })?;
-    let slots = results
-        .into_inner()
-        .map_err(|_| Error::Backend("component result lock poisoned".into()))?
+    let mut slots: Vec<_> = (0..parts.len()).map(|_| None).collect();
+    for (i, result) in results {
+        slots[i] = Some(result);
+    }
+    let slots = slots
         .into_iter()
         .map(|r| r.transpose())
         .collect::<Result<Vec<_>>>()?;

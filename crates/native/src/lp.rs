@@ -45,6 +45,7 @@ pub(crate) enum State {
 /// Kernel controls derived from the solver options.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Controls {
+    pub threads: usize,
     pub pivot_tolerance: f64,
     pub refactor_interval: usize,
     pub adaptive_refactor: bool,
@@ -107,6 +108,7 @@ enum Outcome {
 }
 
 pub(crate) struct Lp {
+    execution: crate::parallel::Execution,
     n: usize,
     m: usize,
     rows: Vec<usize>,
@@ -291,6 +293,11 @@ impl Lp {
             dtol.push((dual / (cost_scale * r)).clamp(1e-12, 1e-7));
         }
         let mut lp = Self {
+            execution: if nnz >= 65_536 {
+                crate::parallel::Execution::new(controls.threads).map_err(Error::Backend)?
+            } else {
+                crate::parallel::Execution::default()
+            },
             n,
             m,
             rows,
@@ -776,7 +783,7 @@ impl Lp {
                             .is_some_and(|old| old.dense_dimension() > self.m / 8)
                 }
             };
-            match Lu::factor_with_workspace(
+            match Lu::factor_with_execution(
                 self.m,
                 column,
                 self.controls.max_factor_entries,
@@ -786,6 +793,7 @@ impl Lp {
                     search: self.controls.factor_pivot_search,
                     ordered,
                 },
+                &self.execution,
             ) {
                 Ok(mut lu) => {
                     #[cfg(feature = "kernel-profile")]
@@ -884,6 +892,7 @@ impl Lp {
     fn compute_dual(&mut self) {
         let _profile = crate::profile::enter("recompute_dual");
         self.dual_stale = false;
+        debug_assert!(self.execution.threads() <= self.controls.threads);
         let n = self.n;
         for p in 0..self.m {
             self.pi[p] = self.cost[self.basic[p]];
@@ -896,16 +905,50 @@ impl Lp {
                 self.pi[k] = 0.0;
             }
         }
-        for j in 0..n {
-            self.d[j] = if self.state[j] == State::Basic {
-                0.0
-            } else {
-                let mut v = self.cost[j];
-                for e in self.col_start[j]..self.col_start[j + 1] {
-                    v -= self.col_value[e] * self.pi[self.col_index[e]];
-                }
-                v
-            };
+        let work = if self.execution.threads() > 1 {
+            (0..n)
+                .filter(|&j| self.state[j] != State::Basic)
+                .map(|j| self.col_start[j + 1] - self.col_start[j])
+                .sum::<usize>()
+        } else {
+            0
+        };
+        if work >= 262_144 {
+            let (state, cost, start, index, value, pi) = (
+                &self.state,
+                &self.cost,
+                &self.col_start,
+                &self.col_index,
+                &self.col_value,
+                &self.pi,
+            );
+            self.execution
+                .chunks_mut(&mut self.d[..n], 64, work, |offset, part| {
+                    for (local, out) in part.iter_mut().enumerate() {
+                        let j = offset + local;
+                        *out = if state[j] == State::Basic {
+                            0.
+                        } else {
+                            let mut v = cost[j];
+                            for e in start[j]..start[j + 1] {
+                                v -= value[e] * pi[index[e]];
+                            }
+                            v
+                        };
+                    }
+                });
+        } else {
+            for j in 0..n {
+                self.d[j] = if self.state[j] == State::Basic {
+                    0.0
+                } else {
+                    let mut v = self.cost[j];
+                    for e in self.col_start[j]..self.col_start[j + 1] {
+                        v -= self.col_value[e] * self.pi[self.col_index[e]];
+                    }
+                    v
+                };
+            }
         }
         for k in 0..self.m {
             self.d[n + k] = if self.state[n + k] == State::Basic {
@@ -1041,21 +1084,61 @@ impl Lp {
         {
             let _column = crate::profile::enter("pricing_column");
             self.stats.column_pricings += 1;
-            for j in 0..n {
-                if self.state[j] == State::Basic {
-                    continue;
-                }
-                let mut value = 0.;
-                for e in self.col_start[j]..self.col_start[j + 1] {
-                    let rho = self.rho[self.col_index[e]];
-                    if rho.abs() > DROP {
-                        value += rho * self.col_value[e];
+            let work = if self.execution.threads() > 1 {
+                (0..n)
+                    .filter(|&j| self.state[j] != State::Basic)
+                    .map(|j| self.col_start[j + 1] - self.col_start[j])
+                    .sum::<usize>()
+            } else {
+                0
+            };
+            if work >= 262_144 {
+                let (state, start, index, values, rho) = (
+                    &self.state,
+                    &self.col_start,
+                    &self.col_index,
+                    &self.col_value,
+                    &self.rho,
+                );
+                self.execution
+                    .chunks_mut(&mut self.alpha[..n], 64, work, |offset, part| {
+                        for (local, out) in part.iter_mut().enumerate() {
+                            let j = offset + local;
+                            let mut value = 0.;
+                            if state[j] != State::Basic {
+                                for e in start[j]..start[j + 1] {
+                                    let r = rho[index[e]];
+                                    if r.abs() > DROP {
+                                        value += r * values[e];
+                                    }
+                                }
+                            }
+                            *out = value;
+                        }
+                    });
+                for j in 0..n {
+                    if self.alpha[j] != 0. {
+                        self.marked[j] = true;
+                        self.touched.push(j);
                     }
                 }
-                if value != 0. {
-                    self.alpha[j] = value;
-                    self.marked[j] = true;
-                    self.touched.push(j);
+            } else {
+                for j in 0..n {
+                    if self.state[j] == State::Basic {
+                        continue;
+                    }
+                    let mut value = 0.;
+                    for e in self.col_start[j]..self.col_start[j + 1] {
+                        let rho = self.rho[self.col_index[e]];
+                        if rho.abs() > DROP {
+                            value += rho * self.col_value[e];
+                        }
+                    }
+                    if value != 0. {
+                        self.alpha[j] = value;
+                        self.marked[j] = true;
+                        self.touched.push(j);
+                    }
                 }
             }
             for &k in &self.rho_index {
@@ -1807,6 +1890,7 @@ mod tests {
 
     fn controls() -> Controls {
         Controls {
+            threads: 1,
             pivot_tolerance: 1e-9,
             refactor_interval: 16,
             adaptive_refactor: true,
@@ -1982,5 +2066,66 @@ mod tests {
         let (status, lp) = solve(&model);
         assert_eq!(status, Status::Infeasible);
         assert!(lp.infeasibility_verified());
+    }
+
+    #[test]
+    fn numeric_workers_preserve_dense_reduced_costs_prices_and_touched_order() {
+        let m = 73usize;
+        let n = 4097usize;
+        let mut a = vec![0.; m * n];
+        for i in 0..m {
+            for j in 0..n {
+                a[i * n + j] = if j == i {
+                    256.
+                } else if (i * 7 + j * 13) % 11 == 0 {
+                    0.
+                } else {
+                    ((i * 37 + j * 19) % 17 + 1) as f64 / 128.
+                };
+            }
+        }
+        let model = Model::new(lp_ip_craft::ModelData {
+            sense: Sense::Maximize,
+            objective: (0..n).map(|j| (1 + j % 7) as f64).collect(),
+            objective_offset: 0.,
+            variables: lp_ip_craft::Bounds::new(vec![0.; n], vec![2.; n]),
+            kinds: vec![lp_ip_craft::VariableKind::Continuous; n],
+            matrix: lp_ip_craft::CsrMatrix::from_dense(m, n, &a).unwrap(),
+            rows: lp_ip_craft::Bounds::new(vec![f64::NEG_INFINITY; m], vec![512.; m]),
+        })
+        .unwrap();
+        let mut expected = None;
+        for threads in [1, 2, 4, 8] {
+            let mut c = controls();
+            c.threads = threads;
+            let mut lp = Lp::new(&model, &vec![true; m], &vec![true; n], c).unwrap();
+            lp.state.fill(State::Lower);
+            for i in 0..m {
+                lp.basic[i] = i;
+                lp.state[i] = State::Basic;
+            }
+            assert!(!lp.refactor().unwrap());
+            lp.compute_dual();
+            let d: Vec<_> = lp.d.iter().map(|v| v.to_bits()).collect();
+            let mut prices = Vec::new();
+            for row in [0, m / 2, m - 1] {
+                lp.compute_row(row);
+                prices.push((
+                    lp.alpha.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                    lp.touched.clone(),
+                ));
+            }
+            assert_eq!(lp.stats.column_pricings, 3, "exercise dense column pricing");
+            let actual = (d, prices);
+            if let Some(e) = &expected {
+                assert_eq!(&actual, e, "width{threads}");
+            } else {
+                expected = Some(actual);
+            }
+            // Reusing the same execution and factor with changed costs must be fresh.
+            lp.cost[m] += 0.25;
+            lp.compute_dual();
+            assert_ne!(lp.d[m].to_bits(), expected.as_ref().unwrap().0[m]);
+        }
     }
 }

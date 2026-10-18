@@ -74,7 +74,7 @@ pub(crate) fn solve(
     // index order, so fixed-work outcomes do not depend on the schedule.
     let next = std::sync::atomic::AtomicUsize::new(0);
     let next = &next;
-    let mut outputs = std::thread::scope(|scope| -> Result<Vec<_>> {
+    let outputs = std::thread::scope(|scope| -> Result<Vec<_>> {
         let mut handles = Vec::new();
         for _ in 0..workers {
             handles.push(
@@ -136,7 +136,10 @@ pub(crate) fn solve(
         }
         Ok(out)
     })?;
-    outputs.sort_by_key(|r| r.0);
+    let outputs = crate::ordered::gather(count, outputs)?;
+    if outputs.len() != count {
+        return Err(Error::Backend("tree task output missing".into()));
+    }
     let mut result = SolveResult::empty(
         Status::Unknown,
         "disjoint-frontier parallel native search",
