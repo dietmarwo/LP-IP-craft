@@ -714,7 +714,7 @@ fn residual_search(
                 }
                 out
             };
-            let mut results = if workers == 1 {
+            let results = if workers == 1 {
                 work()
             } else {
                 std::thread::scope(|scope| -> Result<Vec<_>> {
@@ -739,7 +739,7 @@ fn residual_search(
                     Ok(out)
                 })?
             };
-            results.sort_by_key(|v| v.0);
+            let results = crate::ordered::gather(count, results)?;
             let snapshot_objective = objective(model, &snapshot);
             let mut merged = snapshot.clone();
             let mut touched = vec![false; model.n()];
