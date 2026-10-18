@@ -81,21 +81,28 @@ impl DenseTail {
             }
             let _update = crate::profile::enter("factor_dense_update");
             // A22 -= L21*U12. Short contiguous inner loops are auto-vectorizable.
-            for j0 in (end..n).step_by(TILE) {
-                let jend = (j0 + TILE).min(n);
-                for r0 in (end..n).step_by(TILE) {
-                    for r in r0..(r0 + TILE).min(n) {
-                        for t in start..end {
-                            let l = d[r * n + t];
-                            let (head, tail) = d.split_at_mut(r * n);
-                            let source = &head[t * n + j0..t * n + jend];
-                            let target = &mut tail[j0..jend];
-                            for (v, &u) in target.iter_mut().zip(source) {
-                                *v -= l * u;
+            let remaining = n - end;
+            let work = remaining
+                .saturating_mul(remaining)
+                .saturating_mul(end - start);
+            if execution.threads() > 1 && work >= 32_768 {
+                let (panel, trailing) = d.split_at_mut(end * n);
+                execution.chunks_mut(trailing, n * 16, work, |_, rows| {
+                    for row in rows.chunks_mut(n) {
+                        for j0 in (end..n).step_by(TILE) {
+                            let jend = (j0 + TILE).min(n);
+                            for t in start..end {
+                                let l = row[t];
+                                let source = &panel[t * n + j0..t * n + jend];
+                                for (v, &u) in row[j0..jend].iter_mut().zip(source) {
+                                    *v -= l * u;
+                                }
                             }
                         }
                     }
-                }
+                });
+            } else {
+                schur_serial(&mut d, n, start, end);
             }
         }
         Some(Self {
@@ -169,4 +176,78 @@ fn subtract_dot(mut value: f64, a: &[f64], x: &[f64]) -> f64 {
         value -= a * x;
     }
     value
+}
+
+fn schur_serial(d: &mut [f64], n: usize, start: usize, end: usize) {
+    for j0 in (end..n).step_by(TILE) {
+        let jend = (j0 + TILE).min(n);
+        for r0 in (end..n).step_by(TILE) {
+            for r in r0..(r0 + TILE).min(n) {
+                for t in start..end {
+                    let l = d[r * n + t];
+                    let (head, tail) = d.split_at_mut(r * n);
+                    let source = &head[t * n + j0..t * n + jend];
+                    let target = &mut tail[j0..jend];
+                    for (v, &u) in target.iter_mut().zip(source) {
+                        *v -= l * u;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod parallel_tests {
+    use super::*;
+    #[test]
+    fn scalar_and_parallel_factors_permutations_and_solves_match() {
+        for n in [193, 385] {
+            let mut matrix = crate::active::Active::default();
+            matrix.reset(n);
+            for j in 0..n {
+                for i in 0..n {
+                    matrix.insert(
+                        j,
+                        i,
+                        if i == j {
+                            2. * n as f64
+                        } else {
+                            ((i * 37 + j * 19) % 17 + 1) as f64 / 16.
+                        },
+                    );
+                }
+            }
+            let cols = matrix.cols;
+            let mut expected = None;
+            for threads in [1, 2, 4, 8] {
+                let ex = crate::parallel::Execution::new(threads).unwrap();
+                let mut f =
+                    DenseTail::factor(&cols, (0..n).rev().collect(), (0..n).collect(), n, &ex)
+                        .unwrap();
+                let actual = (
+                    f.rows.clone(),
+                    f.cols.clone(),
+                    f.data.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                );
+                if let Some(e) = &expected {
+                    assert_eq!(&actual, e, "size{n} width{threads}");
+                } else {
+                    expected = Some(actual);
+                }
+                let x: Vec<_> = (0..n).map(|i| ((i * 7) % 13) as f64 / 16.).collect();
+                let rhs: Vec<_> = (0..n)
+                    .map(|i| (0..n).map(|j| cols[j][i].value * x[j]).sum())
+                    .collect();
+                let mut out = vec![0.; n];
+                f.ftran(&rhs, &mut out);
+                assert!(out.iter().zip(&x).all(|(a, b)| (a - b).abs() < 1e-10));
+                let rhs: Vec<_> = (0..n)
+                    .map(|j| (0..n).map(|i| cols[j][i].value * x[i]).sum())
+                    .collect();
+                f.btran(&rhs, &mut out);
+                assert!(out.iter().zip(&x).all(|(a, b)| (a - b).abs() < 1e-10));
+            }
+        }
+    }
 }
