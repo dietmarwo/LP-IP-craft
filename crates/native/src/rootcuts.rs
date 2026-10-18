@@ -139,7 +139,19 @@ pub(crate) fn run(
         if round == rounds || stagnant >= 3 {
             break;
         }
-        let (selected, cuts) = certified_cuts::separate(model, &mut lp, &x, &budget, families);
+        // While both families keep contributing after the first round,
+        // dense cuts are dropped (support above max(50, n/4), like SCIP's
+        // relative support limit). Combined rounds otherwise accumulate
+        // dense rank-2 cuts whose exact derivations dominate root time on
+        // assignment models. Single-family policies, and combined once a
+        // family has stopped, keep every cut.
+        let max_terms = if round >= 1 && families == [true, true] {
+            50.max(model.n() / 4)
+        } else {
+            usize::MAX
+        };
+        let (selected, cuts) =
+            certified_cuts::separate(model, &mut lp, &x, &budget, families, max_terms);
         // A family whose cuts were not selected this round is not separated
         // again; the other family then gets the whole work budget.
         for (active, family) in families.iter_mut().zip(["gmi", "mir"]) {

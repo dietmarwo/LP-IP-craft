@@ -210,9 +210,18 @@ fn cosine(a: &Cut, b: &Cut) -> f64 {
         .sqrt()
         .max(1e-30)
 }
-pub(crate) fn select(model: &Model, mut cuts: Vec<Cut>, x: &[f64], limit: usize) -> Vec<Cut> {
+/// Keeps the most efficacious, pairwise non-parallel cuts, at most `limit`,
+/// with at most `max_terms` terms each.
+pub(crate) fn select(
+    model: &Model,
+    mut cuts: Vec<Cut>,
+    x: &[f64],
+    limit: usize,
+    max_terms: usize,
+) -> Vec<Cut> {
     cuts.retain(|c| {
-        efficacy(c, x) > 1e-6
+        c.terms.len() <= max_terms
+            && efficacy(c, x) > 1e-6
             && !(0..model.m()).any(|i| {
                 let a = model.matrix();
                 let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
@@ -717,6 +726,7 @@ pub(crate) fn separate(
     x: &[f64],
     budget: &Budget<'_>,
     families: [bool; 2],
+    max_terms: usize,
 ) -> (Vec<Cut>, Stats) {
     rational::reset_work();
     let mut stats = Stats::default();
@@ -796,7 +806,10 @@ pub(crate) fn separate(
         }
     }
     stats.work = rational::work();
-    (select(model, output, x, settings.mip_cut_limit), stats)
+    (
+        select(model, output, x, settings.mip_cut_limit, max_terms),
+        stats,
+    )
 }
 
 #[cfg(test)]
@@ -1192,7 +1205,15 @@ pub(crate) mod tests {
             cancel: &cancel,
             pivots: 0,
         };
-        separate(m, &mut lp, &x, &budget, [s.gmi_cuts, s.mir_cuts]).0
+        separate(
+            m,
+            &mut lp,
+            &x,
+            &budget,
+            [s.gmi_cuts, s.mir_cuts],
+            usize::MAX,
+        )
+        .0
     }
     fn feasible(m: &Model, x: &[f64]) -> bool {
         check::evaluate(m, x, &Options::default().tolerances)

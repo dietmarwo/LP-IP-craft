@@ -400,3 +400,35 @@ Iteration 0 (main) on this host:
   |---:|---:|---:|---:|
   | 40,000 | 0.147 s | 0.047 s | 0.31 → 0.19 s |
   | 200,000 | 1.133 s | 0.186 s | 2.09 → 1.05 s (default: 1.10 s) |
+
+### 18. Cap cut support while both families are active — accepted
+
+- **Plan.** Iteration 12's support cap helped combined separation a lot but
+  was rejected for bell5 and for GMI-only p0548. A per-round trace of
+  combined separation shows why the rule can be narrowed:
+  - On bell5 and flugpl, MIR selects nothing in round 0 and is deactivated
+    (iteration 2). From round 1 on, combined is GMI-only there.
+  - On assignment models, gt2, lseu, rgn and p0548, both families keep
+    contributing. GMI's exact work per round grows to 4–10× MIR's as it
+    derives through earlier dense cut rows.
+  So drop cuts with more than max(50, n/4) terms only from round 1 on, and
+  only while both families are still active. Single-family policies are
+  untouched, and so is combined on models where a family stops after
+  round 0. Selection only: validity is unaffected.
+- **Result.** Only gt2, lseu, p0548, rgn and the four assignment models
+  changed (combined and heuristics). bell5 and flugpl are identical (52,495
+  and 16,292 nodes).
+
+  | Set | Combined before | After | Heuristics before | After |
+  |---|---:|---:|---:|---:|
+  | public | 0.150 s | 0.110 s | 0.143 s | 0.094 s |
+  | synthetic | 0.0361 s | 0.0290 s | 0.0396 s | 0.0330 s |
+  | held-out | 0.0368 s | 0.0348 s | 0.0389 s | 0.0352 s |
+  | families | 0.0017 s | 0.0015 s | 0.0015 s | 0.0016 s |
+
+  Per case (combined): gt2 0.75 → 0.22 s (6,164 → 2,426 nodes), lseu 0.37
+  → 0.11 s, p0548 0.16 → 0.14 s, rgn 0.55 → 0.49 s, gap-2 0.099 →
+  0.023 s. Heuristics: gt2 0.45 → 0.04 s. Combined is now the fastest
+  public policy. On synthetic it is still behind MIR alone (0.0290 against
+  0.0236 s). Held-out and family records are unchanged; their mean shifts
+  are timing noise.
