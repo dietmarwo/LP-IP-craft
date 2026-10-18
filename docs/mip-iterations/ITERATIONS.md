@@ -329,3 +329,41 @@ Iteration 0 (main) on this host:
   0.17 s), on gt2 from 2,009 to 671, and on setcover-2 from 911 to 244.
   Searches are unchanged except for ±2 nodes on 10 records (the pump's own
   LP calls), with the same results. Other policies are untouched.
+
+### 15. MIR divisors from VUB slopes — accepted
+
+- **Plan.** MIR-only lot sizing searched as many nodes as default (7,739
+  against 7,738 on lotsize-1), and sp150x300d's MIR root stopped after one
+  round with no cut. Their balance rows only have coefficients ±1, and MIR
+  tried only divisors taken from the row's own coefficients. After a VUB
+  substitution x = u y − t, though, the binary carries coefficient u, so
+  every integer coefficient is a multiple of the divisor 1 and the fraction
+  is zero. The c-MIR procedure of Marchand and Wolsey also divides by the
+  coefficients of fractional integer variables in the substituted row.
+  Here those are the substituted binaries' coefficients a·u/c. Add up to
+  four of them for binaries fractional at the LP point. These divisions
+  give flow-cover-type cuts. Rows without a substituted VUB keep exactly
+  their old candidates, so models without VUB rows (bell5, gt2, p0548,
+  lseu, rgn, flugpl) cannot change.
+- **Test.** A new unit test uses a fixed-charge node: demand d fed by two
+  arcs x ≤ 10 y. For five demands, it checks that a violated cut is found,
+  which needs the slope divisor, and that every grid-feasible point
+  satisfies all cuts. The test fails without the change.
+- **Result.** MIR-only lot sizing:
+
+  | Case | Before | After |
+  |---|---:|---:|
+  | lotsize-1 | 7,739 nodes, 0.189 s | 605 nodes, 0.022 s |
+  | lotsize-2 | 2,155 nodes, 0.052 s | 172 nodes, 0.009 s |
+  | lotsize-3 | 1,190 nodes, 0.044 s | 81 nodes, 0.007 s |
+  | lotsize-4 | 1,880 nodes, 0.071 s | 40 nodes, 0.003 s |
+
+  The synthetic MIR mean drops from 0.0335 to 0.0241 s (−28%). Combined
+  and heuristics also need fewer nodes on lot sizing and on the big-M
+  families. Only VUB models changed: lot sizing, egout, the big-M
+  families, and sp150x300d. egout's MIR tree shrinks (163 → 114 nodes),
+  but its root costs up to 4 ms more. Public MIR and heuristics means rose
+  by 4–5%, mostly timing noise on unchanged records (search-identical GMI
+  moved by 6%). sp150x300d's MIR bound improves only slightly, 37.8 → 38.6
+  (GMI reaches 53.8; the optimum is 69). Its flow structure needs
+  multi-row aggregation, which single-row MIR does not do.

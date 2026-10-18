@@ -558,6 +558,9 @@ struct MirBase {
     terms: Vec<(Dy, bool, MirTerm)>,
     beta: Dy,
     scale: Int,
+    /// Coefficients (unscaled) that substituted VUBs give their binaries,
+    /// for binaries fractional at the LP point.
+    vub_divisors: Vec<f64>,
 }
 fn mir_base(
     model: &Model,
@@ -594,11 +597,17 @@ fn mir_base(
     }
     let scale_dy = Dy::from_int(scale.clone());
     let mut slacks = Vec::new();
+    let mut vub_divisors = Vec::new();
     for t in range {
         let j = a.pattern.indices[t];
         let c = exact(sign * a.values[t])?.mul(&scale_dy)?;
         match &vubs[j] {
             Some(v) if substituted.contains(&j) => {
+                let d = (a.values[t] * v.slope / v.coefficient).abs();
+                let y = x[v.binary];
+                if y > 1e-6 && y < 1. - 1e-6 && d.is_normal() && !vub_divisors.contains(&d) {
+                    vub_divisors.push(d);
+                }
                 // c x = (c / coef) (slope y - t).
                 let coefficient = exact(v.coefficient)?;
                 let slope = exact(v.slope)?;
@@ -633,7 +642,12 @@ fn mir_base(
         return None;
     }
     terms.extend(slacks);
-    Some(MirBase { terms, beta, scale })
+    Some(MirBase {
+        terms,
+        beta,
+        scale,
+        vub_divisors,
+    })
 }
 fn mir(
     model: &Model,
@@ -754,6 +768,17 @@ pub(crate) fn separate(
                     break 'rows;
                 }
                 let base = mir_base(model, i, sign, x, &vubs, &mut acc);
+                // c-MIR also divides by the coefficients that VUB
+                // substitution gives fractional binaries, which yields
+                // flow-cover-type cuts on fixed-charge rows (Marchand and
+                // Wolsey). Rows without a substituted VUB are unaffected.
+                if let Some(b) = &base {
+                    for &d in b.vub_divisors.iter().take(4) {
+                        if !divisors.contains(&d) {
+                            divisors.push(d);
+                        }
+                    }
+                }
                 for divisor in divisors {
                     if budget.stop().is_some() || rational::work() >= cap {
                         break 'rows;
@@ -1318,6 +1343,47 @@ pub(crate) mod tests {
             }
         }
         assert!(total > 0);
+    }
+    #[test]
+    fn vub_slope_divisors_give_flow_cover_cuts_on_a_fixed_charge_node() {
+        // Demand d at a node fed by two arcs x_e <= 10 y_e. Every row
+        // coefficient is 1 or 10 and VUB rows reduce to t >= 0, so only the
+        // VUB slope as divisor yields a cut (y1 + y2 >= ceil(d / 10)).
+        let mut separated = 0;
+        for demand in [3., 4., 7., 13., 17.] {
+            let m = model(
+                vec![-0.01, -0.01, -1., -1.],
+                vec![
+                    VariableKind::Continuous,
+                    VariableKind::Continuous,
+                    VariableKind::Binary,
+                    VariableKind::Binary,
+                ],
+                vec![0.; 4],
+                vec![10., 10., 1., 1.],
+                vec![
+                    1., 1., 0., 0., //
+                    1., 0., -10., 0., //
+                    0., 1., 0., -10.,
+                ],
+                vec![demand, f64::NEG_INFINITY, f64::NEG_INFINITY],
+                vec![f64::INFINITY, 0., 0.],
+            );
+            let s = NativeOptions {
+                mir_cuts: true,
+                ..Default::default()
+            };
+            let (_, x) = optimum(&m, &s);
+            let cuts = separate_at_optimum(&m, &s);
+            valid(&m, &cuts, 5);
+            if cuts
+                .iter()
+                .any(|c| c.terms.iter().map(|&(j, a)| a * x[j]).sum::<f64>() > c.rhs + 1e-3)
+            {
+                separated += 1;
+            }
+        }
+        assert_eq!(separated, 5);
     }
     #[test]
     fn random_small_gmi_and_mir_cuts_preserve_every_integer_point() {
