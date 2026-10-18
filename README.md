@@ -1,3 +1,5 @@
+> Native0.28: explicit1–8 numerical workers, reusable local Rayon resources, parallel dense-LU/pricing and packing-root phases, improved ordered batch/component/tree/residual orchestration, bounded mixed batches and a fail-closed scaling/oracle harness. See [30 iteration plans](docs/parallel-028/PLAN.md), [execution and numerical contract](docs/parallel-028/VALIDITY.md) and [reproduction](docs/parallel-028/REPRODUCE.md). Default numerical width stays1; current MIP presolve/coefficient-tightening defaults stay on. Performance results and raw evidence are included with the local release.
+
 > Default change after 0.27: MIP presolve (bound propagation, probing on binaries, redundant rows) and binary coefficient tightening now run by default. Both keep every feasible point. Dual fixing, cuts and root heuristics stay opt-in. Pass `mip_presolve=False, coefficient_tightening=False` for the previous behaviour. Evidence: [default change](docs/mip-iterations/ITERATIONS.md#default-change).
 
 > Native 0.27: opt-in MIP presolve, exact GMI/MIR root cuts, checked root heuristics and branching experiments, informed by ripsolve. See the [reviewed plan](docs/ripsolve-027/PLAN.md), [API](docs/ripsolve-027/IMPLEMENTATION.md), [validity arguments](docs/ripsolve-027/VALIDITY.md), [results](docs/ripsolve-027/RESULTS.md), [reproduction](docs/ripsolve-027/REPRODUCE.md) and [review changes](docs/ripsolve-027/REVIEW.md). Generic search defaults remain unchanged.
@@ -26,8 +28,7 @@ Version **0.27.0** extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine
-is owned by this project: both numerical crates have **no third-party
-dependencies**, and no HiGHS, C/C++ solver, CMake, libclang, BLAS or external
+is owned by this project: the core remains dependency-free; the native scheduler uses pinned pure-Rust Rayon and its dependencies, and no HiGHS, C/C++ solver, CMake, libclang, BLAS or external
 numerical library is built or linked. The optional Python extension uses PyO3.
 
 What changed, and why it is faster (details in [docs/simplex](docs/simplex/README.md)):
@@ -58,7 +59,7 @@ cases, where 0.15 failed on up to 2 of 550 per seed, and its MIP search needs
 
 MIPs still require finite bounds on **all** variables, including continuous
 variables, of magnitude at most 2^53-1 after justified root inference; unresolved
-infinities remain unsupported. Each numerical kernel uses one thread; independent components, opt-in residual neighborhoods and binary frontiers can use private workers. The two real SpOC4 matching tables are now application benchmarks; their current quality/bound progress and remaining root bottleneck are documented in [the 0.26 results](docs/spoc4-026/RESULTS.md). GTOC application readiness remains unverified.
+infinities remain unsupported. Numerical kernels accept a maximum of1–8 workers through `Options.threads`; small work stays scalar. Independent components, residual neighborhoods and binary frontiers keep their existing worker controls. Explicit numerical width>1 serializes these outer mechanisms. Ordered batches also support outer×inner≤8; the existing16-worker serial-inner API remains compatible. The two real SpOC4 matching tables are now application benchmarks; their current quality/bound progress and remaining root bottleneck are documented in [the 0.26 results](docs/spoc4-026/RESULTS.md). GTOC application readiness remains unverified.
 
 ## Build and use
 
@@ -203,3 +204,9 @@ prove finite bounds; unresolved infinities and magnitudes beyond 2^53-1 still
 return `Unsupported`. Presolve reconstructs singleton LP duals and checks them
 against the original model. Root cuts are restricted to verified positive
 integer binary covers, inserted before factorization; no dynamic local cuts.
+
+## Eight-worker execution (0.28)
+
+For independent small models use `solve_batch(models, workers=8)` with default `Options(threads=1)`. For a large single LP or packing root use `Options(threads=8)`; scalar reductions, sparse pivot selection, triangular dependencies and independent acceptance remain ordered. To use existing packing residual workers choose numerical width1 and `NativeOptions(packing_workers=8, ...)`. Do not multiply eight outer workers by eight numerical workers. Mixed batches support1×8,2×4,4×2 and8×1, with per-job limits and input-order results.
+
+The native implementation remains owned safe Rust; Rayon1.12 supplies scheduling, not an external LP/MIP algorithm or BLAS. Local pools are owned, compatible live widths share weakly indexed resources, and no global Rayon pool is configured. Separate callers must manage their combined budgets. See the detailed execution contract and benchmark scopes before interpreting1/8 ratios.

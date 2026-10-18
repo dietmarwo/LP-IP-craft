@@ -90,7 +90,7 @@ fn skewdense(m: usize) -> (Model, f64) {
     let mut rhs = Vec::new();
     for i in 0..m {
         let mut sum = 0.;
-        for j in 0..n {
+        for (j, cost) in objective.iter_mut().enumerate() {
             let value = if j < m {
                 if j == i { 16. } else { 0. }
             } else if j >= n - heavy {
@@ -103,7 +103,7 @@ fn skewdense(m: usize) -> (Model, f64) {
             if value != 0. {
                 indices.push(j);
                 values.push(value);
-                objective[j] += (1 + i % 5) as f64 * value;
+                *cost += (1 + i % 5) as f64 * value;
                 sum += value;
             }
         }

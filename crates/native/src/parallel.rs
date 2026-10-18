@@ -87,6 +87,12 @@ impl Execution {
         }
     }
 
+    pub(crate) fn in_context<T: Send, F: FnOnce() -> T + Send>(&self, f: F) -> T {
+        match &self.pool {
+            Some(pool) => pool.install(f),
+            None => f(),
+        }
+    }
     pub(crate) fn zip2_mut<T, F>(&self, a: &mut [T], b: &mut [T], chunk: usize, work: usize, f: F)
     where
         T: Send,

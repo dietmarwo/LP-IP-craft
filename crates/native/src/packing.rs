@@ -196,86 +196,101 @@ fn relaxation_with_execution(
     let mut avg = vec![0.; model.n()];
     let mut y = vec![0.; model.m()];
     let mut avg_y = y.clone();
-    let mut grad = vec![0.; model.n()];
+    let mut grad = if execution.threads() == 1 {
+        vec![0.; model.n()]
+    } else {
+        Vec::new()
+    };
     let mut extrapolated = x.clone();
     let step_work = (2 * model.nnz() + 4 * model.n() + 4 * model.m()) as u64;
-    for iteration in 0..if settings.packing_root {
-        settings.packing_root_iterations
-    } else {
-        0
-    } {
-        if stopped(settings, cancel, began)
-            || step_work > settings.packing_root_work.saturating_sub(stats.work)
-        {
-            break;
-        }
-        if execution.threads() > 1 && model.nnz() >= 32_768 {
-            execution.chunks_mut_min(&mut grad, 2048, model.nnz(), 32_768, |first, part| {
-                for (local, value) in part.iter_mut().enumerate() {
-                    let mut sum = 0.;
-                    for &i in &pack.cols[first + local] {
-                        sum += y[i];
-                    }
-                    *value = sum;
-                }
-            });
+    execution.in_context(|| -> Result<()> {
+        for iteration in 0..if settings.packing_root {
+            settings.packing_root_iterations
         } else {
-            grad.fill(0.);
-            for (i, row) in pack.rows.iter().enumerate() {
-                for &j in row {
-                    grad[j] += y[i];
-                }
+            0
+        } {
+            if stopped(settings, cancel, began)
+                || step_work > settings.packing_root_work.saturating_sub(stats.work)
+            {
+                break;
             }
-        }
-        execution.zip3_mut(
-            &mut x,
-            &mut avg,
-            &mut extrapolated,
-            2048,
-            model.n().saturating_mul(8),
-            |first, x, avg, ext| {
-                for (local, ((x, avg), ext)) in x.iter_mut().zip(avg).zip(ext).enumerate() {
-                    let j = first + local;
-                    let next = (*x + step * (pack.weights[j] / scale - grad[j]))
+            if execution.threads() == 1 {
+                grad.fill(0.);
+                for (i, row) in pack.rows.iter().enumerate() {
+                    for &j in row {
+                        grad[j] += y[i];
+                    }
+                }
+                for j in 0..model.n() {
+                    let next = (x[j] + step * (pack.weights[j] / scale - grad[j]))
                         .clamp(model.variables().lower[j], model.variables().upper[j]);
-                    *ext = 2. * next - *x;
-                    *x = next;
-                    *avg += (next - *avg) / ((iteration + 1) as f64);
+                    extrapolated[j] = 2. * next - x[j];
+                    x[j] = next;
+                    avg[j] += (next - avg[j]) / ((iteration + 1) as f64);
                 }
-            },
-        );
-        execution.zip2_mut(
-            &mut y,
-            &mut avg_y,
-            512,
-            model.nnz().saturating_add(model.m().saturating_mul(4)),
-            |first, y, avg_y| {
-                for (local, (y, avg)) in y.iter_mut().zip(avg_y).enumerate() {
-                    let activity: f64 = pack.rows[first + local]
-                        .iter()
-                        .map(|&j| extrapolated[j])
-                        .sum();
-                    *y = (*y + step * (activity - 1.)).max(0.);
-                    *avg += (*y - *avg) / ((iteration + 1) as f64);
+                for (i, row) in pack.rows.iter().enumerate() {
+                    let activity: f64 = row.iter().map(|&j| extrapolated[j]).sum();
+                    y[i] = (y[i] + step * (activity - 1.)).max(0.);
+                    avg_y[i] += (y[i] - avg_y[i]) / ((iteration + 1) as f64);
                 }
-            },
-        );
-        stats.iterations += 1;
-        stats.work += step_work;
-        if iteration % 32 == 31 || iteration + 1 == settings.packing_root_iterations {
-            for prices in [&y, &avg_y] {
-                let prices: Vec<_> = prices.iter().map(|v| v * scale).collect();
-                if prices.iter().all(|v| v.is_finite()) {
-                    if let Some(b) = checked_bound(model, &prices, settings.objective_lattice)? {
-                        if bound.is_none_or(|old| b < old) {
-                            bound = Some(b);
-                            stats.prices = prices;
+            } else {
+                execution.zip3_mut(
+                    &mut x,
+                    &mut avg,
+                    &mut extrapolated,
+                    2048,
+                    model.nnz().saturating_add(model.n().saturating_mul(8)),
+                    |first, x, avg, ext| {
+                        for (local, ((x, avg), ext)) in x.iter_mut().zip(avg).zip(ext).enumerate() {
+                            let j = first + local;
+                            let mut gradient = 0.;
+                            for &i in &pack.cols[j] {
+                                gradient += y[i];
+                            }
+                            let next = (*x + step * (pack.weights[j] / scale - gradient))
+                                .clamp(model.variables().lower[j], model.variables().upper[j]);
+                            *ext = 2. * next - *x;
+                            *x = next;
+                            *avg += (next - *avg) / ((iteration + 1) as f64);
+                        }
+                    },
+                );
+                execution.zip2_mut(
+                    &mut y,
+                    &mut avg_y,
+                    512,
+                    model.nnz().saturating_add(model.m().saturating_mul(4)),
+                    |first, y, avg_y| {
+                        for (local, (y, avg)) in y.iter_mut().zip(avg_y).enumerate() {
+                            let activity: f64 = pack.rows[first + local]
+                                .iter()
+                                .map(|&j| extrapolated[j])
+                                .sum();
+                            *y = (*y + step * (activity - 1.)).max(0.);
+                            *avg += (*y - *avg) / ((iteration + 1) as f64);
+                        }
+                    },
+                );
+            }
+            stats.iterations += 1;
+            stats.work += step_work;
+            if iteration % 32 == 31 || iteration + 1 == settings.packing_root_iterations {
+                for prices in [&y, &avg_y] {
+                    let prices: Vec<_> = prices.iter().map(|v| v * scale).collect();
+                    if prices.iter().all(|v| v.is_finite()) {
+                        if let Some(b) = checked_bound(model, &prices, settings.objective_lattice)?
+                        {
+                            if bound.is_none_or(|old| b < old) {
+                                bound = Some(b);
+                                stats.prices = prices;
+                            }
                         }
                     }
                 }
             }
         }
-    }
+        Ok(())
+    })?;
     if stats.iterations == 0 {
         avg = x;
     }
@@ -776,7 +791,7 @@ fn residual_search(
                         handles.push(
                             std::thread::Builder::new()
                                 .name("lpip-residual".into())
-                                .spawn_scoped(scope, &work)
+                                .spawn_scoped(scope, work)
                                 .map_err(|e| {
                                     Error::Backend(format!("residual worker creation: {e}"))
                                 })?,

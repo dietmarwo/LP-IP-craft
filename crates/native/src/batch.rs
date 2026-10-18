@@ -88,7 +88,7 @@ impl NativeSolver {
                 handles.push(
                     std::thread::Builder::new()
                         .name("lpip-batch".into())
-                        .spawn_scoped(scope, &work)
+                        .spawn_scoped(scope, work)
                         .map_err(|e| Error::Backend(format!("batch worker creation: {e}")))?,
                 );
             }
