@@ -71,3 +71,25 @@ Iteration 0 (main) on this host:
   0.0399 → 0.0349 s, public MIR 0.241 → 0.224 s). Examples: gap-2
   combined 0.256 → 0.131 s, lseu GMI 0.422 → 0.274 s. Held-out and family
   means moved within noise (default moved by as much).
+
+### 2. Stop separating a family that stops contributing — accepted
+
+- **Plan.** On facility location and lot sizing, combined selected exactly
+  GMI-only's cuts (zero MIR cuts in any round), yet ran MIR separation on
+  every row each round. That tripled root time: cfl-1 took 0.025 s,
+  against 0.007 s for GMI alone. Rule: a family with no selected cut in a
+  round is not separated again; the remaining family gets the whole work
+  budget, as it would alone. Combined only; single-family policies cannot
+  change.
+- **Result.** Combined means improve on all four sets:
+
+  | Set | Before | After |
+  |---|---:|---:|
+  | public | 0.173 s | 0.163 s |
+  | synthetic | 0.0420 s | 0.0375 s |
+  | held-out | 0.0392 s | 0.0362 s |
+  | families | 0.0026 s | 0.0014 s |
+
+  bell5 drops from 4.40 to 3.58 s and rgn from 0.70 to 0.57 s. Nothing is
+  lost or slower beyond the flag threshold, and only combined/heuristics
+  records change. Oracle gates: 0 failures, default and combined.

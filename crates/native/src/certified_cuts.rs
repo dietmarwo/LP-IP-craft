@@ -677,11 +677,14 @@ fn mir(
 }
 /// Separates GMI cuts from the optimal tableau and MIR cuts from every row,
 /// including earlier cuts (rank-2 MIR closes most of gt2's root gap).
+/// Separates the active families, `[gmi, mir]`. With both active, GMI may
+/// use half the work budget, so it cannot starve MIR.
 pub(crate) fn separate(
     model: &Model,
     lp: &mut Lp,
     x: &[f64],
     budget: &Budget<'_>,
+    families: [bool; 2],
 ) -> (Vec<Cut>, Stats) {
     rational::reset_work();
     let mut stats = Stats::default();
@@ -690,8 +693,8 @@ pub(crate) fn separate(
     let cap = settings.cut_exact_work;
     let mut acc = Accumulator::new(model.n());
     let mut wide = Wide::new(model.n());
-    if settings.gmi_cuts {
-        let gmi_cap = if settings.mir_cuts { cap / 2 } else { cap };
+    if families[0] {
+        let gmi_cap = if families[1] { cap / 2 } else { cap };
         let candidates = lp.tableau_candidates(model, settings.mip_cut_limit * 4);
         for (pivot, weights) in candidates {
             if budget.stop().is_some() || rational::work() >= gmi_cap {
@@ -707,7 +710,7 @@ pub(crate) fn separate(
             }
         }
     }
-    if settings.mir_cuts && rational::work() < cap {
+    if families[1] && rational::work() < cap {
         let vubs = variable_bounds(model);
         stats.vubs = vubs.iter().filter(|v| v.is_some()).count() as u64;
         'rows: for i in 0..model.m() {
@@ -1146,7 +1149,7 @@ pub(crate) mod tests {
             cancel: &cancel,
             pivots: 0,
         };
-        separate(m, &mut lp, &x, &budget).0
+        separate(m, &mut lp, &x, &budget, [s.gmi_cuts, s.mir_cuts]).0
     }
     fn feasible(m: &Model, x: &[f64]) -> bool {
         check::evaluate(m, x, &Options::default().tolerances)

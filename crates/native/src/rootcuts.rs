@@ -56,6 +56,7 @@ pub(crate) fn run(
     };
     let mut stagnant = 0;
     let mut previous: Option<f64> = None;
+    let mut families = [settings.gmi_cuts, settings.mir_cuts];
     // Rows from here on are root cuts; `last` is the latest accepted optimum
     // and the row count it belongs to.
     let cuts_from = model.m();
@@ -135,7 +136,12 @@ pub(crate) fn run(
         if round == rounds || stagnant >= 3 {
             break;
         }
-        let (selected, cuts) = certified_cuts::separate(model, &mut lp, &x, &budget);
+        let (selected, cuts) = certified_cuts::separate(model, &mut lp, &x, &budget, families);
+        // A family whose cuts were not selected this round is not separated
+        // again; the other family then gets the whole work budget.
+        for (active, family) in families.iter_mut().zip(["gmi", "mir"]) {
+            *active &= selected.iter().any(|c| c.family == family);
+        }
         stats.exact_work += cuts.work;
         stats.candidates += cuts.candidates;
         stats.rejected += cuts.rejected;
