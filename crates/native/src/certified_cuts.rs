@@ -9,7 +9,7 @@
 //! so it, too, has integer coefficients. No gcd is ever needed.
 use crate::{
     Budget,
-    dyadic::{Dy, Int},
+    dyadic::{Dy, Int, Multiplier, Wide, exponent_of},
     lp::Lp,
     rational,
 };
@@ -54,9 +54,6 @@ impl Accumulator {
         }
         self.values[j] = self.values[j].add(v)?;
         Some(())
-    }
-    fn get(&self, j: usize) -> &Dy {
-        &self.values[j]
     }
     fn clear(&mut self) {
         for &j in &self.touched {
@@ -213,9 +210,18 @@ fn cosine(a: &Cut, b: &Cut) -> f64 {
         .sqrt()
         .max(1e-30)
 }
-pub(crate) fn select(model: &Model, mut cuts: Vec<Cut>, x: &[f64], limit: usize) -> Vec<Cut> {
+/// Keeps the most efficacious, pairwise non-parallel cuts, at most `limit`,
+/// with at most `max_terms` terms each.
+pub(crate) fn select(
+    model: &Model,
+    mut cuts: Vec<Cut>,
+    x: &[f64],
+    limit: usize,
+    max_terms: usize,
+) -> Vec<Cut> {
     cuts.retain(|c| {
-        efficacy(c, x) > 1e-6
+        c.terms.len() <= max_terms
+            && efficacy(c, x) > 1e-6
             && !(0..model.m()).any(|i| {
                 let a = model.matrix();
                 let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
@@ -314,6 +320,39 @@ enum Anchored {
     Row(usize, f64, Dy),
 }
 #[allow(clippy::too_many_arguments)]
+/// Exact column sums `Σ k v` for integer k and binary64 v: in place when they
+/// fit [`Wide`], otherwise in [`Dy`]. Both are exact, so the result does not
+/// depend on which one was used.
+/// Each term `(j, k, v)` adds `multipliers[k] * v` to column j.
+fn column_sums(
+    terms: &[(usize, usize, f64)],
+    multipliers: &[Multiplier],
+    wide: &mut Wide,
+    acc: &mut Accumulator,
+) -> Option<Vec<(usize, Dy)>> {
+    let base = terms
+        .iter()
+        .filter_map(|t| exponent_of(t.2))
+        .min()
+        .unwrap_or(0);
+    wide.reset(base);
+    if terms
+        .iter()
+        .all(|&(j, k, v)| wide.add_int_scaled(j, &multipliers[k], v))
+    {
+        return Some(wide.drain());
+    }
+    wide.reset(base);
+    acc.clear();
+    for &(j, k, v) in terms {
+        acc.add(
+            j,
+            &Dy::from_int(multipliers[k].value.clone()).mul(&exact(v)?)?,
+        )?;
+    }
+    Some(acc.drain())
+}
+#[allow(clippy::too_many_arguments)]
 fn gmi(
     model: &Model,
     pivot: usize,
@@ -322,12 +361,15 @@ fn gmi(
     budget: &Budget<'_>,
     cap: u64,
     acc: &mut Accumulator,
+    wide: &mut Wide,
 ) -> Option<Cut> {
     let a = model.matrix();
     acc.clear();
     let stopped = || budget.stop().is_some() || rational::work() >= cap;
     // Exact identity Σ_j (Σ_i k_i a_ij) x_j - Σ_i k_i s_i = 0, s = A x.
     let mut used = Vec::new();
+    let mut products = Vec::new();
+    let mut multipliers = Vec::new();
     for (i, k) in integer_weights(weights)?.into_iter().enumerate() {
         if k == 0 {
             continue;
@@ -335,20 +377,23 @@ fn gmi(
         if stopped() {
             return None;
         }
-        let w = Dy::from_int(Int::from_i64(k));
+        let w = Int::from_i64(k);
+        let index = multipliers.len();
         for t in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
-            acc.add(a.pattern.indices[t], &w.mul(&exact(a.values[t])?)?)?;
+            products.push((a.pattern.indices[t], index, a.values[t]));
         }
-        used.push((i, w));
+        used.push((i, Dy::from_int(w.clone())));
+        multipliers.push(Multiplier::new(w));
     }
-    let p = acc.get(pivot).clone();
-    if p.is_zero() {
-        return None;
-    }
+    let aggregate = column_sums(&products, &multipliers, wide, acc)?;
+    let p = aggregate
+        .iter()
+        .find(|t| t.0 == pivot)
+        .map(|t| t.1.clone())?;
     // Anchor every other column and row activity: p x_p + Σ c z = beta.
     let mut beta = Dy::zero();
     let mut terms: Vec<(Dy, bool, Anchored)> = Vec::new();
-    for (j, c) in acc.drain() {
+    for (j, c) in aggregate {
         if j == pivot {
             continue;
         }
@@ -404,6 +449,8 @@ fn gmi(
     // GMI Σ g z >= 1 times f0 g0: integer z gets r g0 (r <= f0) or
     // (p - r) f0, continuous z gets c g0 (c > 0) or -c f0, with r = c mod p.
     let mut rhs = Dy::from_int(f0.mul(&g0)?.neg());
+    products.clear();
+    multipliers.clear();
     for ((_, integer, term), c) in terms.into_iter().zip(&ints[2..]) {
         if stopped() {
             return None;
@@ -426,20 +473,27 @@ fn gmi(
         // -g z <= ..., z = sign (v - bound).
         match term {
             Anchored::Column(j, sign, bound) => {
-                let gs = Dy::from_int(signed_int(g, sign));
-                acc.add(j, &gs.neg())?;
-                rhs = rhs.sub(&gs.mul(&bound)?)?;
+                let gs = signed_int(g, sign);
+                rhs = rhs.sub(&Dy::from_int(gs.clone()).mul(&bound)?)?;
+                products.push((j, multipliers.len(), 1.));
+                multipliers.push(Multiplier::new(gs.neg()));
             }
             Anchored::Row(i, sign, bound) => {
-                let gs = Dy::from_int(signed_int(g, sign));
+                let gs = signed_int(g, sign);
+                rhs = rhs.sub(&Dy::from_int(gs.clone()).mul(&bound)?)?;
                 for t in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
-                    acc.add(a.pattern.indices[t], &gs.neg().mul(&exact(a.values[t])?)?)?;
+                    products.push((a.pattern.indices[t], multipliers.len(), a.values[t]));
                 }
-                rhs = rhs.sub(&gs.mul(&bound)?)?;
+                multipliers.push(Multiplier::new(gs.neg()));
             }
         }
     }
-    enclose(model, acc.drain(), &rhs, "gmi")
+    enclose(
+        model,
+        column_sums(&products, &multipliers, wide, acc)?,
+        &rhs,
+        "gmi",
+    )
 }
 #[derive(Clone)]
 struct Vub {
@@ -513,6 +567,9 @@ struct MirBase {
     terms: Vec<(Dy, bool, MirTerm)>,
     beta: Dy,
     scale: Int,
+    /// Coefficients (unscaled) that substituted VUBs give their binaries,
+    /// for binaries fractional at the LP point.
+    vub_divisors: Vec<f64>,
 }
 fn mir_base(
     model: &Model,
@@ -549,11 +606,17 @@ fn mir_base(
     }
     let scale_dy = Dy::from_int(scale.clone());
     let mut slacks = Vec::new();
+    let mut vub_divisors = Vec::new();
     for t in range {
         let j = a.pattern.indices[t];
         let c = exact(sign * a.values[t])?.mul(&scale_dy)?;
         match &vubs[j] {
             Some(v) if substituted.contains(&j) => {
+                let d = (a.values[t] * v.slope / v.coefficient).abs();
+                let y = x[v.binary];
+                if y > 1e-6 && y < 1. - 1e-6 && d.is_normal() && !vub_divisors.contains(&d) {
+                    vub_divisors.push(d);
+                }
                 // c x = (c / coef) (slope y - t).
                 let coefficient = exact(v.coefficient)?;
                 let slope = exact(v.slope)?;
@@ -588,7 +651,12 @@ fn mir_base(
         return None;
     }
     terms.extend(slacks);
-    Some(MirBase { terms, beta, scale })
+    Some(MirBase {
+        terms,
+        beta,
+        scale,
+        vub_divisors,
+    })
 }
 fn mir(
     model: &Model,
@@ -650,11 +718,15 @@ fn mir(
 }
 /// Separates GMI cuts from the optimal tableau and MIR cuts from every row,
 /// including earlier cuts (rank-2 MIR closes most of gt2's root gap).
+/// Separates the active families, `[gmi, mir]`. With both active, GMI may
+/// use half the work budget, so it cannot starve MIR.
 pub(crate) fn separate(
     model: &Model,
     lp: &mut Lp,
     x: &[f64],
     budget: &Budget<'_>,
+    families: [bool; 2],
+    max_terms: usize,
 ) -> (Vec<Cut>, Stats) {
     rational::reset_work();
     let mut stats = Stats::default();
@@ -662,22 +734,25 @@ pub(crate) fn separate(
     let settings = budget.settings;
     let cap = settings.cut_exact_work;
     let mut acc = Accumulator::new(model.n());
-    if settings.gmi_cuts {
-        let gmi_cap = if settings.mir_cuts { cap / 2 } else { cap };
+    let mut wide = Wide::new(model.n());
+    if families[0] {
+        let gmi_cap = if families[1] { cap / 2 } else { cap };
         let candidates = lp.tableau_candidates(model, settings.mip_cut_limit * 4);
         for (pivot, weights) in candidates {
             if budget.stop().is_some() || rational::work() >= gmi_cap {
                 break;
             }
             stats.candidates += 1;
-            if let Some(c) = gmi(model, pivot, &weights, x, budget, gmi_cap, &mut acc) {
+            if let Some(c) = gmi(
+                model, pivot, &weights, x, budget, gmi_cap, &mut acc, &mut wide,
+            ) {
                 output.push(c);
             } else {
                 stats.rejected += 1;
             }
         }
     }
-    if settings.mir_cuts && rational::work() < cap {
+    if families[1] && rational::work() < cap {
         let vubs = variable_bounds(model);
         stats.vubs = vubs.iter().filter(|v| v.is_some()).count() as u64;
         'rows: for i in 0..model.m() {
@@ -703,6 +778,17 @@ pub(crate) fn separate(
                     break 'rows;
                 }
                 let base = mir_base(model, i, sign, x, &vubs, &mut acc);
+                // c-MIR also divides by the coefficients that VUB
+                // substitution gives fractional binaries, which yields
+                // flow-cover-type cuts on fixed-charge rows (Marchand and
+                // Wolsey). Rows without a substituted VUB are unaffected.
+                if let Some(b) = &base {
+                    for &d in b.vub_divisors.iter().take(4) {
+                        if !divisors.contains(&d) {
+                            divisors.push(d);
+                        }
+                    }
+                }
                 for divisor in divisors {
                     if budget.stop().is_some() || rational::work() >= cap {
                         break 'rows;
@@ -720,7 +806,10 @@ pub(crate) fn separate(
         }
     }
     stats.work = rational::work();
-    (select(model, output, x, settings.mip_cut_limit), stats)
+    (
+        select(model, output, x, settings.mip_cut_limit, max_terms),
+        stats,
+    )
 }
 
 #[cfg(test)]
@@ -1116,7 +1205,15 @@ pub(crate) mod tests {
             cancel: &cancel,
             pivots: 0,
         };
-        separate(m, &mut lp, &x, &budget).0
+        separate(
+            m,
+            &mut lp,
+            &x,
+            &budget,
+            [s.gmi_cuts, s.mir_cuts],
+            usize::MAX,
+        )
+        .0
     }
     fn feasible(m: &Model, x: &[f64]) -> bool {
         check::evaluate(m, x, &Options::default().tolerances)
@@ -1216,6 +1313,7 @@ pub(crate) mod tests {
                 &budget,
                 4_000_000,
                 &mut acc,
+                &mut Wide::new(m.n()),
             ) {
                 valid(&m, &[c], 3);
                 found += 1;
@@ -1266,6 +1364,47 @@ pub(crate) mod tests {
             }
         }
         assert!(total > 0);
+    }
+    #[test]
+    fn vub_slope_divisors_give_flow_cover_cuts_on_a_fixed_charge_node() {
+        // Demand d at a node fed by two arcs x_e <= 10 y_e. Every row
+        // coefficient is 1 or 10 and VUB rows reduce to t >= 0, so only the
+        // VUB slope as divisor yields a cut (y1 + y2 >= ceil(d / 10)).
+        let mut separated = 0;
+        for demand in [3., 4., 7., 13., 17.] {
+            let m = model(
+                vec![-0.01, -0.01, -1., -1.],
+                vec![
+                    VariableKind::Continuous,
+                    VariableKind::Continuous,
+                    VariableKind::Binary,
+                    VariableKind::Binary,
+                ],
+                vec![0.; 4],
+                vec![10., 10., 1., 1.],
+                vec![
+                    1., 1., 0., 0., //
+                    1., 0., -10., 0., //
+                    0., 1., 0., -10.,
+                ],
+                vec![demand, f64::NEG_INFINITY, f64::NEG_INFINITY],
+                vec![f64::INFINITY, 0., 0.],
+            );
+            let s = NativeOptions {
+                mir_cuts: true,
+                ..Default::default()
+            };
+            let (_, x) = optimum(&m, &s);
+            let cuts = separate_at_optimum(&m, &s);
+            valid(&m, &cuts, 5);
+            if cuts
+                .iter()
+                .any(|c| c.terms.iter().map(|&(j, a)| a * x[j]).sum::<f64>() > c.rhs + 1e-3)
+            {
+                separated += 1;
+            }
+        }
+        assert_eq!(separated, 5);
     }
     #[test]
     fn random_small_gmi_and_mir_cuts_preserve_every_integer_point() {
@@ -1496,7 +1635,16 @@ pub(crate) mod tests {
                 rational::reset_work();
                 let theirs = reference::gmi(&m, pivot, &weights, &x, &budget, 100_000_000);
                 rational::reset_work();
-                let ours = gmi(&m, pivot, &weights, &x, &budget, 100_000_000, &mut acc);
+                let ours = gmi(
+                    &m,
+                    pivot,
+                    &weights,
+                    &x,
+                    &budget,
+                    100_000_000,
+                    &mut acc,
+                    &mut Wide::new(m.n()),
+                );
                 if let Some(theirs) = theirs {
                     proportional(ours.as_ref().expect("dyadic GMI rejected"), &theirs);
                     compared[0] += 1;
@@ -1521,6 +1669,61 @@ pub(crate) mod tests {
             }
         }
         assert!(compared[0] > 100 && compared[1] > 100, "{compared:?}");
+    }
+    #[test]
+    fn in_place_column_sums_equal_dyadic_sums_and_fall_back_when_too_wide() {
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let (mut wide, mut acc) = (Wide::new(6), Accumulator::new(6));
+        for case in 0..400 {
+            let mut terms = Vec::new();
+            for _ in 0..(next() % 40) {
+                let j = (next() % 6) as usize;
+                // Big multipliers on the inline/limb boundary and beyond.
+                let mut k = Int::from_i64((next() as i64) >> (next() % 60));
+                for _ in 0..(next() % 4) {
+                    k = k.shl(60).unwrap().add(&Int::from_u64(next())).unwrap();
+                }
+                let spread = if case % 10 == 0 { 1500 } else { 60 };
+                let v = f64::from_bits(next() >> 2) * 2f64.powi((next() % spread) as i32 - 30);
+                let v = if next() % 2 == 0 { v } else { -v };
+                if v.is_finite() {
+                    terms.push((j, k, v));
+                }
+            }
+            let mut expected = Accumulator::new(6);
+            for (j, k, v) in &terms {
+                expected
+                    .add(
+                        *j,
+                        &Dy::from_int(k.clone())
+                            .mul(&Dy::from_f64(*v).unwrap())
+                            .unwrap(),
+                    )
+                    .unwrap();
+            }
+            let multipliers: Vec<_> = terms.iter().map(|t| Multiplier::new(t.1.clone())).collect();
+            let indexed: Vec<_> = terms
+                .iter()
+                .enumerate()
+                .map(|(k, t)| (t.0, k, t.2))
+                .collect();
+            let got = column_sums(&indexed, &multipliers, &mut wide, &mut acc).unwrap();
+            assert_eq!(got, expected.drain(), "case {case}");
+        }
+        // Cancellation to exactly zero leaves no column.
+        let one = Int::from_u64(1);
+        let multipliers = [Multiplier::new(one.clone()), Multiplier::new(one.neg())];
+        let terms = vec![(2, 0, 0.75), (2, 1, 0.75), (3, 0, 1e-300)];
+        assert_eq!(
+            column_sums(&terms, &multipliers, &mut wide, &mut acc).unwrap(),
+            vec![(3, Dy::from_f64(1e-300).unwrap())]
+        );
     }
     #[test]
     fn exact_box_compensation_protects_tiny_dropped_terms_and_negative_variables() {

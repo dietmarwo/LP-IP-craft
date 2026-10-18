@@ -196,3 +196,6 @@ Against the plan's targets, measured with combined or GMI cuts:
 - No defaults change. GMI-only has the best development mean (0.161 s), but
   promoting it would be a separate decision on more evidence than these 30
   models.
+
+Follow-up: twenty iterations on these issues, with their measurements, are
+in [../mip-iterations/ITERATIONS.md](../mip-iterations/ITERATIONS.md).

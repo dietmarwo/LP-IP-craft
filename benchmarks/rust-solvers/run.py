@@ -36,13 +36,14 @@ def run_one(solver,path,seconds,policy,binary,baseline=None,off=None):
         b=result.get('bound')
         if b is not None and (b>expected+1e-6*(1+abs(expected)) if sense=='minimize' else b<expected-1e-6*(1+abs(expected))):issues.append('bound on wrong side')
         if status=='optimal'and(objective is None or abs(objective-expected)>1e-6*(1+abs(expected))):issues.append('wrong optimality')
-    record.update(case=path.stem,group='heldout'if path.parent.name=='heldout'else'development',input_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),model_sha256=hashlib.sha256(json.dumps(spec,sort_keys=True,separators=(',',':')).encode()).hexdigest(),issues=issues,checked_objective=objective,reference=expected,rs_off=off)
+    record.update(case=path.stem,group='heldout'if path.parent.name=='heldout'else path.parent.name if path.parent.name=='synthetic' else'development',input_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),model_sha256=hashlib.sha256(json.dumps(spec,sort_keys=True,separators=(',',':')).encode()).hexdigest(),issues=issues,checked_objective=objective,reference=expected,rs_off=off)
     return record
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--binary',type=Path,required=True);p.add_argument('--baseline-python',type=Path);p.add_argument('--seconds',type=float,default=10);p.add_argument('--output',type=Path,required=True);p.add_argument('--heldout',action='store_true');p.add_argument('--families',choices=['development','heldout']);p.add_argument('--cases',nargs='+');p.add_argument('--policies',nargs='+',default=['default','presolve','gmi','mir','combined','heuristics','branch-product']);p.add_argument('--solvers',nargs='+',default=['baseline','native','ripsolve','highs']);p.add_argument('--resume',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--binary',type=Path,required=True);p.add_argument('--baseline-python',type=Path);p.add_argument('--seconds',type=float,default=10);p.add_argument('--output',type=Path,required=True);p.add_argument('--heldout',action='store_true');p.add_argument('--families',choices=['development','heldout']);p.add_argument('--synthetic',choices=['development','test']);p.add_argument('--cases',nargs='+');p.add_argument('--policies',nargs='+',default=['default','presolve','gmi','mir','combined','heuristics','branch-product']);p.add_argument('--solvers',nargs='+',default=['baseline','native','ripsolve','highs']);p.add_argument('--resume',action='store_true');a=p.parse_args()
     paths=sorted((BASE/'heldout').glob('*.json'))if a.heldout else[next(ROOT.glob('docs/*/corpus/**/'+name+'.json'))for name in(a.cases or DEV)]
     if a.families:paths=sorted((BASE/'families').glob(a.families+'-*.json'))
+    if a.synthetic:paths=sorted((BASE/'synthetic').glob(a.synthetic+'-*.json'))
     paths=[p for p in paths if p.name!='manifest.json'and(not a.cases or p.stem in a.cases)]
     records=json.loads(a.output.read_text())['records']if a.resume and a.output.exists()else[]
     completed={(r['case'],r['solver'],r.get('policy','default'))for r in records}

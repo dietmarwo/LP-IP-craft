@@ -97,6 +97,20 @@ impl Int {
             Repr::Big { magnitude, .. } => magnitude.shr(k).low_u64(),
         }
     }
+    /// Little-endian 64-bit limbs of the magnitude.
+    fn magnitude_u64(&self) -> Vec<u64> {
+        match &self.0 {
+            Repr::Small(v) => {
+                let m = v.unsigned_abs();
+                vec![m as u64, (m >> 64) as u64]
+            }
+            Repr::Big { magnitude, .. } => magnitude
+                .digits()
+                .chunks(2)
+                .map(|c| u64::from(c[0]) | (u64::from(c.get(1).copied().unwrap_or(0)) << 32))
+                .collect(),
+        }
+    }
     pub(crate) fn abs(&self) -> Self {
         if self.is_negative() {
             self.neg()
@@ -460,6 +474,207 @@ impl Dy {
         }
         Some(self.bracket()?.1)
     }
+}
+
+/// An integer prepared for repeated use in [`Wide::add_int_scaled`]: the
+/// limbs of a large magnitude are extracted once.
+pub(crate) struct Multiplier {
+    pub(crate) value: Int,
+    limbs: Vec<u64>,
+}
+impl Multiplier {
+    pub(crate) fn new(value: Int) -> Self {
+        let mut limbs = match &value.0 {
+            Repr::Small(_) => Vec::new(),
+            Repr::Big { .. } => value.magnitude_u64(),
+        };
+        while limbs.last() == Some(&0) {
+            limbs.pop();
+        }
+        Self { value, limbs }
+    }
+}
+
+/// 64-bit limbs per column of [`Wide`]: 1536 bits.
+const WIDE: usize = 24;
+
+/// Exact sparse fixed-point accumulator. Each column holds a two's
+/// complement integer of [`WIDE`] limbs, the value being that integer times
+/// `2^base`. Additions are in place and never normalize, so a long sum of
+/// products costs one pass over the addend's limbs each. An addend that does
+/// not fit (exponent below `base`, or magnitude at or above
+/// 2^(64 (WIDE - 1)) after shifting) is refused; the caller then repeats the
+/// derivation with [`Dy`] arithmetic, so results never depend on the width.
+/// Fewer than 2^63 addends below that bound cannot overflow the sign.
+pub(crate) struct Wide {
+    base: i64,
+    limbs: Vec<[u64; WIDE]>,
+    seen: Vec<bool>,
+    touched: Vec<usize>,
+}
+
+impl Wide {
+    pub(crate) fn new(n: usize) -> Self {
+        Self {
+            base: 0,
+            limbs: vec![[0; WIDE]; n],
+            seen: vec![false; n],
+            touched: Vec::new(),
+        }
+    }
+    /// Empties every column and sets the common exponent.
+    pub(crate) fn reset(&mut self, base: i64) {
+        for &j in &self.touched {
+            self.limbs[j] = [0; WIDE];
+            self.seen[j] = false;
+        }
+        self.touched.clear();
+        self.base = base;
+    }
+    /// Adds `(-1)^negative * magnitude * 2^e`; false if it does not fit.
+    fn add_magnitude(&mut self, j: usize, negative: bool, magnitude: &[u64], e: i64) -> bool {
+        let Some(top) = magnitude.iter().rposition(|&v| v != 0) else {
+            return true;
+        };
+        let bits = 64 * top + 64 - magnitude[top].leading_zeros() as usize;
+        let Ok(shift) = usize::try_from(e - self.base) else {
+            return false;
+        };
+        if shift + bits > 64 * (WIDE - 1) {
+            return false;
+        }
+        charge(top + 2);
+        if !self.seen[j] {
+            self.seen[j] = true;
+            self.touched.push(j);
+        }
+        let (word, bit) = (shift / 64, shift % 64);
+        let column = &mut self.limbs[j];
+        let mut carry = 0u64;
+        let mut borrow = false;
+        for i in 0..WIDE - word {
+            let low = magnitude.get(i).copied().unwrap_or(0);
+            let piece = if bit == 0 {
+                low
+            } else {
+                let below = if i == 0 {
+                    0
+                } else {
+                    magnitude.get(i - 1).copied().unwrap_or(0)
+                };
+                (low << bit) | (below >> (64 - bit))
+            };
+            let past = i > top + 1;
+            if past && carry == 0 && !borrow {
+                break;
+            }
+            let slot = &mut column[word + i];
+            if negative {
+                let (v, b1) = slot.overflowing_sub(piece);
+                let (v, b2) = v.overflowing_sub(u64::from(borrow));
+                *slot = v;
+                borrow = b1 || b2;
+            } else {
+                let (v, c1) = slot.overflowing_add(piece);
+                let (v, c2) = v.overflowing_add(carry);
+                *slot = v;
+                carry = u64::from(c1 || c2);
+            }
+        }
+        true
+    }
+    /// Adds `g * v` exactly (`v = 1` for a plain integer).
+    pub(crate) fn add_int_scaled(&mut self, j: usize, g: &Multiplier, v: f64) -> bool {
+        let Some((negative, mantissa, e)) = parts(v) else {
+            return v == 0.;
+        };
+        let (g, magnitude) = (&g.value, &g.limbs);
+        if let Repr::Small(k) = &g.0 {
+            // Inline multiplier: the product has at most 3 limbs.
+            let k = k.unsigned_abs();
+            let low = u128::from(k as u64) * u128::from(mantissa);
+            let high = u128::from((k >> 64) as u64) * u128::from(mantissa) + (low >> 64);
+            let product = [low as u64, high as u64, (high >> 64) as u64];
+            return self.add_magnitude(j, negative != g.is_negative(), &product, e);
+        }
+        // A magnitude of WIDE - 1 nonzero limbs or more never fits, and a
+        // refused addition charges nothing.
+        if magnitude.len() >= WIDE {
+            return false;
+        }
+        let mut product = [0u64; WIDE];
+        let mut carry = 0u128;
+        for (slot, &limb) in product.iter_mut().zip(magnitude) {
+            let t = u128::from(limb) * u128::from(mantissa) + carry;
+            *slot = t as u64;
+            carry = t >> 64;
+        }
+        product[magnitude.len()] = carry as u64;
+        self.add_magnitude(
+            j,
+            negative != g.is_negative(),
+            &product[..=magnitude.len()],
+            e,
+        )
+    }
+    fn value(&self, j: usize) -> Dy {
+        let column = &self.limbs[j];
+        let negative = column[WIDE - 1] >> 63 == 1;
+        let mut magnitude = *column;
+        if negative {
+            // Two's complement negation.
+            let mut carry = true;
+            for limb in &mut magnitude {
+                let (v, c) = (!*limb).overflowing_add(u64::from(carry));
+                *limb = v;
+                carry = c;
+            }
+        }
+        if magnitude[2..].iter().all(|&v| v == 0) && magnitude[1] >> 63 == 0 {
+            let v = (i128::from(magnitude[1]) << 64) | i128::from(magnitude[0]);
+            return Dy::new(Int(Repr::Small(if negative { -v } else { v })), self.base);
+        }
+        let digits = magnitude
+            .iter()
+            .flat_map(|&v| [v as u32, (v >> 32) as u32])
+            .collect();
+        Dy::new(Int::from_parts(negative, Nat::new(digits)), self.base)
+    }
+    /// Nonzero columns in order, as dyadics; leaves the accumulator empty.
+    pub(crate) fn drain(&mut self) -> Vec<(usize, Dy)> {
+        self.touched.sort_unstable();
+        let out = self
+            .touched
+            .iter()
+            .map(|&j| (j, self.value(j)))
+            .filter(|(_, v)| !v.is_zero())
+            .collect();
+        let base = self.base;
+        self.reset(base);
+        out
+    }
+}
+
+/// Sign, integer mantissa and exponent of a nonzero finite binary64 value.
+fn parts(v: f64) -> Option<(bool, u64, i64)> {
+    if !v.is_finite() || v == 0. {
+        return None;
+    }
+    let bits = v.to_bits();
+    let biased = ((bits >> 52) & 2047) as i64;
+    let fraction = bits & ((1u64 << 52) - 1);
+    let mantissa = if biased == 0 {
+        fraction
+    } else {
+        fraction | (1u64 << 52)
+    };
+    let e = if biased == 0 { -1074 } else { biased - 1075 };
+    Some((v < 0., mantissa, e))
+}
+
+/// The exponent of v's integer mantissa (the scale [`Wide`] needs as base).
+pub(crate) fn exponent_of(v: f64) -> Option<i64> {
+    parts(v).map(|p| p.2)
 }
 
 #[cfg(test)]

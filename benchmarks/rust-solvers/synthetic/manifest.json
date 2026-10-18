@@ -1,0 +1,386 @@
+[
+  {
+    "file": "development-cfl-1.json",
+    "group": "development",
+    "family": "cfl",
+    "seed": 1,
+    "expected": 1797.9779785431015,
+    "sha256": "dd6e2c0c530a237e7354e33e4559d8aa81d0c63ea7a720b8e56f62881c541ef9"
+  },
+  {
+    "file": "development-cfl-2.json",
+    "group": "development",
+    "family": "cfl",
+    "seed": 2,
+    "expected": 1913.0588235294113,
+    "sha256": "107da77d990c438d7307946f538950b917df610dcd75131a9a86903d83a32df2"
+  },
+  {
+    "file": "development-cfl-3.json",
+    "group": "development",
+    "family": "cfl",
+    "seed": 3,
+    "expected": 1669.576470588235,
+    "sha256": "20abb28a70a2e72c601216e0e23c2618d841f67920b585c354572745e3501278"
+  },
+  {
+    "file": "development-cfl-4.json",
+    "group": "development",
+    "family": "cfl",
+    "seed": 4,
+    "expected": 1798.918181818182,
+    "sha256": "73c0873153e149d9c805024842c366cf82a8feff4d38c5b41974f5f4005c05f9"
+  },
+  {
+    "file": "development-gap-1.json",
+    "group": "development",
+    "family": "gap",
+    "seed": 1,
+    "expected": 327.0,
+    "sha256": "3735cf467e6cdc081ae6a1fec1e0826adccb82e27382595a64242ca57f711ffa"
+  },
+  {
+    "file": "development-gap-2.json",
+    "group": "development",
+    "family": "gap",
+    "seed": 2,
+    "expected": 338.99999999999994,
+    "sha256": "4eadb4c40a9737798ee24020f1b390f3f3a64179ff08dbc53b08ea7b76b87ed7"
+  },
+  {
+    "file": "development-gap-3.json",
+    "group": "development",
+    "family": "gap",
+    "seed": 3,
+    "expected": 349.9999999999518,
+    "sha256": "8e88f1aceb9a6deb757e7b2a95c333e41f712f852552e85dd1f91528ffad6047"
+  },
+  {
+    "file": "development-gap-4.json",
+    "group": "development",
+    "family": "gap",
+    "seed": 4,
+    "expected": 301.0,
+    "sha256": "2442f268a3e5c06beb60bca59afafb772d9eb8e8567b9c38de3afd1f7870b8dd"
+  },
+  {
+    "file": "development-intcover-1.json",
+    "group": "development",
+    "family": "intcover",
+    "seed": 1,
+    "expected": 6225.0,
+    "sha256": "debe4371ac5e417fb955a3a53703f8b36ae84041ea77cd50f6d35ad1a0c58a3e"
+  },
+  {
+    "file": "development-intcover-2.json",
+    "group": "development",
+    "family": "intcover",
+    "seed": 2,
+    "expected": 8524.0,
+    "sha256": "018fd10717166f667d116c0e4e8b309bb55723f7f41094cebf9b0cc35e97a5c8"
+  },
+  {
+    "file": "development-intcover-3.json",
+    "group": "development",
+    "family": "intcover",
+    "seed": 3,
+    "expected": 6095.000000000004,
+    "sha256": "d246b2bee85a9e50b8648709fcd7e63a778d00d6b5aee217a144b3b627246fc3"
+  },
+  {
+    "file": "development-intcover-4.json",
+    "group": "development",
+    "family": "intcover",
+    "seed": 4,
+    "expected": 4526.999999999989,
+    "sha256": "7f17cf781c5928bd848c3d2265262c9aa04dcca1d438d29312cd8c926ddf2715"
+  },
+  {
+    "file": "development-lotsize-1.json",
+    "group": "development",
+    "family": "lotsize",
+    "seed": 1,
+    "expected": 2838.0,
+    "sha256": "b14d66a99928fe541bff52ec327cde9e14bb04ac261e94d2fbea5e0af77ced29"
+  },
+  {
+    "file": "development-lotsize-2.json",
+    "group": "development",
+    "family": "lotsize",
+    "seed": 2,
+    "expected": 2967.0,
+    "sha256": "2aa2ea5bd08ae75ccfa6ed1ada1c1224147cf428df9b768250d8db61999f95a4"
+  },
+  {
+    "file": "development-lotsize-3.json",
+    "group": "development",
+    "family": "lotsize",
+    "seed": 3,
+    "expected": 3161.0,
+    "sha256": "10be48cccfa06ba7f0cea5fd86089154e74d606056553a428546223fc10768d6"
+  },
+  {
+    "file": "development-lotsize-4.json",
+    "group": "development",
+    "family": "lotsize",
+    "seed": 4,
+    "expected": 2789.0,
+    "sha256": "59df3bad47ba1b3606dc4cc068fd26be7f64d9a45b76b92f4633e3741f97663c"
+  },
+  {
+    "file": "development-mknap-1.json",
+    "group": "development",
+    "family": "mknap",
+    "seed": 1,
+    "expected": 1035.0000000000005,
+    "sha256": "0e51b9979ba30db5dd3f18c4ba937100dca4fd152cbecbf9def1f4be30c7ba81"
+  },
+  {
+    "file": "development-mknap-2.json",
+    "group": "development",
+    "family": "mknap",
+    "seed": 2,
+    "expected": 1067.0,
+    "sha256": "15228830bcedd8e8fe68e8960c9c56e52edbd22303b1802acaa93e4e2fea4c0b"
+  },
+  {
+    "file": "development-mknap-3.json",
+    "group": "development",
+    "family": "mknap",
+    "seed": 3,
+    "expected": 1086.000000000005,
+    "sha256": "73171df95d55a4c639b673e37913482e61b324feeedcbc76593691d3a0cdd246"
+  },
+  {
+    "file": "development-mknap-4.json",
+    "group": "development",
+    "family": "mknap",
+    "seed": 4,
+    "expected": 1031.0,
+    "sha256": "d93f6e818c9acdd42f7b27d15eb28f2561733c34c1cb41bf7d7358bdc3d254d5"
+  },
+  {
+    "file": "development-setcover-1.json",
+    "group": "development",
+    "family": "setcover",
+    "seed": 1,
+    "expected": 57.0,
+    "sha256": "18a9cdacac51719f0f1f84ed7677d781965b517c378e5c34ae000f90f296a775"
+  },
+  {
+    "file": "development-setcover-2.json",
+    "group": "development",
+    "family": "setcover",
+    "seed": 2,
+    "expected": 66.0,
+    "sha256": "6d82d6e8256f774d47a44667272057c2b553e0d342e4ecc96a2a7f8b85dd9432"
+  },
+  {
+    "file": "development-setcover-3.json",
+    "group": "development",
+    "family": "setcover",
+    "seed": 3,
+    "expected": 67.0,
+    "sha256": "565a6327a0b0fd3103f6c6719868325e0bc2c83530f68ac26398081e308c03a3"
+  },
+  {
+    "file": "development-setcover-4.json",
+    "group": "development",
+    "family": "setcover",
+    "seed": 4,
+    "expected": 60.0,
+    "sha256": "7d9966c2b99c154070ec8fdf3f00d87a292a7c8f3ff0b9e6b7a82b1983daeb39"
+  },
+  {
+    "file": "test-cfl-101.json",
+    "group": "test",
+    "family": "cfl",
+    "seed": 101,
+    "expected": 1977.8167305236273,
+    "sha256": "9f7695e3463a086011a985dd39054ac393c5640c616e1a86c593f96d20383294"
+  },
+  {
+    "file": "test-cfl-102.json",
+    "group": "test",
+    "family": "cfl",
+    "seed": 102,
+    "expected": 1452.1714285714058,
+    "sha256": "9b50b2e95bce050f55032a331483bb09abf66e4210d1138eac52db91260aa8b3"
+  },
+  {
+    "file": "test-cfl-103.json",
+    "group": "test",
+    "family": "cfl",
+    "seed": 103,
+    "expected": 2084.788461538462,
+    "sha256": "9855a547c277f1fad6e22ab92466de0551ddecc8d9cb6e2aeeb352335621b5a8"
+  },
+  {
+    "file": "test-cfl-104.json",
+    "group": "test",
+    "family": "cfl",
+    "seed": 104,
+    "expected": 2335.237681159421,
+    "sha256": "5d2afb5ff01848405000a20ea0da87566e2e1021427d9f0afd0b9a07ab8b3649"
+  },
+  {
+    "file": "test-gap-101.json",
+    "group": "test",
+    "family": "gap",
+    "seed": 101,
+    "expected": 351.99999999999994,
+    "sha256": "babda075413f88f99894efd9777b7238a0c2ea1736404a67411541f474fc086a"
+  },
+  {
+    "file": "test-gap-102.json",
+    "group": "test",
+    "family": "gap",
+    "seed": 102,
+    "expected": 277.0,
+    "sha256": "f0f948f70e4a4763b45ffd50feaf970eca1b41fb82800e63af5592fa70b09e81"
+  },
+  {
+    "file": "test-gap-103.json",
+    "group": "test",
+    "family": "gap",
+    "seed": 103,
+    "expected": 332.99999999999994,
+    "sha256": "73483186a5d93dfd6e4fc2a2da28fefd596e714479b7bab2287224b0122ee2bd"
+  },
+  {
+    "file": "test-gap-104.json",
+    "group": "test",
+    "family": "gap",
+    "seed": 104,
+    "expected": 348.0,
+    "sha256": "f9e22924c9eeab30ffc48790be7c81b8be5fe0c5b23bd2283a4eb01e86201e44"
+  },
+  {
+    "file": "test-intcover-101.json",
+    "group": "test",
+    "family": "intcover",
+    "seed": 101,
+    "expected": 7238.0,
+    "sha256": "682e1648f1e8b0c36310342583e4d0be442b763b68f254afed8a4e303e801578"
+  },
+  {
+    "file": "test-intcover-102.json",
+    "group": "test",
+    "family": "intcover",
+    "seed": 102,
+    "expected": 6273.0,
+    "sha256": "5e4877910584e5ee13c76eb295db86dd2dc6ef7a691f5b75109ea6ec3c3fd80c"
+  },
+  {
+    "file": "test-intcover-103.json",
+    "group": "test",
+    "family": "intcover",
+    "seed": 103,
+    "expected": 4728.0,
+    "sha256": "95754a7d77f5034cb995813bb835525089b8a670a9b9421face849ea2b0f2150"
+  },
+  {
+    "file": "test-intcover-104.json",
+    "group": "test",
+    "family": "intcover",
+    "seed": 104,
+    "expected": 2564.0,
+    "sha256": "73c7c05cd267bede6a5d8c7518db4873d4133ae0d46d3893ae556ec393207277"
+  },
+  {
+    "file": "test-lotsize-101.json",
+    "group": "test",
+    "family": "lotsize",
+    "seed": 101,
+    "expected": 3109.0,
+    "sha256": "d34fc1a78ef8f9a52bce7086b0dcd2f4df46c22708bbe2fc825191fadd394896"
+  },
+  {
+    "file": "test-lotsize-102.json",
+    "group": "test",
+    "family": "lotsize",
+    "seed": 102,
+    "expected": 2831.0,
+    "sha256": "e60cff6f3c24cd6ad2dce6b0499ce1e013fd73d36cba52a41b290c1d90f3d022"
+  },
+  {
+    "file": "test-lotsize-103.json",
+    "group": "test",
+    "family": "lotsize",
+    "seed": 103,
+    "expected": 3709.0,
+    "sha256": "74bddd4a69e2c6ed94a753c1496cdc9653b56f82655cb24c23cee55fde640df2"
+  },
+  {
+    "file": "test-lotsize-104.json",
+    "group": "test",
+    "family": "lotsize",
+    "seed": 104,
+    "expected": 3429.0,
+    "sha256": "4c7ab41a3889b5ba405926d61bdebef460289bfb2a633b606ed8574026a02a11"
+  },
+  {
+    "file": "test-mknap-101.json",
+    "group": "test",
+    "family": "mknap",
+    "seed": 101,
+    "expected": 1062.0,
+    "sha256": "c9e560db9e7497d9337a0150f3f4deb9667b198f97f1cf53ec76483abd5b3b9a"
+  },
+  {
+    "file": "test-mknap-102.json",
+    "group": "test",
+    "family": "mknap",
+    "seed": 102,
+    "expected": 1080.0,
+    "sha256": "f051f84b12c18fc0be13ddab07e8164cca11b12e431a6a748f2cc74e60d7f8d9"
+  },
+  {
+    "file": "test-mknap-103.json",
+    "group": "test",
+    "family": "mknap",
+    "seed": 103,
+    "expected": 1052.0,
+    "sha256": "74c0500a405e677a308fc2e1a4830490c3e920baeff233dced8c8a2252d5f6a5"
+  },
+  {
+    "file": "test-mknap-104.json",
+    "group": "test",
+    "family": "mknap",
+    "seed": 104,
+    "expected": 1027.0,
+    "sha256": "58ad84984791f81e842a9c2ea9ef56d6660bebe1872059157f525e664e65a82f"
+  },
+  {
+    "file": "test-setcover-101.json",
+    "group": "test",
+    "family": "setcover",
+    "seed": 101,
+    "expected": 59.0,
+    "sha256": "20172e9eef4d581a054a5fd80787d6a76b1328454e147be2e9bb976e5efe5b94"
+  },
+  {
+    "file": "test-setcover-102.json",
+    "group": "test",
+    "family": "setcover",
+    "seed": 102,
+    "expected": 54.0,
+    "sha256": "4b07d3d2315f6168b7d10ebaf959257e1ab1f58e79db27573c60e552b5073909"
+  },
+  {
+    "file": "test-setcover-103.json",
+    "group": "test",
+    "family": "setcover",
+    "seed": 103,
+    "expected": 67.0,
+    "sha256": "de4d9756aa1342d9cbe025aa373f3f8334c2aee3cbdef5998845dcf4bb490fde"
+  },
+  {
+    "file": "test-setcover-104.json",
+    "group": "test",
+    "family": "setcover",
+    "seed": 104,
+    "expected": 76.0,
+    "sha256": "ee7cdd8585213083dc1e205959b7ae9cfb4aec0cb88eeaa703277e9f1e907abd"
+  }
+]

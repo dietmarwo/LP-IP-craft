@@ -8,7 +8,7 @@ pub(crate) struct Stats {
     pub cycles: u64,
     pub failures: u64,
 }
-fn candidate(
+pub(crate) fn candidate(
     model: &Model,
     x: Vec<f64>,
     options: &Options,
@@ -126,6 +126,8 @@ pub(crate) fn run(
     }
     let mut point = initial;
     let mut seen = std::collections::BTreeSet::new();
+    let mut projection: Option<Lp> = None;
+    let pump_from = stats.calls as usize;
     while (stats.calls as usize) < cap && allowed(budget, *nodes) {
         let mut target = rounded(&point);
         let key: Vec<_> = integers.iter().map(|&j| target[j].to_bits()).collect();
@@ -152,43 +154,61 @@ pub(crate) fn run(
             stats.candidates += 1;
             break;
         }
-        let mut data = model.data().clone();
+        // The L1 projection LP is built once; later rounds only move the
+        // target, which changes row and auxiliary bounds but no costs, so the
+        // dual simplex continues from the previous optimal basis.
         let n = model.n();
-        data.sense = Sense::Minimize;
-        data.objective.fill(0.);
-        data.objective_offset = 0.;
-        data.kinds.fill(VariableKind::Continuous);
-        for (at, &j) in integers.iter().enumerate() {
-            let k = n + at;
-            data.objective.push(1.);
-            data.variables.lower.push(0.);
-            data.variables.upper.push(
-                (target[j] - model.variables().lower[j])
-                    .abs()
-                    .max((model.variables().upper[j] - target[j]).abs()),
-            );
-            data.kinds.push(VariableKind::Continuous);
-            for (sign, rhs) in [(1., target[j]), (-1., -target[j])] {
-                data.matrix.pattern.indices.extend([j, k]);
-                data.matrix.values.extend([sign, -1.]);
-                data.matrix.pattern.indptr.push(data.matrix.values.len());
-                data.matrix.pattern.rows += 1;
-                data.rows.lower.push(f64::NEG_INFINITY);
-                data.rows.upper.push(rhs);
+        let reach = |j: usize, t: f64| {
+            (t - model.variables().lower[j])
+                .abs()
+                .max((model.variables().upper[j] - t).abs())
+        };
+        let projection = match projection.as_mut() {
+            Some(lp) => {
+                for (at, &j) in integers.iter().enumerate() {
+                    let t = target[j];
+                    lp.set_row_bounds(model.m() + 2 * at, f64::NEG_INFINITY, t)?;
+                    lp.set_row_bounds(model.m() + 2 * at + 1, f64::NEG_INFINITY, -t)?;
+                    lp.set_bound(n + at, 0., reach(j, t))?;
+                }
+                lp
             }
-        }
-        data.matrix.pattern.cols = data.objective.len();
-        let auxiliary = Model::new(data)?;
-        let mut projection = Lp::new(
-            &auxiliary,
-            &vec![true; auxiliary.m()],
-            &vec![true; auxiliary.n()],
-            controls(&auxiliary, options, budget.settings),
-        )?;
+            None => {
+                let mut data = model.data().clone();
+                data.sense = Sense::Minimize;
+                data.objective.fill(0.);
+                data.objective_offset = 0.;
+                data.kinds.fill(VariableKind::Continuous);
+                for (at, &j) in integers.iter().enumerate() {
+                    let k = n + at;
+                    data.objective.push(1.);
+                    data.variables.lower.push(0.);
+                    data.variables.upper.push(reach(j, target[j]));
+                    data.kinds.push(VariableKind::Continuous);
+                    for (sign, rhs) in [(1., target[j]), (-1., -target[j])] {
+                        data.matrix.pattern.indices.extend([j, k]);
+                        data.matrix.values.extend([sign, -1.]);
+                        data.matrix.pattern.indptr.push(data.matrix.values.len());
+                        data.matrix.pattern.rows += 1;
+                        data.rows.lower.push(f64::NEG_INFINITY);
+                        data.rows.upper.push(rhs);
+                    }
+                }
+                data.matrix.pattern.cols = data.objective.len();
+                let auxiliary = Model::new(data)?;
+                projection.insert(Lp::new(
+                    &auxiliary,
+                    &vec![true; auxiliary.m()],
+                    &vec![true; auxiliary.n()],
+                    controls(&auxiliary, options, budget.settings),
+                )?)
+            }
+        };
+        let cold = stats.calls as usize == pump_from;
         *nodes += 1;
         stats.calls += 1;
         let status = projection
-            .solve(budget, true)
+            .solve(budget, cold)
             .unwrap_or(Status::NumericalFailure);
         if status != Status::Optimal {
             stats.failures += 1;

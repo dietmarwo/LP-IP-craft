@@ -15,6 +15,9 @@ pub(crate) struct Stats {
     pub basis_reuses: u64,
     /// Cut rows slack at the final root LP optimum, removed before search.
     pub pruned: u64,
+    /// RENS sub-MIP nodes, and whether it improved the root seed.
+    pub rens_nodes: u64,
+    pub rens_found: u64,
     pub bound: Option<f64>,
     pub initial_objective: Option<f64>,
     pub stages: Vec<String>,
@@ -56,6 +59,7 @@ pub(crate) fn run(
     };
     let mut stagnant = 0;
     let mut previous: Option<f64> = None;
+    let mut families = [settings.gmi_cuts, settings.mir_cuts];
     // Rows from here on are root cuts; `last` is the latest accepted optimum
     // and the row count it belongs to.
     let cuts_from = model.m();
@@ -135,7 +139,24 @@ pub(crate) fn run(
         if round == rounds || stagnant >= 3 {
             break;
         }
-        let (selected, cuts) = certified_cuts::separate(model, &mut lp, &x, &budget);
+        // While both families keep contributing after the first round,
+        // dense cuts are dropped (support above max(50, n/4), like SCIP's
+        // relative support limit). Combined rounds otherwise accumulate
+        // dense rank-2 cuts whose exact derivations dominate root time on
+        // assignment models. Single-family policies, and combined once a
+        // family has stopped, keep every cut.
+        let max_terms = if round >= 1 && families == [true, true] {
+            50.max(model.n() / 4)
+        } else {
+            usize::MAX
+        };
+        let (selected, cuts) =
+            certified_cuts::separate(model, &mut lp, &x, &budget, families, max_terms);
+        // A family whose cuts were not selected this round is not separated
+        // again; the other family then gets the whole work budget.
+        for (active, family) in families.iter_mut().zip(["gmi", "mir"]) {
+            *active &= selected.iter().any(|c| c.family == family);
+        }
         stats.exact_work += cuts.work;
         stats.candidates += cuts.candidates;
         stats.rejected += cuts.rejected;
@@ -159,9 +180,82 @@ pub(crate) fn run(
         if rows == model.m() && rows > cuts_from {
             stats.pruned = prune_slack(model, cuts_from, &x)?;
         }
+        if settings.root_heuristics && budget.stop().is_none() {
+            rens(model, &x, options, &mut budget, began, &mut stats)?;
+        }
     }
     stats.pivots = budget.pivots;
     Ok(stats)
+}
+/// RENS: the sub-MIP of `model` in which every integer column that is
+/// integral at the root optimum `x` is fixed and every other one is
+/// restricted to its two neighbouring integers, when at least half of the
+/// integer columns are fixed. It is solved with a node budget of 50 per
+/// heuristic LP call. Its incumbents are feasible for
+/// `model`, and only those are kept, as the search's start; its status and
+/// bound say nothing about `model` and are discarded.
+fn rens(
+    model: &Model,
+    x: &[f64],
+    options: &Options,
+    budget: &mut Budget<'_>,
+    began: Instant,
+    stats: &mut Stats,
+) -> Result<()> {
+    let settings = budget.settings;
+    let mut data = model.data().clone();
+    let (mut open, mut fixed) = (0, 0);
+    for (j, &v) in x.iter().enumerate() {
+        if !model.kinds()[j].is_integral() {
+            continue;
+        }
+        let (lo, hi) = (
+            data.variables.lower[j].ceil(),
+            data.variables.upper[j].floor(),
+        );
+        if (v - v.round()).abs() <= 1e-6 {
+            fixed += 1;
+            let r = v.round().clamp(lo, hi);
+            data.variables.lower[j] = r;
+            data.variables.upper[j] = r;
+        } else {
+            data.variables.lower[j] = lo.max(v.floor());
+            data.variables.upper[j] = hi.min(v.ceil());
+            open += 1;
+        }
+    }
+    let nodes = 50 * settings.heuristic_lp_calls as u64;
+    let nodes = settings
+        .node_limit
+        .map_or(nodes, |n| n.saturating_sub(stats.nodes).min(nodes));
+    // Like SCIP's minimum fixing rate: with fewer than half the integer
+    // columns fixed, the sub-MIP is nearly the whole problem.
+    if open == 0 || nodes == 0 || fixed < open {
+        return Ok(());
+    }
+    let mut s = packing::child_settings(settings, began);
+    s.node_limit = Some(nodes);
+    s.iteration_limit = settings
+        .iteration_limit
+        .map(|p| p.saturating_sub(budget.pivots));
+    s.mip_trace_limit = 0;
+    s.branch_trace_limit = 0;
+    let Ok(sub) = Model::new(data) else {
+        return Ok(());
+    };
+    // A failed heuristic solve is not an error of the main search.
+    let Ok(r) = NativeSolver::new(s).solve(&sub, options, None, budget.cancel) else {
+        return Ok(());
+    };
+    stats.nodes += r.nodes;
+    stats.rens_nodes += r.nodes;
+    budget.pivots += r.iterations;
+    if let Some(c) = r.candidate {
+        if primal::candidate(model, c, options, &mut stats.seed)? {
+            stats.rens_found += 1;
+        }
+    }
+    Ok(())
 }
 /// Removes cut rows (index `from` on) that are strictly slack at the root LP
 /// optimum `x`. Each has a zero dual there, so `x` and its duals stay

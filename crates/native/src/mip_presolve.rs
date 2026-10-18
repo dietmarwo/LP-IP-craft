@@ -10,6 +10,9 @@ pub(crate) struct Stats {
     pub dual_fixed: u64,
     pub work: u64,
     pub conflicts: u64,
+    pub probed: u64,
+    pub probe_fixed: u64,
+    pub probe_tightened: u64,
 }
 fn dy(v: f64) -> Option<Dy> {
     Dy::from_f64(v)
@@ -133,6 +136,100 @@ fn tighten_row(model: &Model, i: usize, sign: f64) -> Option<certified_cuts::Cut
     }
     None
 }
+/// Binaries probed per presolve call, at most.
+const PROBES: usize = 2000;
+/// Probing on binaries with exact integer propagation. For each unfixed
+/// binary, both values are propagated on a copy of the bounds. A value that
+/// propagates to a conflict cannot occur in any feasible point, so the
+/// binary is fixed to the other one. Otherwise every feasible point lies in
+/// one of the two propagated boxes, so each column's bounds may shrink to
+/// the hull of its two propagated intervals. Returns the new bounds, or
+/// `None` when the model's own bounds conflict (left to the checked LP).
+fn probe(model: &Model, budget: &Budget<'_>, stats: &mut Stats) -> Option<Bounds> {
+    let mut base = model.variables().clone();
+    let mut domain = propagate::Domain::new(model, true);
+    let mut changed = Vec::new();
+    if !domain.apply(&mut base, &mut changed, budget) {
+        return None;
+    }
+    let binaries: Vec<usize> = (0..model.n())
+        .filter(|&j| model.kinds()[j].is_integral() && base.lower[j] == 0. && base.upper[j] == 1.)
+        .take(PROBES)
+        .collect();
+    // Trials run in place on `base` and are undone from `kept`, a copy of
+    // `base` between probes, over the columns they changed only; a probe
+    // costs its propagation, not a copy of every bound.
+    let mut kept = base.clone();
+    for j in binaries {
+        if budget.stop().is_some() {
+            break;
+        }
+        if base.lower[j] == base.upper[j] {
+            continue;
+        }
+        stats.probed += 1;
+        let mut outcome: [Option<Vec<(usize, f64, f64)>>; 2] = [None, None];
+        for (side, value) in [0., 1.].into_iter().enumerate() {
+            base.lower[j] = value;
+            base.upper[j] = value;
+            let mut columns = vec![j];
+            let feasible = domain.apply(&mut base, &mut columns, budget);
+            if feasible {
+                outcome[side] = Some(
+                    columns
+                        .iter()
+                        .map(|&k| (k, base.lower[k], base.upper[k]))
+                        .collect(),
+                );
+            }
+            for &k in &columns {
+                base.lower[k] = kept.lower[k];
+                base.upper[k] = kept.upper[k];
+            }
+            domain.reset(&base, &columns);
+        }
+        let mut tightened = Vec::new();
+        match outcome {
+            [None, None] => return None,
+            [Some(_), None] | [None, Some(_)] => {
+                let value = if outcome[0].is_some() { 0. } else { 1. };
+                base.lower[j] = value;
+                base.upper[j] = value;
+                tightened.push(j);
+                stats.probe_fixed += 1;
+            }
+            [Some(zero), Some(one)] => {
+                // A column one trial did not change keeps its bounds there.
+                let at = |trial: &[(usize, f64, f64)], k: usize| {
+                    trial
+                        .iter()
+                        .rev()
+                        .find(|t| t.0 == k)
+                        .map_or((kept.lower[k], kept.upper[k]), |t| (t.1, t.2))
+                };
+                for &(k, _, _) in zero.iter().chain(&one) {
+                    let (l0, u0) = at(&zero, k);
+                    let (l1, u1) = at(&one, k);
+                    let (lo, hi) = (l0.min(l1), u0.max(u1));
+                    if lo > base.lower[k] || hi < base.upper[k] {
+                        base.lower[k] = base.lower[k].max(lo);
+                        base.upper[k] = base.upper[k].min(hi);
+                        tightened.push(k);
+                        stats.probe_tightened += 1;
+                    }
+                }
+            }
+        }
+        if !tightened.is_empty() && !domain.apply(&mut base, &mut tightened, budget) {
+            return None;
+        }
+        for &k in &tightened {
+            kept.lower[k] = base.lower[k];
+            kept.upper[k] = base.upper[k];
+        }
+    }
+    Some(base)
+}
 pub(crate) fn run(
     model: &mut Model,
     settings: &NativeOptions,
@@ -169,6 +266,13 @@ pub(crate) fn run(
                 }
                 if prev == changed.len() {
                     break;
+                }
+            }
+            if stats.rounds == 1 && (0..model.n()).all(|j| b.lower[j] <= b.upper[j]) {
+                let mut d = model.data().clone();
+                d.variables = b.clone();
+                if let Some(p) = probe(&Model::new(d)?, &budget, &mut stats) {
+                    b = p;
                 }
             }
             if (0..model.n()).all(|j| b.lower[j] <= b.upper[j]) {
@@ -436,6 +540,64 @@ mod tests {
                 }
             }
         }
+    }
+    #[test]
+    fn probing_keeps_every_feasible_binary_point_and_finds_fixings() {
+        let mut rng = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng
+        };
+        let (mut fixed, mut tightened) = (0, 0);
+        for _ in 0..300 {
+            let n = 6;
+            let a: Vec<f64> = (0..3 * n).map(|_| (next() % 9) as f64 - 4.).collect();
+            let rl: Vec<f64> = (0..3).map(|_| -((next() % 6) as f64)).collect();
+            let ru: Vec<f64> = (0..3).map(|_| (next() % 5) as f64).collect();
+            let kinds = (0..n)
+                .map(|j| {
+                    if j < 5 {
+                        VariableKind::Binary
+                    } else {
+                        VariableKind::Integer
+                    }
+                })
+                .collect();
+            let mut up = vec![1.; n];
+            up[5] = 3.;
+            let m = model(vec![1.; n], kinds, vec![0.; n], up, a, rl, ru);
+            let s = NativeOptions::default();
+            let cancel = CancellationToken::default();
+            let budget = Budget {
+                start: Instant::now(),
+                settings: &s,
+                cancel: &cancel,
+                pivots: 0,
+            };
+            let mut stats = Stats::default();
+            let Some(b) = probe(&m, &budget, &mut stats) else {
+                continue;
+            };
+            fixed += stats.probe_fixed;
+            tightened += stats.probe_tightened;
+            for mask in 0..(32 * 4) {
+                let x: Vec<f64> = (0..5)
+                    .map(|j| ((mask >> j) & 1) as f64)
+                    .chain([(mask >> 5) as f64])
+                    .collect();
+                if check::evaluate(&m, &x, &Options::default().tolerances)
+                    .unwrap()
+                    .feasible_candidate
+                {
+                    for j in 0..n {
+                        assert!(b.lower[j] <= x[j] && x[j] <= b.upper[j], "{x:?} {b:?}");
+                    }
+                }
+            }
+        }
+        assert!(fixed > 0 && tightened > 0, "{fixed} {tightened}");
     }
     #[test]
     fn singleton_dual_fixing_is_sense_aware_and_general_integer_safe() {

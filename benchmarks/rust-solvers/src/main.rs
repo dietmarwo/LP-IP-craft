@@ -96,7 +96,8 @@ fn main() {
             mip_trace_limit: 8,
             mip_presolve: enhanced,
             coefficient_tightening: enhanced,
-            dual_presolve: enhanced,
+            // `presolve-nodual` keeps the feasible set (no dual fixing).
+            dual_presolve: enhanced && policy != "presolve-nodual",
             gmi_cuts: matches!(policy, "gmi" | "combined" | "heuristics"),
             mir_cuts: matches!(policy, "mir" | "combined" | "heuristics"),
             mip_cut_rounds: 16,

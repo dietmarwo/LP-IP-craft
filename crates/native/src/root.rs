@@ -385,6 +385,12 @@ pub(crate) fn solve(
         ("mip_presolve_dual_fixed", presolve_stats.dual_fixed),
         ("mip_presolve_exact_work", presolve_stats.work),
         ("mip_presolve_conflicts", presolve_stats.conflicts),
+        ("mip_presolve_probed", presolve_stats.probed),
+        ("mip_presolve_probe_fixed", presolve_stats.probe_fixed),
+        (
+            "mip_presolve_probe_tightened",
+            presolve_stats.probe_tightened,
+        ),
         ("gmi_cuts", advanced_stats.gmi),
         ("mir_cuts", advanced_stats.mir),
         ("root_basis_reuses", advanced_stats.basis_reuses),
@@ -400,6 +406,8 @@ pub(crate) fn solve(
         ),
         ("root_heuristic_cycles", advanced_stats.primal.cycles),
         ("root_heuristic_failures", advanced_stats.primal.failures),
+        ("root_rens_nodes", advanced_stats.rens_nodes),
+        ("root_rens_candidates", advanced_stats.rens_found),
     ] {
         result
             .backend

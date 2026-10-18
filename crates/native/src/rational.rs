@@ -70,6 +70,10 @@ impl Nat {
             .enumerate()
             .fold(0, |acc, (i, &v)| acc | (u128::from(v) << (32 * i)))
     }
+    /// Little-endian 32-bit limbs, without trailing zeros.
+    pub(crate) fn digits(&self) -> &[u32] {
+        &self.0
+    }
     /// The low 64 bits.
     pub(crate) fn low_u64(&self) -> u64 {
         u64::from(self.0.first().copied().unwrap_or(0))
@@ -176,81 +180,60 @@ impl Nat {
             }
             return (Self::new(q), Self::small(k));
         }
-        // Normalize so that the divisor's top limb has its high bit set.
-        let s = v[n - 1].leading_zeros();
-        let spill = |hi: u32, lo: u32| {
-            if s == 0 {
-                hi
-            } else {
-                (hi << s) | (lo >> (32 - s))
-            }
-        };
         let mut vn = vec![0u32; n];
-        for i in (1..n).rev() {
-            vn[i] = spill(v[i], v[i - 1]);
-        }
-        vn[0] = v[0] << s;
         let mut un = vec![0u32; m + 1];
-        un[m] = if s == 0 { 0 } else { u[m - 1] >> (32 - s) };
-        for i in (1..m).rev() {
-            un[i] = spill(u[i], u[i - 1]);
-        }
-        un[0] = u[0] << s;
-        const BASE: u64 = 1 << 32;
         let mut q = vec![0u32; m - n + 1];
-        for j in (0..=m - n).rev() {
-            let top = (u64::from(un[j + n]) << 32) | u64::from(un[j + n - 1]);
-            let mut qhat = top / u64::from(vn[n - 1]);
-            let mut rhat = top % u64::from(vn[n - 1]);
-            while qhat >= BASE
-                || qhat * u64::from(vn[n - 2]) > (rhat << 32) + u64::from(un[j + n - 2])
-            {
-                qhat -= 1;
-                rhat += u64::from(vn[n - 1]);
-                if rhat >= BASE {
-                    break;
-                }
-            }
-            // Multiply and subtract qhat * vn from un[j..=j + n].
-            let mut k = 0i64;
-            for i in 0..n {
-                let p = qhat * u64::from(vn[i]);
-                let t = i64::from(un[i + j]) - k - (p & 0xFFFF_FFFF) as i64;
-                un[i + j] = t as u32;
-                k = (p >> 32) as i64 - (t >> 32);
-            }
-            let t = i64::from(un[j + n]) - k;
-            un[j + n] = t as u32;
-            q[j] = qhat as u32;
-            if t < 0 {
-                // qhat was one too large: add the divisor back.
-                q[j] = q[j].wrapping_sub(1);
-                let mut c = 0u64;
-                for i in 0..n {
-                    let t = u64::from(un[i + j]) + u64::from(vn[i]) + c;
-                    un[i + j] = t as u32;
-                    c = t >> 32;
-                }
-                un[j + n] = un[j + n].wrapping_add(c as u32);
-            }
+        let s = long_division(u, v, &mut un, &mut vn, Some(&mut q));
+        (Self::new(q), Self::new(remainder(&un, n, s)))
+    }
+    /// `self = self mod b`, the remainder of [`Self::div_rem`] with exactly the
+    /// same charged work, reusing the caller's buffers instead of allocating.
+    fn rem_assign(&mut self, b: &Self, un: &mut Vec<u32>, vn: &mut Vec<u32>) {
+        assert!(!b.zero());
+        if self.cmp(b) == Ordering::Less {
+            return;
         }
-        let mut r = vec![0u32; n];
+        let (m, n) = (self.0.len(), b.0.len());
+        charge((m - n + 1) * n + 1);
+        if n == 1 {
+            let d = u64::from(b.0[0]);
+            let k = self
+                .0
+                .iter()
+                .rev()
+                .fold(0u64, |k, &limb| ((k << 32) | u64::from(limb)) % d);
+            self.0.clear();
+            if k != 0 {
+                self.0.push(k as u32);
+            }
+            return;
+        }
+        vn.clear();
+        vn.resize(n, 0);
+        un.clear();
+        un.resize(m + 1, 0);
+        let s = long_division(&self.0, &b.0, un, vn, None);
+        self.0.clear();
         for i in 0..n - 1 {
-            r[i] = if s == 0 {
+            self.0.push(if s == 0 {
                 un[i]
             } else {
                 (un[i] >> s) | (un[i + 1] << (32 - s))
-            };
+            });
         }
-        r[n - 1] = un[n - 1] >> s;
-        (Self::new(q), Self::new(r))
+        self.0.push(un[n - 1] >> s);
+        while self.0.last() == Some(&0) {
+            self.0.pop();
+        }
     }
     fn gcd(mut a: Self, mut b: Self) -> Self {
-        while !b.zero() {
-            let r = a.div_rem(&b).1;
-            a = b;
-            b = r;
-        }
+        SCRATCH.with(|scratch| {
+            let (un, vn) = &mut *scratch.borrow_mut();
+            while !b.zero() {
+                a.rem_assign(&b, un, vn);
+                std::mem::swap(&mut a, &mut b);
+            }
+        });
         a
     }
     fn leading(&self) -> f64 {
@@ -260,6 +243,92 @@ impl Nat {
         }
         x
     }
+}
+thread_local! { static SCRATCH: std::cell::RefCell<(Vec<u32>, Vec<u32>)> = const { std::cell::RefCell::new((Vec::new(), Vec::new())) }; }
+
+/// Algorithm D on `u / v` (at least two divisor limbs, `u >= v`), with `un`
+/// of `u.len() + 1` and `vn` of `v.len()` zeroed limbs. Leaves the
+/// normalized remainder in `un[..n + 1]` and, if given, the quotient in `q`;
+/// returns the normalization shift.
+fn long_division(
+    u: &[u32],
+    v: &[u32],
+    un: &mut [u32],
+    vn: &mut [u32],
+    mut q: Option<&mut Vec<u32>>,
+) -> u32 {
+    let (m, n) = (u.len(), v.len());
+    // Normalize so that the divisor's top limb has its high bit set.
+    let s = v[n - 1].leading_zeros();
+    let spill = |hi: u32, lo: u32| {
+        if s == 0 {
+            hi
+        } else {
+            (hi << s) | (lo >> (32 - s))
+        }
+    };
+    for i in (1..n).rev() {
+        vn[i] = spill(v[i], v[i - 1]);
+    }
+    vn[0] = v[0] << s;
+    un[m] = if s == 0 { 0 } else { u[m - 1] >> (32 - s) };
+    for i in (1..m).rev() {
+        un[i] = spill(u[i], u[i - 1]);
+    }
+    un[0] = u[0] << s;
+    const BASE: u64 = 1 << 32;
+    for j in (0..=m - n).rev() {
+        let top = (u64::from(un[j + n]) << 32) | u64::from(un[j + n - 1]);
+        let mut qhat = top / u64::from(vn[n - 1]);
+        let mut rhat = top % u64::from(vn[n - 1]);
+        while qhat >= BASE || qhat * u64::from(vn[n - 2]) > (rhat << 32) + u64::from(un[j + n - 2])
+        {
+            qhat -= 1;
+            rhat += u64::from(vn[n - 1]);
+            if rhat >= BASE {
+                break;
+            }
+        }
+        // Multiply and subtract qhat * vn from un[j..=j + n].
+        let mut k = 0i64;
+        for i in 0..n {
+            let p = qhat * u64::from(vn[i]);
+            let t = i64::from(un[i + j]) - k - (p & 0xFFFF_FFFF) as i64;
+            un[i + j] = t as u32;
+            k = (p >> 32) as i64 - (t >> 32);
+        }
+        let t = i64::from(un[j + n]) - k;
+        un[j + n] = t as u32;
+        let mut digit = qhat as u32;
+        if t < 0 {
+            // qhat was one too large: add the divisor back.
+            digit = digit.wrapping_sub(1);
+            let mut c = 0u64;
+            for i in 0..n {
+                let t = u64::from(un[i + j]) + u64::from(vn[i]) + c;
+                un[i + j] = t as u32;
+                c = t >> 32;
+            }
+            un[j + n] = un[j + n].wrapping_add(c as u32);
+        }
+        if let Some(q) = q.as_deref_mut() {
+            q[j] = digit;
+        }
+    }
+    s
+}
+/// The denormalized `n`-limb remainder left in `un` by [`long_division`].
+fn remainder(un: &[u32], n: usize, s: u32) -> Vec<u32> {
+    let mut r = vec![0u32; n];
+    for i in 0..n - 1 {
+        r[i] = if s == 0 {
+            un[i]
+        } else {
+            (un[i] >> s) | (un[i + 1] << (32 - s))
+        };
+    }
+    r[n - 1] = un[n - 1] >> s;
+    r
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Rat {
@@ -275,10 +344,17 @@ impl Rat {
         if n.zero() {
             return Some(Self::zero());
         }
-        if d == Nat::small(1) {
+        if d.0 == [1] {
             return Some(Self { negative, n, d });
         }
         let g = Nat::gcd(n.clone(), d.clone());
+        if g.0 == [1] {
+            // Dividing by one leaves n and d; charge what those divisions
+            // would, so budgets (and outcomes) do not depend on the shortcut.
+            charge(n.0.len() + 1);
+            charge(d.0.len() + 1);
+            return Some(Self { negative, n, d });
+        }
         Some(Self {
             negative,
             n: n.div_rem(&g).0,
@@ -595,6 +671,50 @@ mod division_tests {
         }
     }
 
+    #[test]
+    fn in_place_remainder_and_gcd_match_division_with_identical_work() {
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let nat = |limbs: usize, next: &mut dyn FnMut() -> u64| {
+            Nat::new((0..limbs).map(|_| next() as u32 >> (next() % 8)).collect())
+        };
+        let (mut un, mut vn) = (Vec::new(), Vec::new());
+        for _ in 0..5_000 {
+            let a = nat(1 + (next() % 9) as usize, &mut next);
+            let b = nat(1 + (next() % 6) as usize, &mut next);
+            if b.zero() {
+                continue;
+            }
+            reset_work();
+            let expected = a.div_rem(&b).1;
+            let charged = work();
+            reset_work();
+            let mut r = a.clone();
+            r.rem_assign(&b, &mut un, &mut vn);
+            assert_eq!(r, expected);
+            assert_eq!(work(), charged);
+            // gcd against the plain Euclid recurrence, same charges.
+            let euclid = |mut x: Nat, mut y: Nat| {
+                while !y.zero() {
+                    let r = x.div_rem(&y).1;
+                    x = y;
+                    y = r;
+                }
+                x
+            };
+            reset_work();
+            let g = euclid(a.clone(), b.clone());
+            let charged = work();
+            reset_work();
+            assert_eq!(Nat::gcd(a.clone(), b.clone()), g);
+            assert_eq!(work(), charged);
+        }
+    }
     #[test]
     fn work_counter_charges_products_and_divisions() {
         reset_work();

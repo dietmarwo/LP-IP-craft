@@ -68,3 +68,24 @@ def test_random_general_integer_modes_against_exhaustive_independent_oracle():
                 assert r.best_bound<=optimum+1e-6 if sense=='minimize'else r.best_bound>=optimum-1e-6
             trace=r.backend.effective_options.get('diagnostics.branch_trace')
             if trace:assert len(json.loads(trace))<=4
+
+def test_rens_incumbents_are_feasible_budgeted_and_keep_the_exhaustive_optimum():
+    rng=random.Random(28005);found=0
+    for case in range(40):
+        n=10+case%4;m=3
+        A=[[rng.randrange(1,15)for _ in range(n)]for _ in range(m)]
+        c=[float(rng.randrange(1,20))for _ in range(n)]
+        ru=[sum(row)*.45 for row in A]
+        optimum=max(sum(a*v for a,v in zip(c,x))for x in product((0,1),repeat=n)if all(sum(a*v for a,v in zip(row,x))<=u for row,u in zip(A,ru)))
+        mod=model(c,A,[0.]*n,[1.]*n,[-math.inf]*m,ru,['binary']*n)
+        for limit in [None,40]:
+            r=run(mod,gmi_cuts=True,mir_cuts=True,root_heuristics=True,heuristic_lp_calls=4,node_limit=limit)
+            d=r.backend.effective_options
+            assert int(d['diagnostics.root_rens_nodes'])<=50*4
+            if limit:assert r.nodes<=limit
+            assert r.evaluation.feasible_candidate
+            if r.status=='optimal':assert abs(r.evaluation.objective-optimum)<1e-6,(case,r.evaluation.objective,optimum)
+            else:assert r.evaluation.objective<=optimum+1e-6 and (r.best_bound is None or r.best_bound>=optimum-1e-6)
+            found+=int(d['diagnostics.root_rens_candidates'])
+        assert run(mod).evaluation.objective==pytest.approx(optimum)
+    assert found>0
