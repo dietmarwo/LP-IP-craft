@@ -261,3 +261,24 @@ Iteration 0 (main) on this host:
   327,797 nodes at the 1M cap, against 52,495 before, and is lost at the
   100k cap under gmi, combined and heuristics. Rejected; probing stays
   exact-only.
+
+### 12. Cap cut density — rejected, but informative
+
+- **Plan.** rgn's nodes cost 102 µs with cuts, against 62 µs without: about
+  30 kept cut rows on a 24-row model. Candidate cuts are mostly short
+  (median 10–30 terms) with a dense tail (up to 162 terms on rgn and 250
+  on p0548). Discard cuts with more than max(20, n/4) terms, like SCIP's
+  relative support limit for GMI. A second variant used max(50, n/4).
+- **Result.** Strong but uneven:
+  - Combined and heuristics improve a lot. Synthetic means drop 37–47%
+    (combined 0.0386 → 0.0224 s). Assignment combined drops from 0.13–0.15 s
+    to 0.010–0.037 s, so combined is no longer slower than MIR alone there.
+    gt2 combined goes from 0.70 to 0.17 s and heuristics from 0.40 to 0.05 s.
+  - GMI-only gets worse: p0548 goes from 0.43 to 3.6 s, because its dense
+    cuts are essential.
+  - bell5 is lost at the 100k cap under all three GMI policies. At the 1M
+    cap it needs 139k–161k nodes against 52k, even when the 50-term floor
+    keeps nearly all its own cuts: one removed cut is enough to send its
+    tree elsewhere.
+  Rejected by rule. Density control for combined separation is the most
+  promising open direction from these iterations.
