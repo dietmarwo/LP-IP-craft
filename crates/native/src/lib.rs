@@ -23,6 +23,9 @@ mod ordered;
 mod ordering;
 mod packing;
 pub mod parallel;
+#[cfg(feature = "parallel-bench")]
+#[doc(hidden)]
+pub mod parallel_bench;
 mod presolve;
 mod primal;
 pub mod profile;

@@ -13,7 +13,7 @@ import time
 
 def validate(payload, case):
     family, size, mode, inner, outer, jobs = case
-    if payload.get('status') != 'optimal' or payload.get('completed') != jobs:
+    if payload.get('status') != ('checked' if family == 'factor' else 'optimal') or payload.get('completed') != jobs:
         raise ValueError('incomplete/nonoptimal child results')
     for k in ['seconds', 'objective', 'residual']:
         if not isinstance(payload.get(k), (float, int)) or not math.isfinite(payload[k]):

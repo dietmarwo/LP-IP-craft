@@ -79,6 +79,52 @@ fn ring(n: usize) -> (Model, f64) {
         expected,
     )
 }
+
+fn skewdense(m: usize) -> (Model, f64) {
+    let n = m * 8;
+    let heavy = m / 2;
+    let mut indptr = vec![0];
+    let mut indices = Vec::new();
+    let mut values = Vec::new();
+    let mut objective = vec![0.; n];
+    let mut rhs = Vec::new();
+    for i in 0..m {
+        let mut sum = 0.;
+        for j in 0..n {
+            let value = if j < m {
+                if j == i { 16. } else { 0. }
+            } else if j >= n - heavy {
+                ((i * 37 + j * 19) % 17 + 1) as f64 / 16.
+            } else if j % m == i {
+                0.125
+            } else {
+                0.
+            };
+            if value != 0. {
+                indices.push(j);
+                values.push(value);
+                objective[j] += (1 + i % 5) as f64 * value;
+                sum += value;
+            }
+        }
+        indptr.push(indices.len());
+        rhs.push(sum);
+    }
+    let expected = objective.iter().sum();
+    (
+        Model::new(ModelData {
+            sense: Sense::Maximize,
+            objective,
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; n], vec![2.; n]),
+            kinds: vec![VariableKind::Continuous; n],
+            matrix: CsrMatrix::new(m, n, indptr, indices, values),
+            rows: Bounds::new(vec![f64::NEG_INFINITY; m], rhs),
+        })
+        .unwrap(),
+        expected,
+    )
+}
 fn fixture(family: &str, n: usize) -> (Model, f64) {
     match family {
         "packing" => packing(n),
@@ -87,6 +133,7 @@ fn fixture(family: &str, n: usize) -> (Model, f64) {
         "network" => network(n),
         "selection" => selection(n),
         "dense" => dense(n),
+        "skewdense" => skewdense(n),
         _ => panic!("unknown family"),
     }
 }
@@ -165,6 +212,22 @@ fn main() {
     let workers = args.get(5).map(|v| v.parse().unwrap()).unwrap_or(1);
     let jobs = args.get(6).map(|v| v.parse().unwrap()).unwrap_or(1);
     assert!(inner * workers <= 8 && inner > 0 && workers > 0 && jobs > 0);
+    #[cfg(feature = "parallel-bench")]
+    if family == "factor" {
+        assert_eq!(workers, 1);
+        assert_eq!(jobs, 3);
+        let q = lp_ip_craft_native::parallel_bench::run(n, inner).unwrap();
+        println!(
+            "{{\"version\":\"{}\",\"family\":\"factor\",\"size\":{n},\"mode\":\"{mode}\",\"inner\":{inner},\"workers\":1,\"jobs\":3,\"completed\":3,\"seconds\":{},\"workflow_seconds\":{},\"resource_seconds\":{},\"objective\":0.0,\"residual\":{},\"checksum\":{},\"pivots\":0,\"nodes\":0,\"status\":\"checked\"}}",
+            env!("CARGO_PKG_VERSION"),
+            q.seconds,
+            q.workflow_seconds,
+            q.resource_seconds,
+            q.error,
+            q.checksum
+        );
+        return;
+    }
     let mut settings = NativeOptions {
         decompose: false,
         component_threads: 1,
