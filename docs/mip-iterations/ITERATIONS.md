@@ -432,3 +432,19 @@ Iteration 0 (main) on this host:
   public policy. On synthetic it is still behind MIR alone (0.0290 against
   0.0236 s). Held-out and family records are unchanged; their mean shifts
   are timing noise.
+
+### 19. VUB substitution for general-integer columns — rejected
+
+- **Plan.** bell5 has 14 two-term rows x ≤ c·y in which y is a general
+  integer (bounds up to 10,000), not a binary. MIR recognized no VUB there
+  and selected no cut on bell5 at all. The substitution x = (c·y − t)/a is
+  an identity, with t ≥ 0 implied by the row, for any integer y. So accept
+  any integer y with lower bound zero, and take slope divisors for y
+  fractional at the LP point. A new unit test checks the cuts on a
+  two-arc node with y ∈ {0, …, 3} against every grid point.
+- **Result.** MIR now recognizes 13 VUBs on bell5 and selects 6 cuts. The
+  MIR-only root barely moves (8,608,418 → 8,609,853). Under combined, MIR
+  therefore stays active after round 0, so iteration 18's support cap
+  applies to bell5's later GMI rounds. Its combined root falls from
+  8,931,303 to 8,732,531, and bell5 is lost at the node limit. Rejected by
+  rule; the evaluation was stopped after the public set.
