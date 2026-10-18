@@ -11,3 +11,9 @@ Run paired scalar/eight, batch/components/tree/residual and cold/warm cases; no 
 ## Decision
 
 Accept only a sound capability or a measured reduction of useful work; otherwise revert the prototype and preserve its evidence. Cheap fallbacks and the one-thread default remain. Final results will distinguish noisy/negative observations from retained wins.
+
+## Measured adaptation before implementation
+
+Weighted column splitting23 gave no reliable gain on either declared skewed primary size (about45.16→47.80ms and97.04→97.31ms). Remove it and its per-LP classification. Raise generic pricing dispatch to262,144 *nonbasic* coefficient operations; avoid parallel dispatch for cheap late bases. Keep large disjoint Schur work and tested outer scheduling. A pre-cancelled batch can use its serial path to avoid helpers while preserving ordinary per-job validation/error precedence.
+
+Code review of the real SpOC4 path shows three additional independent phases in its packing primal-dual root: column gradients, independent projected primal coordinates, and independent row-price projections. Add bounded local execution for these phases when numerical threads are explicitly requested. Column incidence lists are in original row order, so each gradient retains its scalar addition order. Coordinate/row operations retain their original expressions, with joins between phases. Keep step sizes, iteration/work budgets, stopping checks, averaging, greedy order and serial conservative bound checks. Add a35-step active parallel comparison on32,768 binary columns (including the32-step certification boundary), requiring bitwise hint/price/bound and identical work counters for1/2/4/8. This is an application-driven extension before application measurement, not a replacement of old fixtures.

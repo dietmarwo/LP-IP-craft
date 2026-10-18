@@ -39,7 +39,11 @@ impl NativeSolver {
         settings.component_threads = 1;
         settings.packing_workers = 1;
         settings.tree_threads = 1;
-        let workers = workers.min(models.len());
+        let workers = if cancel.is_cancelled() {
+            1
+        } else {
+            workers.min(models.len())
+        };
         if workers <= 1 {
             let mut solver = NativeSolver::new(settings);
             return Ok(models

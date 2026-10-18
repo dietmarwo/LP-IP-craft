@@ -112,3 +112,20 @@ fn many_distinct_jobs_and_claim_boundaries_keep_original_order() {
         }
     }
 }
+
+#[test]
+fn precancelled_batch_preserves_serial_validation_and_job_errors() {
+    let (good, bad) = (model(false), model(true));
+    let token = CancellationToken::default();
+    token.cancel();
+    let solver = NativeSolver::default();
+    let run = |workers| {
+        solver
+            .solve_batch(&[&good, &bad, &good], &Options::default(), workers, &token)
+            .unwrap()
+            .into_iter()
+            .map(|r| r.map(|r| r.status).map_err(|e| e.to_string()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(run(1), run(8));
+}

@@ -149,6 +149,7 @@ struct RootStats {
     work: u64,
     prices: Vec<f64>,
 }
+#[cfg(test)]
 fn relaxation(
     pack: &Packing,
     model: &Model,
@@ -156,6 +157,25 @@ fn relaxation(
     cancel: &CancellationToken,
     began: Instant,
     seed: &[f64],
+) -> Result<(Vec<f64>, Option<f64>, RootStats)> {
+    relaxation_with_execution(
+        pack,
+        model,
+        settings,
+        cancel,
+        began,
+        seed,
+        &crate::parallel::Execution::default(),
+    )
+}
+fn relaxation_with_execution(
+    pack: &Packing,
+    model: &Model,
+    settings: &NativeOptions,
+    cancel: &CancellationToken,
+    began: Instant,
+    seed: &[f64],
+    execution: &crate::parallel::Execution,
 ) -> Result<(Vec<f64>, Option<f64>, RootStats)> {
     let mut stats = RootStats::default();
     let mut initial = vec![0f64; model.m()];
@@ -189,24 +209,57 @@ fn relaxation(
         {
             break;
         }
-        grad.fill(0.);
-        for (i, row) in pack.rows.iter().enumerate() {
-            for &j in row {
-                grad[j] += y[i];
+        if execution.threads() > 1 && model.nnz() >= 32_768 {
+            execution.chunks_mut_min(&mut grad, 2048, model.nnz(), 32_768, |first, part| {
+                for (local, value) in part.iter_mut().enumerate() {
+                    let mut sum = 0.;
+                    for &i in &pack.cols[first + local] {
+                        sum += y[i];
+                    }
+                    *value = sum;
+                }
+            });
+        } else {
+            grad.fill(0.);
+            for (i, row) in pack.rows.iter().enumerate() {
+                for &j in row {
+                    grad[j] += y[i];
+                }
             }
         }
-        for j in 0..model.n() {
-            let next = (x[j] + step * (pack.weights[j] / scale - grad[j]))
-                .clamp(model.variables().lower[j], model.variables().upper[j]);
-            extrapolated[j] = 2. * next - x[j];
-            x[j] = next;
-            avg[j] += (next - avg[j]) / ((iteration + 1) as f64);
-        }
-        for (i, row) in pack.rows.iter().enumerate() {
-            let activity: f64 = row.iter().map(|&j| extrapolated[j]).sum();
-            y[i] = (y[i] + step * (activity - 1.)).max(0.);
-            avg_y[i] += (y[i] - avg_y[i]) / ((iteration + 1) as f64);
-        }
+        execution.zip3_mut(
+            &mut x,
+            &mut avg,
+            &mut extrapolated,
+            2048,
+            model.n().saturating_mul(8),
+            |first, x, avg, ext| {
+                for (local, ((x, avg), ext)) in x.iter_mut().zip(avg).zip(ext).enumerate() {
+                    let j = first + local;
+                    let next = (*x + step * (pack.weights[j] / scale - grad[j]))
+                        .clamp(model.variables().lower[j], model.variables().upper[j]);
+                    *ext = 2. * next - *x;
+                    *x = next;
+                    *avg += (next - *avg) / ((iteration + 1) as f64);
+                }
+            },
+        );
+        execution.zip2_mut(
+            &mut y,
+            &mut avg_y,
+            512,
+            model.nnz().saturating_add(model.m().saturating_mul(4)),
+            |first, y, avg_y| {
+                for (local, (y, avg)) in y.iter_mut().zip(avg_y).enumerate() {
+                    let activity: f64 = pack.rows[first + local]
+                        .iter()
+                        .map(|&j| extrapolated[j])
+                        .sum();
+                    *y = (*y + step * (activity - 1.)).max(0.);
+                    *avg += (*y - *avg) / ((iteration + 1) as f64);
+                }
+            },
+        );
         stats.iterations += 1;
         stats.work += step_work;
         if iteration % 32 == 31 || iteration + 1 == settings.packing_root_iterations {
@@ -1161,7 +1214,13 @@ pub(crate) fn solve(
             .sum::<f64>();
     let greedy_seconds = began.elapsed().as_secs_f64();
     let t = Instant::now();
-    let (hint, bound, root_stats) = relaxation(&pack, model, settings, cancel, began, seed)?;
+    let execution = if model.nnz() >= 65_536 {
+        crate::parallel::Execution::new(options.threads).map_err(Error::Backend)?
+    } else {
+        crate::parallel::Execution::default()
+    };
+    let (hint, bound, root_stats) =
+        relaxation_with_execution(&pack, model, settings, cancel, began, seed, &execution)?;
     let relaxation_seconds = t.elapsed().as_secs_f64();
     if let Some(x) = pack.greedy(model, Some(&hint)) {
         improve(model, options, &mut best, x)?;
@@ -1877,6 +1936,75 @@ mod tests {
                 if feasible(&m, &x) {
                     assert!(feasible(&cut, &x));
                 }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod parallel_root_tests {
+    use super::*;
+    #[test]
+    fn projected_root_has_bit_identical_hints_prices_bounds_and_work() {
+        let n = 32768;
+        let m = 4096;
+        let mut rows = vec![Vec::new(); m];
+        for j in 0..n {
+            for i in [j % m, (j + 1) % m, (j + 5) % m] {
+                rows[i].push(j);
+            }
+        }
+        let mut indptr = vec![0];
+        let mut indices = Vec::new();
+        for row in rows {
+            indices.extend(row);
+            indptr.push(indices.len());
+        }
+        let nnz = indices.len();
+        let model = Model::new(ModelData {
+            sense: Sense::Maximize,
+            objective: (0..n).map(|j| (1 + j % 31) as f64).collect(),
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; n], vec![1.; n]),
+            kinds: vec![VariableKind::Binary; n],
+            matrix: CsrMatrix::new(m, n, indptr, indices, vec![1.; nnz]),
+            rows: Bounds::new(vec![f64::NEG_INFINITY; m], vec![1.; m]),
+        })
+        .unwrap();
+        let pack = Packing::new(&model).unwrap();
+        let seed = pack.greedy(&model, None).unwrap();
+        let settings = NativeOptions {
+            packing_root: true,
+            packing_root_iterations: 35,
+            packing_root_work: 100_000_000,
+            time_limit_seconds: None,
+            ..Default::default()
+        };
+        let mut expected = None;
+        for threads in [1, 2, 4, 8] {
+            let execution = crate::parallel::Execution::new(threads).unwrap();
+            let (hint, bound, stats) = relaxation_with_execution(
+                &pack,
+                &model,
+                &settings,
+                &CancellationToken::default(),
+                Instant::now(),
+                &seed,
+                &execution,
+            )
+            .unwrap();
+            assert_eq!(stats.iterations, 35);
+            let actual = (
+                hint.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                bound.map(f64::to_bits),
+                stats.prices.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                stats.iterations,
+                stats.work,
+            );
+            if let Some(e) = &expected {
+                assert_eq!(&actual, e, "root width{threads}");
+            } else {
+                expected = Some(actual);
             }
         }
     }
