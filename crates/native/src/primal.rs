@@ -8,7 +8,7 @@ pub(crate) struct Stats {
     pub cycles: u64,
     pub failures: u64,
 }
-fn candidate(
+pub(crate) fn candidate(
     model: &Model,
     x: Vec<f64>,
     options: &Options,

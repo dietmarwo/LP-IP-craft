@@ -121,3 +121,39 @@ Iteration 0 (main) on this host:
   3.84 s), and p0548 GMI from 0.60 to 1.29 s. Degenerate cuts at the root
   become binding after branching. Reverted; only strictly slack cuts are
   removed.
+
+### 5. RENS in the root heuristics — accepted
+
+- **Plan.** A gt2 trace with combined cuts shows the incumbent improving
+  only through integral leaves: 27206 at node 57, then 25282, 24106,
+  23876, and the optimum 21166 at node 3,430. The proof follows at node
+  6,154. The root dives (one fixing per LP, at most 8 LPs) never reach an
+  integral point; an exploratory run with 200 LPs and least-fractional
+  rounding also failed. Add RENS after the cut loop when `root_heuristics`
+  is on. It fixes every integer column that is integral at the final root
+  optimum and restricts the fractional ones to their two neighbours. The
+  resulting sub-MIP is solved by a child solver with a deterministic budget
+  of 50 nodes per heuristic LP call (800 by default), and those nodes and
+  pivots count against the call's limits. Only its incumbents are used, as
+  the search start; its status and bound are discarded.
+- **First version.** The heuristics policy improved on public, but got
+  worse on synthetic and held-out. issue-2173, for example, went from 0.30
+  to 0.53 s: with few integers fixed, the sub-MIP is nearly the whole
+  problem. A rerun of the same code moved those means by 6–9%, so this host
+  was noisy here.
+- **Final version.** Run RENS only when at least half the integer columns
+  are fixed, like SCIP's minimum fixing rate.
+- **Result.** Heuristics policy:
+
+  | Set | Before | After |
+  |---|---:|---:|
+  | public | 0.184 s | 0.157 s |
+  | synthetic | 0.0448 s | 0.0454 s |
+  | held-out | 0.0393 s | 0.0384 s |
+  | families | 0.0017 s | 0.0016 s |
+
+  RENS now finds root incumbents. gt2 gets its optimum 21166 at the root
+  (0.72 → 0.39 s, 6,181 → 2,756 nodes), and p0548 gets 8698, the root
+  incumbent the delivered heuristics never found. lseu gets 1165, rgn its
+  optimum. No case is flagged. Other policies are untouched. Oracle gates:
+  0 failures.

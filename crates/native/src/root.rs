@@ -400,6 +400,8 @@ pub(crate) fn solve(
         ),
         ("root_heuristic_cycles", advanced_stats.primal.cycles),
         ("root_heuristic_failures", advanced_stats.primal.failures),
+        ("root_rens_nodes", advanced_stats.rens_nodes),
+        ("root_rens_candidates", advanced_stats.rens_found),
     ] {
         result
             .backend
