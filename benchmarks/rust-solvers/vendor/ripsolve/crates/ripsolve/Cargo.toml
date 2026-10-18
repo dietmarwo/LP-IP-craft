@@ -1,0 +1,32 @@
+[package]
+name = "ripsolve"
+description = "A branch-and-cut solver for mixed-integer programs, in pure Rust. Fast on small and medium models."
+homepage = "https://github.com/ripsolve/ripsolve"
+keywords = ["optimization", "mip", "solver"]
+categories = ["mathematics"]
+readme = "README.md"
+# The integration tests read model files from the repository's samples directory,
+# which sits outside this package. Shipping them would hand every consumer a
+# `cargo test` that fails on missing paths, so they stay in the repository where
+# they work. The unit tests inside src/ are published and run normally.
+exclude = ["tests/**"]
+version = "0.4.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/ripsolve/ripsolve"
+documentation = "https://docs.rs/ripsolve"
+
+# docs.rs builds with all features and shows which feature gates an item. Neither
+# matters yet (there are no features), but setting them here means the published
+# documentation does not change shape the first time one is added.
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dev-dependencies]
+lp_parser_rs = "4.1"
+serde_json = "1"
+
+[dependencies]
+thiserror = "2"
+lp_parser_rs = "4.1"

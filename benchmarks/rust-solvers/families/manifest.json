@@ -1,0 +1,102 @@
+[
+  {
+    "file": "development-bigm-10.json",
+    "group": "development",
+    "sha256": "1eeb180f25852af1aa57f94c2d14161c5b7e7221141dbc9d0b6cebde81547539"
+  },
+  {
+    "file": "development-knapsack-10.json",
+    "group": "development",
+    "sha256": "73692e5209947995ac21e91a0b5700df338aed3367908058fe78c8e6831a7fbe"
+  },
+  {
+    "file": "development-bigm-11.json",
+    "group": "development",
+    "sha256": "c1f4377a6c25fe6564c4004270c545b5883a4a5fb798631fe0b1fd94902c76c9"
+  },
+  {
+    "file": "development-knapsack-11.json",
+    "group": "development",
+    "sha256": "04982fc37b78e0d02731ac575a8af83bb96f5be34ce9bf47fe44230a94413b41"
+  },
+  {
+    "file": "development-bigm-12.json",
+    "group": "development",
+    "sha256": "2a642a16afa35cc327f1818ad2c6b632038c4e130cb429b0ba7420361a85c95e"
+  },
+  {
+    "file": "development-knapsack-12.json",
+    "group": "development",
+    "sha256": "67e004296a4f52461c784d0d0b85db7a3045d67b2222e84e8491bfb11937ae4b"
+  },
+  {
+    "file": "development-bigm-13.json",
+    "group": "development",
+    "sha256": "39917adea43ac35156f84ac750e4a14434aa13cea6174ae2069a91a2d3278896"
+  },
+  {
+    "file": "development-knapsack-13.json",
+    "group": "development",
+    "sha256": "c1c5bba5abd2c7e6533c57363447c5065e248e3df708c310c2bc53372c6d71b2"
+  },
+  {
+    "file": "development-bigm-14.json",
+    "group": "development",
+    "sha256": "74b9072e149d82767c1f7f1cddbc724039800d01c9c2b888f44b7f53c684209a"
+  },
+  {
+    "file": "development-knapsack-14.json",
+    "group": "development",
+    "sha256": "85276904df2d0a660c52f9387b2616d8916e57a59b0af9cfe945f5feed09ca1b"
+  },
+  {
+    "file": "heldout-bigm-110.json",
+    "group": "heldout",
+    "sha256": "4efd0c4fb2a189372e07eca101036dec3e5d87e61c9e060a5ad156def538de43"
+  },
+  {
+    "file": "heldout-knapsack-110.json",
+    "group": "heldout",
+    "sha256": "7f049637b014cbb1470cbf448c5720cbe03e28a5762d963f665e521e76f25b9d"
+  },
+  {
+    "file": "heldout-bigm-111.json",
+    "group": "heldout",
+    "sha256": "e577ff8a20430c811aa093840f25c8d7f4826167f087dd63c330d9677d6344bd"
+  },
+  {
+    "file": "heldout-knapsack-111.json",
+    "group": "heldout",
+    "sha256": "289c0e2d5c559784d3dfd4415c6cd163b281be99ea00bb7bcc5bb8d5cd6cb75a"
+  },
+  {
+    "file": "heldout-bigm-112.json",
+    "group": "heldout",
+    "sha256": "73783e4392a8792ff0a67e822cc2a1ed60a0fc91a74e21aa29f11f36ce1ca7e7"
+  },
+  {
+    "file": "heldout-knapsack-112.json",
+    "group": "heldout",
+    "sha256": "d852a30d56ad73f125e839b43d4f2fe94db7b6e44e00ea08cad362b7d656e776"
+  },
+  {
+    "file": "heldout-bigm-113.json",
+    "group": "heldout",
+    "sha256": "07418649fedf87f8f6c741d164b586fb5a3ad4f098c9cc55e2f657c8f6ca8c42"
+  },
+  {
+    "file": "heldout-knapsack-113.json",
+    "group": "heldout",
+    "sha256": "38a28c0fe6916efdbd376da856e69f70cae1f13fc2436562946010309cae1d2a"
+  },
+  {
+    "file": "heldout-bigm-114.json",
+    "group": "heldout",
+    "sha256": "ef84896e278f3133e33a903b0ffa741d20b7ca08c833cc0da130c6b2e424ccbd"
+  },
+  {
+    "file": "heldout-knapsack-114.json",
+    "group": "heldout",
+    "sha256": "d37cc6b5ae6d97eb96ed75e2ccfba5d9318100ede2625ba2d7035a941215ef97"
+  }
+]

@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 from ._native import solve_batch_native as _solve_batch_native
 
-__version__ = "0.26.0"
+__version__ = "0.27.0"
 
 __all__ = [
     "BACKENDS",
@@ -120,6 +120,20 @@ class NativeOptions:
     mixed_propagation: bool = False
     root_cuts: bool = False
     root_separation: bool = False
+    mip_presolve: bool = False
+    coefficient_tightening: bool = False
+    dual_presolve: bool = False
+    mip_presolve_rounds: int = 8
+    gmi_cuts: bool = False
+    mir_cuts: bool = False
+    mip_cut_rounds: int = 8
+    mip_cut_limit: int = 16
+    cut_exact_work: int = 4_000_000
+    root_heuristics: bool = False
+    heuristic_lp_calls: int = 16
+    branching_score: str = "weighted_sum"
+    pseudocost_min_step: float = 0.0
+    branch_trace_limit: int = 0
     root_cut_rounds: int = 2
     cover_lifting: bool = True
     steepest_edge: bool = True

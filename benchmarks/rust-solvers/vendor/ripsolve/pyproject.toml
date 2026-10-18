@@ -1,0 +1,38 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "ripsolve"
+description = "A branch-and-cut solver for mixed-integer programs, with a gurobipy-shaped interface"
+readme = "README.md"
+license = "MIT"
+# A copy of the repository's LICENSE: packaging only takes license files from
+# beside pyproject.toml, and a symlink would arrive as text on a Windows checkout.
+license-files = ["LICENSE"]
+authors = [{ name = "Andrew Henshaw" }]
+requires-python = ">=3.9"
+keywords = ["optimization", "mip", "milp", "integer-programming", "linear-programming", "solver", "gurobipy"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+# Taken from the workspace Cargo.toml, so the wheel and the crate cannot drift apart.
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://ripsolve.org"
+Source = "https://github.com/ripsolve/ripsolve"
+Issues = "https://github.com/ripsolve/ripsolve/issues"
+"Rust API" = "https://docs.rs/ripsolve"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.maturin]
+manifest-path = "crates/ripsolve-py/Cargo.toml"

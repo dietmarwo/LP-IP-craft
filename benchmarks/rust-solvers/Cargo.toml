@@ -1,0 +1,11 @@
+[package]
+name = "solvercmp"
+version = "0.1.0"
+edition = "2024"
+publish = false
+[workspace]
+[dependencies]
+lp-ip-craft = { path = "../../crates/core" }
+lp-ip-craft-native = { path = "../../crates/native" }
+ripsolve = { path = "vendor/ripsolve/crates/ripsolve" }
+serde_json = "1"

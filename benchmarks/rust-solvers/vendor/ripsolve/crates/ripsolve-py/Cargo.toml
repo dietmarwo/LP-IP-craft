@@ -1,0 +1,21 @@
+[package]
+name = "ripsolve-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Python bindings for the ripsolve mixed-integer programming solver."
+# A CPython extension module, not a Rust library: it is built into a wheel from
+# python/pyproject.toml (or by python/build.sh) and imported by the interpreter,
+# so there is nothing here for a Rust consumer.
+publish = false
+
+[lib]
+# Named for the module Python will import; `cdylib` because CPython loads it as a
+# shared object rather than linking it as a Rust library.
+name = "ripsolve"
+crate-type = ["cdylib"]
+
+[dependencies]
+ripsolve.workspace = true
+pyo3 = { workspace = true, features = ["extension-module", "abi3-py39"] }

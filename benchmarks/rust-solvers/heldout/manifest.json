@@ -1,0 +1,203 @@
+{
+  "highs_commit": "73cac48c5340d775a477087198611862559be250",
+  "selection": "first twenty sorted unseen, parser-supported MIPs with n,m<=1000; no performance filtering",
+  "instances": [
+    {
+      "name": "2171",
+      "n": 5,
+      "m": 98,
+      "input_sha256": "0ae8e6295d4aab41c08934487a0bd379fbcfdcb2c5ccd9fa9847e668931616ce",
+      "source": "HiGHS/check/instances/2171.mps",
+      "sha256": "d52b99c04e145a1ddce9b13a4ca3cd58abd7b563d8cdf3192c77d5a72e94cb14",
+      "native_bounds_infinite": false
+    },
+    {
+      "name": "bound_implied",
+      "n": 112,
+      "m": 73,
+      "input_sha256": "0bddce203fbaf141dc98b8179d270c9acdfc7bc01fc210645a988fa9bf1755e3",
+      "source": "HiGHS/check/instances/bound_implied.mps",
+      "sha256": "2f804ef371206ebcb1cd5d819ed16108b72fbd6a4aec15a435580299d06efd0b",
+      "native_bounds_infinite": false
+    },
+    {
+      "name": "infeasible-mip0",
+      "n": 9,
+      "m": 11,
+      "input_sha256": "d19d2a296e2c8ae9ba543a885c9dc96a39e4691823033b7df57526f5bbf1477c",
+      "source": "HiGHS/check/instances/infeasible-mip0.mps",
+      "sha256": "60f7631e319821309e6e2b3073f845001e7b165d07f51bcf5ba58835259d8520",
+      "native_bounds_infinite": true
+    },
+    {
+      "name": "infeasible-mip1",
+      "n": 22,
+      "m": 38,
+      "input_sha256": "c4cffc1e38293c59e805d5e0c1c650ee1c17f1446a803afb9b119109571994c0",
+      "source": "HiGHS/check/instances/infeasible-mip1.mps",
+      "sha256": "0ad00b6a6e099af2f6420c5f990be8c4ffeebc6a19c6d03b125b9ab106cbf27e",
+      "native_bounds_infinite": true
+    },
+    {
+      "name": "issue-2095",
+      "n": 66,
+      "m": 29,
+      "input_sha256": "955c7add2e5b50b00f6d3cd0eb10ee81b31aba6ebca9bb38895f77b1bf3d2205",
+      "source": "HiGHS/check/instances/issue-2095.mps",
+      "sha256": "fa4ba4304810cdc9ba4ab94a24cf159f5b218337428e0239fea45913d16582ca",
+      "native_bounds_infinite": false
+    },
+    {
+      "name": "issue-2173",
+      "n": 15,
+      "m": 192,
+      "input_sha256": "2b46c3f4582fb6a07a7aad77c878298f523429c9fd6a3f3f2092c789166198fc",
+      "source": "HiGHS/check/instances/issue-2173.mps",
+      "sha256": "9864363e3a36bca4cad483ff53c436aff27f0cfbc407a36c76932e76df3e2449",
+      "native_bounds_infinite": false
+    },
+    {
+      "name": "issue-2204",
+      "n": 37,
+      "m": 12,
+      "input_sha256": "e6cb059f01dfc7c14c4150b65ba28a2e78f6397c001db012a9c7667e68d36e54",
+      "source": "HiGHS/check/instances/issue-2204.mps",
+      "sha256": "52f07c6d21c58192b63cce54a4edd8d51cbade70659975db4c66afc88ebecb74",
+      "native_bounds_infinite": true
+    },
+    {
+      "name": "issue-2290",
+      "n": 30,
+      "m": 35,
+      "input_sha256": "059a5aece2ed2cdb27d4fff481c0b0da54152bd0e7658498827802d45715e3b0",
+      "source": "HiGHS/check/instances/issue-2290.mps",
+      "sha256": "e392c9a0c2b3c97f7d3a6087a3254e4b062a15b710d866cc13c48430a71df5ff",
+      "native_bounds_infinite": true
+    },
+    {
+      "name": "issue-2402",
+      "n": 36,
+      "m": 32,
+      "input_sha256": "eb7566bd82798e97f1501add9b93de3b8d150f4ecc80d3d42e057292f19a33f6",
+      "source": "HiGHS/check/instances/issue-2402.mps",
+      "sha256": "6c893d6b9f23188c0ef2f16104f265a9f92ac83b318f194a56c265599ec8d607",
+      "native_bounds_infinite": false
+    },
+    {
+      "name": "issue-2874-3",
+      "n": 4,
+      "m": 16,
+      "input_sha256": "79d1b37a6ef47368090e6f6177984689738c03b1839dbaca428aa823d0b5acfc",
+      "source": "HiGHS/check/instances/issue-2874-3.mps",
+      "sha256": "20bfede3e24de57fd84ab7c5e4919d9b0d6af3d2f1f793762f2db28807569e58",
+      "native_bounds_infinite": false
+    },
+    {
+      "name": "sp150x300d",
+      "n": 600,
+      "m": 450,
+      "input_sha256": "bd7c538ac1b5a3b7be8c8a30cfe87bcf441469bac980708fcb8a25483f38223f",
+      "source": "HiGHS/check/instances/sp150x300d.mps",
+      "sha256": "339aa4411ef126df72dc66718090fc6915debdc44d732a0f0be903310e52cf4a",
+      "native_bounds_infinite": false
+    }
+  ],
+  "excluded": [
+    {
+      "name": "2821-duplicate.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/2821-duplicate.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "2821-qmatrix.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/2821-qmatrix.mps'), 'QMATRIX')"
+    },
+    {
+      "name": "2821-quadobj.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/2821-quadobj.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "2821-summation.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/2821-summation.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "2821.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/2821.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "2894.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/2894.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "3015.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/3015.mps'), 'unsupported bound', 'SC')"
+    },
+    {
+      "name": "atwood0.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/atwood0.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "comment.mps",
+      "reason": "parser: too many values to unpack (expected 2)"
+    },
+    {
+      "name": "dD2e.mps",
+      "reason": "parser: could not convert string to float: '1.0d3'"
+    },
+    {
+      "name": "dcmulti.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/dcmulti.mps'), 'IMPORTANCES')"
+    },
+    {
+      "name": "garbage.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/garbage.mps'), 'dvhfalkmnthry6v54y76m87yq,x,^%(^%(T&*)(lksz')"
+    },
+    {
+      "name": "gesa2.mps",
+      "reason": "predeclared dimension cap"
+    },
+    {
+      "name": "issue-2446.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/issue-2446.mps'), 'OBJSENSE')"
+    },
+    {
+      "name": "primal1.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/primal1.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "qjh.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/qjh.mps'), 'QSECTION')"
+    },
+    {
+      "name": "qjh_qmatrix.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/qjh_qmatrix.mps'), 'QMATRIX')"
+    },
+    {
+      "name": "qjh_quadobj.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/qjh_quadobj.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "qjh_quadobj_qmatrix.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/qjh_quadobj_qmatrix.mps'), 'QUADOBJ')"
+    },
+    {
+      "name": "qjh_uncon.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/qjh_uncon.mps'), 'QSECTION')"
+    },
+    {
+      "name": "semi-continuous.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/semi-continuous.mps'), 'OBJSENSE')"
+    },
+    {
+      "name": "semi-integer.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/semi-integer.mps'), 'OBJSENSE')"
+    },
+    {
+      "name": "silly-names.mps",
+      "reason": "parser: (PosixPath('/workspace/scratch/f38b380ad117/refs/HiGHS/check/instances/silly-names.mps'), 'OBJSENSE')"
+    },
+    {
+      "name": "warnings.mps",
+      "reason": "parser: "
+    }
+  ]
+}

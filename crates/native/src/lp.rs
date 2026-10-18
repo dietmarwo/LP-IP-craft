@@ -1532,6 +1532,66 @@ impl Lp {
         })
     }
 
+    /// For up to `limit` basic integer columns with the most fractional
+    /// values, the BTRAN row of the basis inverse in original row units.
+    /// Advisory only: the exact cut derivation re-aggregates the original
+    /// rows with these multipliers and keeps every residual.
+    pub fn tableau_candidates(&mut self, model: &Model, limit: usize) -> Vec<(usize, Vec<f64>)> {
+        let mut order: Vec<_> = self
+            .basic
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &j)| {
+                if j >= self.n {
+                    return None;
+                }
+                let original = self.cols[j];
+                let value = self.x[j] * self.col_scale[j];
+                let fraction = (value - value.round()).abs();
+                (model.kinds()[original].is_integral() && fraction > 1e-6)
+                    .then_some((i, original, fraction))
+            })
+            .collect();
+        order.sort_by(|a, b| b.2.total_cmp(&a.2).then(a.1.cmp(&b.1)));
+        order.truncate(limit);
+        let mut out = Vec::new();
+        for (i, j, _) in order {
+            let mut rho = vec![0.; self.m];
+            rho[i] = 1.;
+            let mut index = Vec::new();
+            self.lu
+                .as_mut()
+                .unwrap()
+                .btran_unit_indexed(i, &mut rho, &mut index);
+            let mut weights = vec![0.; model.m()];
+            for (k, &row) in self.rows.iter().enumerate() {
+                weights[row] = rho[k] * self.row_scale[k];
+            }
+            if weights.iter().all(|v| v.is_finite()) {
+                out.push((j, weights));
+            }
+        }
+        out
+    }
+    /// The LP of `model`, which must extend this LP's model by appended rows:
+    /// the combinatorial basis and nonbasic states are kept, the new rows'
+    /// logicals become basic, and the enlarged factorization is rebuilt.
+    pub fn extend_rows(&self, model: &Model) -> Result<Self> {
+        let mut keep = vec![false; model.n()];
+        for &j in &self.cols {
+            keep[j] = true;
+        }
+        let mut next = Self::new(model, &vec![true; model.m()], &keep, self.controls)?;
+        if self.rows.iter().copied().ne(0..self.m) || next.n != self.n || next.m < self.m {
+            return Err(Error::Backend("root basis row mapping changed".into()));
+        }
+        next.basic[..self.m].copy_from_slice(&self.basic);
+        next.state[..self.n + self.m].copy_from_slice(&self.state);
+        next.weight[..self.m].copy_from_slice(&self.weight);
+        next.primal_stale = true;
+        next.dual_stale = true;
+        Ok(next)
+    }
     /// Solves the LP from the current basis. `Optimal` is declared only with
     /// primal and dual values recomputed from scratch and feasible; with
     /// `fresh_optimum` (cold solves), also on a fresh factorization.
