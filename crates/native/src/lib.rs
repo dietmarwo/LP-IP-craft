@@ -19,6 +19,7 @@ mod lp;
 mod lu;
 mod mip_presolve;
 mod mixed;
+mod ordered;
 mod ordering;
 mod packing;
 mod presolve;
