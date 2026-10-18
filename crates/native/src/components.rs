@@ -209,6 +209,19 @@ fn run_parts(
         Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     };
+    let mut order: Vec<_> = (0..parts.len()).collect();
+    // Work reservations remain tied to the original part, never queue order.
+    if settings.node_limit.is_none() && settings.iteration_limit.is_none() {
+        order.sort_by_key(|&i| {
+            std::cmp::Reverse(
+                parts[i]
+                    .model
+                    .nnz()
+                    .saturating_add(parts[i].model.n())
+                    .saturating_add(parts[i].model.m()),
+            )
+        });
+    }
     let next = AtomicUsize::new(0);
     let stop = AtomicBool::new(false);
     let results = Mutex::new(vec![None; parts.len()]);
@@ -225,6 +238,7 @@ fn run_parts(
                         if i >= parts.len() {
                             break;
                         }
+                        let i = order[i];
                         let part = &parts[i];
                         let mut c = controls(settings, started);
                         c.node_limit = quota(settings.node_limit, i, parts.len());
