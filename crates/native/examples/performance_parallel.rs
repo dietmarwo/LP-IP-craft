@@ -40,9 +40,49 @@ fn dense(n: usize) -> (Model, f64) {
         expected,
     )
 }
+fn ring(n: usize) -> (Model, f64) {
+    assert!(n >= 4);
+    let profits: Vec<_> = (0..n).map(|i| (1 + (i * 11 + 7) % 17) as f64).collect();
+    let mut a = vec![0.; n * n];
+    for i in 0..n {
+        a[i * n + i] = 1.;
+        a[i * n + (i + 1) % n] = 1.;
+    }
+    let mut expected = 0_f64;
+    for first in 0..=1 {
+        let mut state = [f64::NEG_INFINITY; 2];
+        state[first] = profits[0] * first as f64;
+        for (i, &profit) in profits.iter().enumerate().skip(1) {
+            let next = [
+                state[0].max(state[1]),
+                if i == n - 1 && first == 1 {
+                    f64::NEG_INFINITY
+                } else {
+                    state[0] + profit
+                },
+            ];
+            state = next;
+        }
+        expected = expected.max(state[0].max(state[1]));
+    }
+    (
+        Model::new(ModelData {
+            sense: Sense::Maximize,
+            objective: profits,
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; n], vec![1.; n]),
+            kinds: vec![VariableKind::Binary; n],
+            matrix: CsrMatrix::from_dense(n, n, &a).unwrap(),
+            rows: Bounds::new(vec![f64::NEG_INFINITY; n], vec![1.; n]),
+        })
+        .unwrap(),
+        expected,
+    )
+}
 fn fixture(family: &str, n: usize) -> (Model, f64) {
     match family {
         "packing" => packing(n),
+        "ring" => ring(n),
         "irregular" => irregular(n),
         "network" => network(n),
         "selection" => selection(n),

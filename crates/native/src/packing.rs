@@ -643,99 +643,102 @@ fn residual_search(
             // depend on which worker ran what.
             let next = std::sync::atomic::AtomicUsize::new(0);
             let next = &next;
-            let mut results = std::thread::scope(|scope| -> Result<Vec<_>> {
-                let mut handles = Vec::new();
-                for _ in 0..workers {
-                    handles.push(
-                        std::thread::Builder::new()
-                            .name("lpip-residual".into())
-                            .spawn_scoped(scope, move || {
-                                let mut out = Vec::new();
-                                loop {
-                                    let at =
-                                        next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                    if at >= count || stopped(settings, cancel, began) {
-                                        break;
-                                    }
-                                    let result = (|| -> Result<Option<_>> {
-                                        let Some((mut residual, columns, start)) =
-                                            neighborhood_seed(
-                                                pack,
-                                                model,
-                                                incumbent,
-                                                hint,
-                                                round * settings.packing_neighborhoods + base + at,
-                                                size,
-                                                plan[at],
-                                                settings,
-                                                cancel,
-                                                began,
-                                            )?
-                                        else {
-                                            return Ok(None);
-                                        };
-                                        let cut_began = Instant::now();
-                                        let (cliques, work) = if settings.packing_residual_cliques {
-                                            let (m, cuts, work) =
-                                                local_cliques(&residual, settings, cancel, began)?;
-                                            residual = m;
-                                            (cuts, work)
-                                        } else {
-                                            (0, 0)
-                                        };
-                                        let cut_seconds = cut_began.elapsed().as_secs_f64();
-                                        let mut controls = child_settings(settings, began);
-                                        controls.node_limit = Some(node_share);
-                                        controls.iteration_limit = Some(pivot_share);
-                                        controls.reliability_branching = true;
-                                        controls.scalable_branching = true;
-                                        let r = NativeSolver::new(controls).solve(
-                                            &residual,
-                                            options,
-                                            Some(&start),
-                                            cancel,
-                                        )?;
-                                        // Most residuals return their warm start, which is
-                                        // the snapshot and cannot improve on it. A changed
-                                        // point gets its full-model check here, in parallel;
-                                        // the ordered merge only reads the outcome.
-                                        let checked = r
-                                            .candidate
-                                            .as_ref()
-                                            .filter(|x| {
-                                                columns
-                                                    .iter()
-                                                    .zip(x.iter())
-                                                    .any(|(&j, &v)| incumbent[j] != v)
-                                            })
-                                            .map(|x| {
-                                                let mut point = incumbent.clone();
-                                                for (&j, &v) in columns.iter().zip(x) {
-                                                    point[j] = v;
-                                                }
-                                                let value = admit(model, options, &point);
-                                                (point, value)
-                                            });
-                                        Ok(Some((r, cliques, work, cut_seconds, checked)))
-                                    })();
-                                    out.push((at, result));
-                                }
-                                out
-                            })
-                            .map_err(|e| {
-                                Error::Backend(format!("residual worker creation: {e}"))
-                            })?,
-                    );
-                }
+            let work = || {
                 let mut out = Vec::new();
-                for h in handles {
-                    out.extend(
-                        h.join()
-                            .map_err(|_| Error::Backend("residual worker panicked".into()))?,
-                    );
+                loop {
+                    let at = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if at >= count || stopped(settings, cancel, began) {
+                        break;
+                    }
+                    let result = (|| -> Result<Option<_>> {
+                        let Some((mut residual, columns, start)) = neighborhood_seed(
+                            pack,
+                            model,
+                            incumbent,
+                            hint,
+                            round * settings.packing_neighborhoods + base + at,
+                            size,
+                            plan[at],
+                            settings,
+                            cancel,
+                            began,
+                        )?
+                        else {
+                            return Ok(None);
+                        };
+                        let cut_began = Instant::now();
+                        let (cliques, work) = if settings.packing_residual_cliques {
+                            let (m, cuts, work) =
+                                local_cliques(&residual, settings, cancel, began)?;
+                            residual = m;
+                            (cuts, work)
+                        } else {
+                            (0, 0)
+                        };
+                        let cut_seconds = cut_began.elapsed().as_secs_f64();
+                        let mut controls = child_settings(settings, began);
+                        controls.node_limit = Some(node_share);
+                        controls.iteration_limit = Some(pivot_share);
+                        controls.reliability_branching = true;
+                        controls.scalable_branching = true;
+                        let r = NativeSolver::new(controls).solve(
+                            &residual,
+                            options,
+                            Some(&start),
+                            cancel,
+                        )?;
+                        // Most residuals return their warm start, which is
+                        // the snapshot and cannot improve on it. A changed
+                        // point gets its full-model check here, in parallel;
+                        // the ordered merge only reads the outcome.
+                        let checked = r
+                            .candidate
+                            .as_ref()
+                            .filter(|x| {
+                                columns
+                                    .iter()
+                                    .zip(x.iter())
+                                    .any(|(&j, &v)| incumbent[j] != v)
+                            })
+                            .map(|x| {
+                                let mut point = incumbent.clone();
+                                for (&j, &v) in columns.iter().zip(x) {
+                                    point[j] = v;
+                                }
+                                let value = admit(model, options, &point);
+                                (point, value)
+                            });
+                        Ok(Some((r, cliques, work, cut_seconds, checked)))
+                    })();
+                    out.push((at, result));
                 }
-                Ok(out)
-            })?;
+                out
+            };
+            let mut results = if workers == 1 {
+                work()
+            } else {
+                std::thread::scope(|scope| -> Result<Vec<_>> {
+                    let mut handles = Vec::new();
+                    for _ in 0..workers {
+                        handles.push(
+                            std::thread::Builder::new()
+                                .name("lpip-residual".into())
+                                .spawn_scoped(scope, &work)
+                                .map_err(|e| {
+                                    Error::Backend(format!("residual worker creation: {e}"))
+                                })?,
+                        );
+                    }
+                    let mut out = Vec::new();
+                    for h in handles {
+                        out.extend(
+                            h.join()
+                                .map_err(|_| Error::Backend("residual worker panicked".into()))?,
+                        );
+                    }
+                    Ok(out)
+                })?
+            };
             results.sort_by_key(|v| v.0);
             let snapshot_objective = objective(model, &snapshot);
             let mut merged = snapshot.clone();
