@@ -1065,19 +1065,35 @@ impl Lp {
         {
             let _column = crate::profile::enter("pricing_column");
             self.stats.column_pricings += 1;
-            for j in 0..n {
-                if self.state[j] == State::Basic {
-                    continue;
-                }
-                let mut value = 0.;
-                for e in self.col_start[j]..self.col_start[j + 1] {
-                    let rho = self.rho[self.col_index[e]];
-                    if rho.abs() > DROP {
-                        value += rho * self.col_value[e];
+            let (state, start, index, values, rho) = (
+                &self.state,
+                &self.col_start,
+                &self.col_index,
+                &self.col_value,
+                &self.rho,
+            );
+            self.execution.chunks_mut(
+                &mut self.alpha[..n],
+                64,
+                self.col_value.len(),
+                |offset, part| {
+                    for (local, out) in part.iter_mut().enumerate() {
+                        let j = offset + local;
+                        let mut value = 0.;
+                        if state[j] != State::Basic {
+                            for e in start[j]..start[j + 1] {
+                                let r = rho[index[e]];
+                                if r.abs() > DROP {
+                                    value += r * values[e];
+                                }
+                            }
+                        }
+                        *out = value;
                     }
-                }
-                if value != 0. {
-                    self.alpha[j] = value;
+                },
+            );
+            for j in 0..n {
+                if self.alpha[j] != 0. {
                     self.marked[j] = true;
                     self.touched.push(j);
                 }
