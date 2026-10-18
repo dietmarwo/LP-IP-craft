@@ -33,6 +33,7 @@ impl NativeSolver {
                 .collect());
         }
         let next = AtomicUsize::new(0);
+        let claim = (models.len() / (workers * 8)).clamp(1, 4);
         let results = std::thread::scope(|scope| -> Result<Vec<_>> {
             let mut handles = Vec::new();
             for _ in 0..workers {
@@ -43,11 +44,13 @@ impl NativeSolver {
                         let mut solver = NativeSolver::new(settings);
                         let mut out = Vec::with_capacity(models.len() / workers);
                         loop {
-                            let i = next.fetch_add(1, Ordering::Relaxed);
-                            if i >= models.len() {
+                            let first = next.fetch_add(claim, Ordering::Relaxed);
+                            if first >= models.len() {
                                 break;
                             }
-                            out.push((i, solver.solve(models[i], options, None, cancel)));
+                            for i in first..models.len().min(first + claim) {
+                                out.push((i, solver.solve(models[i], options, None, cancel)));
+                            }
                         }
                         out
                     })
