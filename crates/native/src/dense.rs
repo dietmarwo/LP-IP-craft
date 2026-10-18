@@ -55,14 +55,28 @@ impl DenseTail {
                         rows.swap(c, pivot);
                     }
                     let diagonal = d[c * n + c];
-                    for r in c + 1..n {
-                        let l = d[r * n + c] / diagonal;
-                        d[r * n + c] = l;
-                        let (head, tail) = d.split_at_mut(r * n);
+                    if execution.threads() > 1 && (n - c - 1).saturating_mul(end - c - 1) >= 8192 {
+                        let (head, tail) = d.split_at_mut((c + 1) * n);
                         let source = &head[c * n + c + 1..c * n + end];
-                        let target = &mut tail[c + 1..end];
-                        for (v, &u) in target.iter_mut().zip(source) {
-                            *v -= l * u;
+                        execution.chunks_mut(tail, n * 16, usize::MAX, |_, rows| {
+                            for row in rows.chunks_mut(n) {
+                                let l = row[c] / diagonal;
+                                row[c] = l;
+                                for (v, &u) in row[c + 1..end].iter_mut().zip(source) {
+                                    *v -= l * u;
+                                }
+                            }
+                        });
+                    } else {
+                        for r in c + 1..n {
+                            let l = d[r * n + c] / diagonal;
+                            d[r * n + c] = l;
+                            let (head, tail) = d.split_at_mut(r * n);
+                            let source = &head[c * n + c + 1..c * n + end];
+                            let target = &mut tail[c + 1..end];
+                            for (v, &u) in target.iter_mut().zip(source) {
+                                *v -= l * u;
+                            }
                         }
                     }
                 }
