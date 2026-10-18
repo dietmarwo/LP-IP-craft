@@ -110,3 +110,14 @@ Iteration 0 (main) on this host:
   | gap-2 | 1.288 G | 1.159 G | −10% |
   | p0548 | 2.760 G | 2.641 G | −4% |
   | lseu | 3.462 G | 3.321 G | −4% |
+
+### 4. Also prune tight cuts with a zero root dual — rejected
+
+- **Plan.** Rows with a zero dual at the final root optimum can be removed
+  with the root value unchanged, whether slack or tight (degenerate).
+  Hypothesis: fewer cut rows speed up node LPs (rgn, gt2, gap).
+- **Result.** Large regressions. gt2 GMI-only went from 1,529 to 30,062
+  nodes (0.21 → 2.12 s), combined from 6,164 to 60,882 nodes (0.71 →
+  3.84 s), and p0548 GMI from 0.60 to 1.29 s. Degenerate cuts at the root
+  become binding after branching. Reverted; only strictly slack cuts are
+  removed.
