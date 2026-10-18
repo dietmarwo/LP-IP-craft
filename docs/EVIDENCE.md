@@ -98,3 +98,31 @@ The 0.25.0 source itself was never delivered separately here: its release
 commit `c2eb282` exists only in the authoring repository. The 0.25 import
 commit is the 0.26 tree with the archive's own 0.26 patch
 (`patches/LP-IP-craft-0.26.0.patch`, based on `c2eb282`) applied in reverse.
+
+## Native 0.27 evidence
+
+The 0.27 delivery archive arrived truncated:
+
+- `LP-IP-craft-0.27.0-ripsolve.zip`, 10,926,426 bytes,
+  SHA-256 `a1dc91c72922a1abadb85a750d3013bad3a26093c4045c1beeefbbd3aaecd5ab`
+
+It has no central directory and ends partway through
+`docs/ripsolve-027/data/pilot.json`; 458 of its 546 `MANIFEST.sha256`
+entries were recovered intact from the local file headers. The source
+is complete regardless: the archive's `PATCH-0.27.0.diff` matches the
+SHA-256 recorded in its `SOURCE-REVISION`
+(`cba04ee4…f27f`), and applied to `825ee42` it reproduces all 482
+repository files of the manifest byte for byte. That is the import
+commit.
+
+[`evidence-0.27.0.sha256`](evidence-0.27.0.sha256) lists the manifest's
+60 raw files under `docs/ripsolve-027/data/`. 21 were recovered (the
+oracle, bound, held-out, family and branching records and the frozen LP
+inputs). The other 39 were not in the upload: `pilot.json`,
+`plain-lp.json`, `public.json`, `public-60s.json`,
+`reference-adapter-corrections.json`, `rgn-lp-input.json`,
+`ripsolve-ablations.json`, `ripsolve-serial.json`,
+`ripsolve-status-reproduction.json`, the SpOC4 records and solution
+vectors (`spoc4-*`) and all 21 logs under `validation/`. The review
+re-measured instead of relying on them; see
+[ripsolve-027/REVIEW.md](ripsolve-027/REVIEW.md).

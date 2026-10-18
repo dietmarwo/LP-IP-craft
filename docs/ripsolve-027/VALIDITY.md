@@ -2,7 +2,18 @@
 
 ## The certificate boundary
 
-Numerical LP solutions, BTRAN multipliers, root heuristics, candidate scores and efficacy calculations propose actions. They do not establish a valid cut. Accepted cuts start from exact equalities or original inequalities and use the existing bounded Rat implementation, which interprets binary64 data exactly. Arithmetic overflow/bit/work limits reject the proposal. The final branch-and-bound solver retains its original incumbent admission, exact witness and outward dual-bound rules.
+Numerical LP solutions, BTRAN multipliers, root heuristics, candidate scores and efficacy calculations propose actions. They do not establish a valid cut. Accepted cuts start from exact equalities or original inequalities and are derived in exact dyadic arithmetic (`dyadic.rs`, since the review; 0.27.0 used the bounded Rat implementation), which interprets binary64 data exactly. Arithmetic overflow/bit/work limits reject the proposal. The final branch-and-bound solver retains its original incumbent admission, exact witness and outward dual-bound rules.
+
+## Exact arithmetic without division (review change)
+
+Every binary64 value is a dyadic rational m·2^e. Sums and products of dyadics are dyadic, so aggregation, anchoring, substitution and the box compensation below are exact without any gcd. The only nondyadic step is the rounding function itself. For the equation (or inequality) at hand, all coefficients, the right-hand side and the pivot coefficient (GMI) or divisor (MIR) are scaled by the same power of two to integers. Then frac(a/p) = (a mod p)/p with the Euclidean remainder, and multiplying the GMI or MIR inequality by its positive common denominator (f0·(p-f0) for GMI, p-f0 for MIR, with f0 = b mod p) gives integer coefficients:
+
+- GMI, `Σ g z >= f0 (p-f0)`: integer z with r = a mod p gets `r (p-f0)` if r <= f0, else `(p-r) f0`; continuous z gets `a (p-f0)` for a > 0, else `-a f0`.
+- MIR, `Σ h z <= floor(b/p) (p-f0)`: integer z gets `floor(a/p) (p-f0) + max(0, r-f0)`; continuous z gets a for a < 0 and 0 otherwise.
+
+These are the standard inequalities of the next sections multiplied by a positive number. Integers below 2^127 are held inline; larger ones use the existing limb arithmetic and long division, with the same 8192-bit limit and work counter. The tests keep the 0.27.0 rational derivation as a reference and check that both give proportional cuts.
+
+Three further changes are all justified by the arguments below. Multipliers are rounded to integers on a grid relative to the largest one before aggregation: any multipliers give an exact identity, so this changes only the residuals. A term whose variable or row activity is fixed over the box (z = 0 on every feasible point) is left out of the cut, which leaves every feasible point's left-hand side unchanged. For a VUB coefficient c whose odd part does not divide the row coefficient, the base row is first multiplied by the least common multiple of those odd parts, which keeps a/c dyadic; MIR of a positively scaled row with the equally scaled divisor is the same cut.
 
 ## Floating coefficient conversion
 
@@ -10,7 +21,7 @@ Suppose an exact rational inequality is `Σ c_j x_j <= b` on the actual root box
 
 `B = b + Σ max((q_j-c_j) l_j, (q_j-c_j) u_j)`.
 
-Then every point satisfying the exact inequality also satisfies `Σ q_j x_j <= B`. The maximizers are chosen by the exact sign of the coefficient error, and the sum is computed in exact rationals. The emitted RHS is an enclosing binary64 upper value of B. A nonzero error with an infinite required endpoint rejects the cut. Exactly representable coefficients need no compensation. Density/dynamism/efficacy filters can discard a valid cut but cannot make an invalid one valid.
+Then every point satisfying the exact inequality also satisfies `Σ q_j x_j <= B`. The maximizers are chosen by the exact sign of the coefficient error, and the sum is computed exactly. The emitted RHS is an enclosing binary64 upper value of B. Since the review, the row is first scaled by a power of two so that its largest coefficient lies in [1,2), and each q is the binary64 neighbour below or above c (or zero for |c| < 2^-37) with the smaller exact compensation among those whose required endpoint is finite. A coefficient with no admissible choice rejects the cut. Exactly representable coefficients need no compensation. Density/dynamism/efficacy filters can discard a valid cut but cannot make an invalid one valid.
 
 ## Binary coefficient tightening
 
@@ -43,7 +54,7 @@ After dividing by positive d and writing f=frac(b/d), MIR maps an integer coeffi
 
 ## Basis reuse, bounds and limits
 
-Appending root rows preserves old combinatorial basis columns/nonbasic states and adds logical basic columns. Row mappings are checked, and the enlarged numerical factorization is rebuilt; a stale LU is never used for the new matrix. The first solve and every resolved root round pass native's existing primal/dual acceptance checks. Checked bounds survive interruption and can tighten the final global bound because reductions preserve the integer optimum and cuts retain all integer feasible points.
+Appending root rows preserves old combinatorial basis columns/nonbasic states and adds logical basic columns. Since the review, cut rows that are strictly slack at the final accepted root optimum are removed before the search. Such a row has a zero dual there, so that primal/dual pair remains optimal for the smaller LP and the recorded root bound is unchanged; removing valid inequalities removes no feasible point. Row mappings are checked, and the enlarged numerical factorization is rebuilt; a stale LU is never used for the new matrix. The first solve and every resolved root round pass native's existing primal/dual acceptance checks. Checked bounds survive interruption and can tighten the final global bound because reductions preserve the integer optimum and cuts retain all integer feasible points.
 
 All root LP calls and heuristic projections consume parent node/pivot/time budgets. L1-pump objectives and dive statuses never supply a global bound. Every heuristic proposal is checked in original coordinates; the final search applies normal certification before pruning. Bounded traces and pseudocost estimates affect branching choices only. No new optimality termination shortcut is introduced.
 
