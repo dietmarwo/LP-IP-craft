@@ -192,3 +192,20 @@ Iteration 0 (main) on this host:
   became solved (4.3 s) and gt2 combined went from 0.74 to 0.24 s.
   Rejected by rule (lost cases). The tests caught a wrong RHS exponent in
   the first draft.
+
+### 8. issue-2290's unsupported domain — investigated, no change
+
+- **Plan.** Native refuses any MIP with an infinite variable bound, including
+  on continuous columns, unless root propagation (`infer_bounds`, 4 sweeps)
+  can bound them. issue-2290 has two binaries; all its infinite bounds are
+  on continuous columns, four of them free. Hypothesis: longer propagation
+  chains need more sweeps.
+- **Result.** No admission with 8, 16, 64 or 256 sweeps. Some columns
+  cannot be bounded by row reasoning at all. c23, for example, has zero
+  cost and appears only in a ≥ row with a positive coefficient, so it is
+  unbounded even in the LP relaxation. LP bound tightening cannot certify
+  bounds through the free columns either: the safe Lagrangian bound needs
+  their reduced costs exactly zero, which numerical duals do not give.
+  Supporting this domain needs exact dual certificates (an exact basis
+  solve) or optimum-preserving domination bounds. That is a feature, not
+  an iteration; no code changed.
