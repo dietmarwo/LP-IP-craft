@@ -49,30 +49,31 @@ impl NativeSolver {
         let order = &order;
         let next = AtomicUsize::new(0);
         let claim = (models.len() / (workers * 8)).clamp(1, 4);
+        let work = || {
+            let mut solver = NativeSolver::new(settings.clone());
+            let mut out = Vec::with_capacity(models.len() / workers);
+            loop {
+                let first = next.fetch_add(claim, Ordering::Relaxed);
+                if first >= models.len() {
+                    break;
+                }
+                for &i in &order[first..models.len().min(first + claim)] {
+                    out.push((i, solver.solve(models[i], options, None, cancel)));
+                }
+            }
+            out
+        };
         let results = std::thread::scope(|scope| -> Result<Vec<_>> {
             let mut handles = Vec::new();
-            for _ in 0..workers {
-                let (settings, next) = (settings.clone(), &next);
-                let handle = std::thread::Builder::new()
-                    .name("lpip-batch".into())
-                    .spawn_scoped(scope, move || {
-                        let mut solver = NativeSolver::new(settings);
-                        let mut out = Vec::with_capacity(models.len() / workers);
-                        loop {
-                            let first = next.fetch_add(claim, Ordering::Relaxed);
-                            if first >= models.len() {
-                                break;
-                            }
-                            for &i in &order[first..models.len().min(first + claim)] {
-                                out.push((i, solver.solve(models[i], options, None, cancel)));
-                            }
-                        }
-                        out
-                    })
-                    .map_err(|e| Error::Backend(format!("batch worker creation: {e}")))?;
-                handles.push(handle);
+            for _ in 1..workers {
+                handles.push(
+                    std::thread::Builder::new()
+                        .name("lpip-batch".into())
+                        .spawn_scoped(scope, &work)
+                        .map_err(|e| Error::Backend(format!("batch worker creation: {e}")))?,
+                );
             }
-            let mut out = Vec::with_capacity(models.len());
+            let mut out = work();
             for h in handles {
                 out.extend(
                     h.join()
