@@ -120,8 +120,8 @@ class NativeOptions:
     mixed_propagation: bool = False
     root_cuts: bool = False
     root_separation: bool = False
-    mip_presolve: bool = False
-    coefficient_tightening: bool = False
+    mip_presolve: bool = True
+    coefficient_tightening: bool = True
     dual_presolve: bool = False
     mip_presolve_rounds: int = 8
     gmi_cuts: bool = False

@@ -86,7 +86,12 @@ fn main() {
         .unwrap_or(1000000);
     let began = Instant::now();
     let result = if args[1] == "native" {
-        let enhanced = policy != "default" && !policy.starts_with("branch-");
+        // `default` and the branching experiments use the library defaults;
+        // `legacy` restores the pre-0.28 defaults (no MIP presolve).
+        let library = NativeOptions::default();
+        let enhanced =
+            !matches!(policy, "default" | "legacy") && !policy.starts_with("branch-");
+        let legacy = policy == "legacy";
         let settings = NativeOptions {
             time_limit_seconds: Some(seconds),
             node_limit: Some(node_cap),
@@ -94,10 +99,11 @@ fn main() {
             decompose: false,
             mip_diagnostics: true,
             mip_trace_limit: 8,
-            mip_presolve: enhanced,
-            coefficient_tightening: enhanced,
+            mip_presolve: enhanced || (!legacy && library.mip_presolve),
+            coefficient_tightening: enhanced || (!legacy && library.coefficient_tightening),
             // `presolve-nodual` keeps the feasible set (no dual fixing).
-            dual_presolve: enhanced && policy != "presolve-nodual",
+            dual_presolve: (enhanced && policy != "presolve-nodual")
+                || (!enhanced && !legacy && library.dual_presolve),
             gmi_cuts: matches!(policy, "gmi" | "combined" | "heuristics"),
             mir_cuts: matches!(policy, "mir" | "combined" | "heuristics"),
             mip_cut_rounds: 16,
