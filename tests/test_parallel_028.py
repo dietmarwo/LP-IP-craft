@@ -46,6 +46,18 @@ def test_mixed_batch_uses_one_explicit_budget(workers, inner):
     out = lp.solve_batch([m] * 17, workers=workers, options=lp.Options(threads=inner))
     assert len(out) == 17 and all(r.status == "optimal" for r in out)
     assert all(r.evaluation.objective == pytest.approx(e, abs=1e-6) for r in out)
+    # Each job runs with the requested numerical width (0.28 as delivered ran 1).
+    assert all(
+        r.backend.effective_options["numeric_threads"] == str(inner) for r in out
+    )
+
+
+def test_batch_validates_the_numerical_width_like_a_direct_solve():
+    m, _ = planted(32)
+    with pytest.raises(ValueError, match="threads must be at least 1"):
+        lp.solve(m, backend="native", options=lp.Options(threads=0))
+    with pytest.raises(ValueError, match="threads must be at least 1"):
+        lp.solve_batch([m], workers=2, options=lp.Options(threads=0))
 
 
 @pytest.mark.parametrize("workers,inner", [(2, 8), (4, 4), (8, 2), (16, 2)])

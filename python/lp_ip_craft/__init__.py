@@ -348,6 +348,8 @@ def solve_batch(models: Iterable[Model], *, workers: int = 1, options: Optional[
     """Solve independent native jobs in order with 1..16 Rust workers.
 
     Budgets apply per job. Nested component, residual and tree workers are disabled inside the pool.
+    ``options.threads`` is each job's numerical width; above 1, ``workers * threads`` must not
+    exceed 8.
     Returns an exception value for a failed job; batch argument errors raise.
     Cancellation is shared, and queued jobs report cancellation too.
     """
@@ -359,7 +361,7 @@ def solve_batch(models: Iterable[Model], *, workers: int = 1, options: Optional[
     if options.threads > 1 and options.threads * workers > 8:
         raise ValueError("batch outer workers times numerical threads must not exceed 8")
     raw = _solve_batch_native(list(models), workers, options.feasibility_tolerance,
-                             options.integrality_tolerance,
+                             options.integrality_tolerance, options.threads,
                              cancellation if cancellation is not None else Cancellation(),
                              None if backend_options is None else asdict(backend_options))
     return [r if isinstance(r, Exception) else _result_from_raw(r) for r in raw]
