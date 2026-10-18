@@ -285,8 +285,8 @@ Iteration 0 (main) on this host:
 
 ### 13. Index GMI multipliers instead of copying them — accepted
 
-- **Plan.** After iteration 12, gap-2 combined still spent about a quarter
-  of its instructions in the allocator. The largest source was copying big
+- **Plan.** gap-2 combined still spent about a quarter of its
+  instructions in the allocator. The largest source was copying big
   integer multipliers: the back-substitution copied each one once per row
   entry it scales (290,659 copies on gap-2). Each addition also extracted
   the multiplier's limbs again into a fresh vector. Store each multiplier
@@ -448,3 +448,129 @@ Iteration 0 (main) on this host:
   applies to bell5's later GMI rounds. Its combined root falls from
   8,931,303 to 8,732,531, and bell5 is lost at the node limit. Rejected by
   rule; the evaluation was stopped after the public set.
+
+### 20. Default promotion analysis — no change
+
+- **Plan.** The 0.27 review left the defaults unchanged, asking for more
+  evidence than 30 models. Compare the default with presolve-only and with
+  the cut policies on all five sets, including the 24 unseen test models.
+  The harness gains a `presolve-nodual` policy: MIP presolve and
+  coefficient tightening without dual fixing. Unlike dual fixing, it keeps
+  the whole feasible set. The figure of merit is the shifted mean ratio,
+  (mean + 0.01 s) / (default mean + 0.01 s), on the final code.
+- **Result.**
+
+  | Set | presolve | presolve-nodual | gmi | combined |
+  |---|---:|---:|---:|---:|
+  | public | ×0.61 | ×0.61 | ×0.29, +bell5, +p0548 | ×0.23, +bell5, +p0548 |
+  | synthetic | ×1.05 | ×1.04 | ×0.84 | ×0.74 |
+  | held-out | ×1.02 | ×1.04 | ×1.06 | ×1.13 |
+  | families | ×1.01 | ×1.00 | ×1.05 | ×1.09 |
+  | test (unseen) | ×1.01 | ×0.99 | ×0.92 | ×0.78 |
+
+  No policy loses a case the default solves. Presolve alone halves egout,
+  gt2 and lseu times and is otherwise neutral. On synthetic and held-out
+  models it changes the search on only a few records; the 1–5% there is
+  presolve overhead (0.1–1.5 ms per model) plus timing noise. The cut
+  policies win on public, synthetic and test, but cost 1–4 ms of root work
+  per small model, about 10% on held-out and families. Single cases slow
+  down too: rgn under GMI (0.45 → 0.72 s), and issue-2173 and 2171 under
+  combined.
+- **Decision.** No default changes. The evidence favours making
+  `presolve-nodual` (`mip_presolve` and `coefficient_tightening`) the
+  default: it never loses a case and is neutral or better everywhere except
+  sub-millisecond overheads. But flipping it changes every default result
+  and the guarantee kept by every iteration here, that default records stay
+  identical to main. That makes it a decision for its own pull request,
+  with its own SpOC4 and oracle references. The cut policies remain opt-in
+  recommendations: combined for hard models, nothing for tiny ones.
+
+## Outcome
+
+Iteration 0 (main) against the final code, same host and protocol; proved
+cases and shifted geometric mean in seconds. The test set was evaluated
+only now, with both builds.
+
+| Set | default | gmi | mir | combined | heuristics |
+|---|---|---|---|---|---|
+| public | 7/9, 0.522 → 7/9, 0.514 | 9/9, 0.166 → 9/9, 0.144 | 7/9, 0.241 → **8/9, 0.163** | 9/9, 0.178 → **9/9, 0.108** | 9/9, 0.199 → **9/9, 0.097** |
+| synthetic | 0.0449 → 0.0427 | 0.0399 → 0.0341 | 0.0320 → **0.0233** | 0.0469 → **0.0288** | 0.0527 → **0.0311** |
+| held-out | 9/11, 0.0334 → 9/11, 0.0310 | 0.0361 → 0.0336 | 0.0353 → 0.0337 | 0.0380 → 0.0362 | 0.0432 → **0.0352** |
+| families | 0.0004 → 0.0004 | 0.0011 → 0.0009 | 0.0011 → 0.0011 | 0.0025 → **0.0013** | 0.0025 → **0.0014** |
+| test (unseen) | 0.0344 → 0.0340 | 0.0312 → 0.0302 | 0.0278 → **0.0198** | 0.0356 → **0.0242** | 0.0458 → **0.0276** |
+
+All synthetic, family and test models are proved by every policy in both
+builds; no record has an issue (wrong optimality, bound on the wrong side,
+rejected candidate). Default records are identical to iteration 0 on all
+five sets (status, objective, nodes, pivots), apart from runs stopped by
+the time limit. Presolve-only on the final code: public 0.307 s, synthetic
+0.0454 s, held-out 0.0319 s, families 0.0004 s, test 0.0345 s.
+
+| # | Iteration | Outcome |
+|---:|---|---|
+| 1 | In-place exact accumulation for GMI | accepted, search-identical |
+| 2 | Stop separating a family that stops contributing | accepted |
+| 3 | No heap traffic for inline-size sums | accepted, search-identical |
+| 4 | Prune tight cuts with a zero root dual | rejected |
+| 5 | RENS in the root heuristics | accepted |
+| 6 | Allocation-free gcd for the rational witness (default path) | accepted, search-identical |
+| 7 | Divide cuts by their coefficient gcd | rejected |
+| 8 | issue-2290's unsupported domain | investigated, no change |
+| 9 | Stop the root loop at the first stagnant round | rejected |
+| 10 | Probing on binaries | accepted |
+| 11 | Mixed-row propagation in probing | rejected |
+| 12 | Cap cut density | rejected |
+| 13 | Index GMI multipliers | accepted, search-identical |
+| 14 | Warm-started feasibility pump | accepted |
+| 15 | MIR divisors from VUB slopes | accepted |
+| 16 | Sign-extension-aware in-place sums | rejected (too little gain) |
+| 17 | Probing without copying the bounds | accepted, search-identical |
+| 18 | Cap cut support while both families are active | accepted |
+| 19 | VUB substitution for general-integer columns | rejected |
+| 20 | Default promotion analysis | no change |
+
+Against the open issues at the start:
+
+- **Combined slower than the better single family.** Resolved on public
+  (combined is now the fastest policy) and on held-out and families
+  (combined ≈ the single families). On synthetic and test, combined is
+  still behind MIR alone (0.0288 against 0.0233 s; 0.0242 against
+  0.0198 s). The remaining gap is GMI's exact derivation cost on
+  facility-location and covering models, where its cuts help little.
+- **rgn slower with cuts.** Narrowed: combined rgn 0.70 → 0.50 s and MIR
+  0.69 → 0.54 s, against 0.45 s for default. GMI-only is still slowest
+  (0.85 → 0.72 s).
+- **Milliseconds of root work on small models.** Reduced but not removed:
+  combined families 2.5 → 1.3 ms, against 0.4 ms for default.
+- **bell5's root target (8.94M).** Not met; 8.931M. Iterations 11 and 19
+  raised other bell5 roots but enlarged the tree.
+- **Root incumbents on p0548 and gt2.** Resolved by RENS (iteration 5).
+- **issue-2290.** Needs exact dual certificates or domination bounds
+  (iteration 8).
+- **sp150x300d.** Still unsolved. With 120 s and no node cap, combined
+  reaches a bound of 57.0 against the optimum 69 after 273,628 nodes. Its
+  fixed-charge network needs multi-row (path) aggregation for flow cover
+  cuts. Single-row MIR with VUB divisors only lifts its 3-second MIR bound
+  from 37.8 to 38.6, and a quick probe with complemented binaries added
+  nothing.
+- **Defaults.** Unchanged; iteration 20 gives the evidence for promoting
+  presolve without dual fixing in a separate change.
+
+## Final verification
+
+On the final code:
+
+- **Frozen oracle.** All 6,330 cases under the default and the combined
+  settings, 0 failures in the frozen-adjudication audit. Every default
+  record matches main's in status, objective, nodes and pivots.
+- **400-model bound audit.** 0 unsafe finite bounds under either policy.
+- **SpOC4.** Both full repairs (8 rounds of rejected seeds, 4 workers)
+  give solution vectors byte-identical to the 0.26 package's, with the same
+  objectives (32,847.565 and 70,945.093) and bounds.
+- **Evaluation records.** No record on any of the five sets has an issue
+  (rejected candidate, wrong optimality, bound on the wrong side of the
+  frozen optimum).
+- **CI equivalents.** `cargo fmt --check`, clippy with `-D warnings` (default
+  and `--all-features`), 182 Rust tests (also `--all-targets
+  --all-features`), 258 pytest tests, the CI oracle example scripts, the
+  benchmark smoke runs and the dependency audit pass.

@@ -34,6 +34,10 @@ All other variables may be continuous. The reasoning requires a binary x, not an
 
 Objective-directed empty/singleton fixing has a different contract: move the variable to a finite, objective-preferred bound only when this movement cannot violate any active row side. This preserves some optimum, not all feasible points. Globally valid cuts do not invalidate that argument, because they also hold at the retained optimal integer point. An external lazy-constraint callback with unseen rows would invalidate the argument; native exposes none. A better original-feasible start outside an optimum-preserving reduced box invokes the existing original-model fallback.
 
+## Probing (iterations)
+
+For a binary x and the box B after presolve's propagation, every feasible point lies in B ∩ {x = 0} or B ∩ {x = 1}. The exact integer propagation is applied to each. It only removes values that no feasible point of that half can take (exact i128 row activities over integral data). If one half becomes infeasible, every feasible point has the other value, so x is fixed to it. Otherwise each feasible point lies in one of the two propagated boxes, and every column's bounds may shrink to the hull of its two intervals. Both reductions keep every feasible point, so the reduction preserves the feasible set, unlike dual fixing. Trials run on the bounds in place and are undone exactly over the columns they changed. An exhaustive unit test checks the invariant on 300 random binary and integer models.
+
 ## Exact tableau reconstruction
 
 For a numerically chosen basic structural integer column k, obtain advisory multipliers rho from BTRAN and undo power-of-two row scaling. Treat each finite resulting binary64 multiplier as an exact dyadic. Reaggregate the original equations `A x - r = 0` in Rat arithmetic. This is an exact identity for all original feasible points, regardless of BTRAN error.
@@ -51,6 +55,14 @@ This follows from the integer split on x_k and the integer part of the integral 
 A recognized exact two-term row `a x + c y <= 0`, a>0>c, implies `x <= (-c/a)y`. y must be binary and x continuous; d=-c/a remains rational. Substituting `x=d y-z` introduces a certified nonnegative continuous residual z. Other variables are shifted/complemented on valid bounds. This gives an original inequality over nonnegative integer/continuous terms.
 
 After dividing by positive d and writing f=frac(b/d), MIR maps an integer coefficient a to `floor(a)+max(0,(frac(a)-f)/(1-f))`, a continuous coefficient to `min(0,a)/(1-f)`, and RHS to floor(b/d). This standard mixed-integer rounding inequality holds for every feasible integer assignment and continuous slice. All arithmetic and substitutions remain exact before conversion. Numerical hints only choose anchors/divisors and rank the resulting valid rows.
+
+Any positive divisor gives a valid MIR inequality; the divisor only affects strength. Since the iterations, divisors also include the coefficient a·u/c that a substituted VUB gives its binary, for binaries fractional at the LP point. They are chosen numerically and enter the derivation as exact binary64 values like the row's own coefficients.
+
+## Selection and root heuristics (iterations)
+
+Two later rules only choose among valid rows. A family with no selected cut in a round is not separated again. While both families are active after the first round, a cut with more than max(50, n/4) terms is not selected. Discarding a valid cut never invalidates anything.
+
+The warm-started feasibility pump and RENS only propose points. A pump projection LP solution is rounded and checked in original coordinates like before; its objective is never a bound. RENS solves a restriction of the presolved model with its root cuts: the root box with some integer columns fixed and the others narrowed. Its incumbent is a candidate. Like every other root heuristic proposal, it is checked against the presolved model before it becomes the search's start, and the final solution is checked in original coordinates as before. A restriction's status and bound say nothing about the full model, so both are discarded. The child solver's nodes and pivots are charged to the parent's limits.
 
 ## Basis reuse, bounds and limits
 
