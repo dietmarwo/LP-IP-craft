@@ -32,6 +32,21 @@ impl NativeSolver {
                 .map(|model| solver.solve(model, options, None, cancel))
                 .collect());
         }
+        let mut order: Vec<_> = (0..models.len()).collect();
+        if models.len() >= workers * 4 {
+            let work = |i: usize| {
+                models[i]
+                    .nnz()
+                    .saturating_add(models[i].n())
+                    .saturating_add(models[i].m())
+            };
+            let lo = order.iter().map(|&i| work(i)).min().unwrap_or(0);
+            let hi = order.iter().map(|&i| work(i)).max().unwrap_or(0);
+            if hi > lo.saturating_mul(2) {
+                order.sort_by_key(|&i| std::cmp::Reverse(work(i)));
+            }
+        }
+        let order = &order;
         let next = AtomicUsize::new(0);
         let claim = (models.len() / (workers * 8)).clamp(1, 4);
         let results = std::thread::scope(|scope| -> Result<Vec<_>> {
@@ -48,7 +63,7 @@ impl NativeSolver {
                             if first >= models.len() {
                                 break;
                             }
-                            for i in first..models.len().min(first + claim) {
+                            for &i in &order[first..models.len().min(first + claim)] {
                                 out.push((i, solver.solve(models[i], options, None, cancel)));
                             }
                         }
