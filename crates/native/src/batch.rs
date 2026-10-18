@@ -20,9 +20,9 @@ impl NativeSolver {
                 "batch workers must be in 1..=16".into(),
             ));
         }
-        if options.threads != 1 {
-            return Err(Error::Unsupported(
-                "mixed batch numerical budgets are not enabled yet".into(),
+        if options.threads > 1 && workers.saturating_mul(options.threads) > 8 {
+            return Err(Error::InvalidInput(
+                "batch outer workers times numerical threads must not exceed8".into(),
             ));
         }
         let mut settings = self.settings.clone();

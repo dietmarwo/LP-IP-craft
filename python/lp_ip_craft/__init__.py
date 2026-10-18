@@ -351,12 +351,12 @@ def solve_batch(models: Iterable[Model], *, workers: int = 1, options: Optional[
     Cancellation is shared, and queued jobs report cancellation too.
     """
     options = options or Options()
-    if options.threads != 1:
-        raise NotImplementedError("batch numerical kernels require options.threads = 1")
     if isinstance(workers, bool) or not isinstance(workers, int):
         raise TypeError("workers must be an integer")
     if not 1 <= workers <= 16:
         raise ValueError("workers must be in 1..16")
+    if options.threads > 1 and options.threads * workers > 8:
+        raise ValueError("batch outer workers times numerical threads must not exceed8")
     raw = _solve_batch_native(list(models), workers, options.feasibility_tolerance,
                              options.integrality_tolerance,
                              cancellation if cancellation is not None else Cancellation(),

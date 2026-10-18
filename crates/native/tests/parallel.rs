@@ -84,3 +84,42 @@ fn precancel_and_zero_time_keep_existing_precedence() {
         );
     }
 }
+
+#[test]
+fn mixed_batch_budget_and_old_outer_width_are_explicit() {
+    let m = box_model();
+    let jobs = vec![&m; 17];
+    let s = NativeSolver::default();
+    for (outer, inner) in [(1, 8), (2, 4), (4, 2), (8, 1), (16, 1)] {
+        let out = s
+            .solve_batch(
+                &jobs,
+                &Options {
+                    threads: inner,
+                    ..Default::default()
+                },
+                outer,
+                &CancellationToken::default(),
+            )
+            .unwrap();
+        assert_eq!(out.len(), 17);
+        assert!(
+            out.into_iter()
+                .all(|v| v.unwrap().status == Status::Optimal)
+        );
+    }
+    for (outer, inner) in [(2, 8), (4, 4), (8, 2), (16, 2)] {
+        assert!(matches!(
+            s.solve_batch(
+                &jobs,
+                &Options {
+                    threads: inner,
+                    ..Default::default()
+                },
+                outer,
+                &CancellationToken::default()
+            ),
+            Err(Error::InvalidInput(_))
+        ));
+    }
+}
