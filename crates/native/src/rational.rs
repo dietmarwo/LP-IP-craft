@@ -70,6 +70,10 @@ impl Nat {
             .enumerate()
             .fold(0, |acc, (i, &v)| acc | (u128::from(v) << (32 * i)))
     }
+    /// Little-endian 32-bit limbs, without trailing zeros.
+    pub(crate) fn digits(&self) -> &[u32] {
+        &self.0
+    }
     /// The low 64 bits.
     pub(crate) fn low_u64(&self) -> u64 {
         u64::from(self.0.first().copied().unwrap_or(0))
