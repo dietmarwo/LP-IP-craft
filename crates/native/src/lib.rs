@@ -2345,9 +2345,12 @@ impl LpIpSolver for NativeSolver {
             }
         }
         let eligible = options.threads > 1
-            && model.nnz() >= 32_768
+            && model.nnz() >= 65_536
             && !cancel.is_cancelled()
-            && self.settings.time_limit_seconds != Some(0.)
+            && !self
+                .settings
+                .time_limit_seconds
+                .is_some_and(|t| began.elapsed().as_secs_f64() >= t)
             && self.settings.node_limit != Some(0)
             && self.settings.iteration_limit != Some(0);
         let _execution = if eligible {

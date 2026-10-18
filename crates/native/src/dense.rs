@@ -55,28 +55,14 @@ impl DenseTail {
                         rows.swap(c, pivot);
                     }
                     let diagonal = d[c * n + c];
-                    if execution.threads() > 1 && (n - c - 1).saturating_mul(end - c - 1) >= 8192 {
-                        let (head, tail) = d.split_at_mut((c + 1) * n);
+                    for r in c + 1..n {
+                        let l = d[r * n + c] / diagonal;
+                        d[r * n + c] = l;
+                        let (head, tail) = d.split_at_mut(r * n);
                         let source = &head[c * n + c + 1..c * n + end];
-                        execution.chunks_mut(tail, n * 16, usize::MAX, |_, rows| {
-                            for row in rows.chunks_mut(n) {
-                                let l = row[c] / diagonal;
-                                row[c] = l;
-                                for (v, &u) in row[c + 1..end].iter_mut().zip(source) {
-                                    *v -= l * u;
-                                }
-                            }
-                        });
-                    } else {
-                        for r in c + 1..n {
-                            let l = d[r * n + c] / diagonal;
-                            d[r * n + c] = l;
-                            let (head, tail) = d.split_at_mut(r * n);
-                            let source = &head[c * n + c + 1..c * n + end];
-                            let target = &mut tail[c + 1..end];
-                            for (v, &u) in target.iter_mut().zip(source) {
-                                *v -= l * u;
-                            }
+                        let target = &mut tail[c + 1..end];
+                        for (v, &u) in target.iter_mut().zip(source) {
+                            *v -= l * u;
                         }
                     }
                 }
@@ -193,10 +179,10 @@ fn subtract_dot(mut value: f64, a: &[f64], x: &[f64]) -> f64 {
 }
 
 fn schur_serial(d: &mut [f64], n: usize, start: usize, end: usize) {
-    for r0 in (end..n).step_by(TILE) {
-        for r in r0..(r0 + TILE).min(n) {
-            for j0 in (end..n).step_by(TILE) {
-                let jend = (j0 + TILE).min(n);
+    for j0 in (end..n).step_by(TILE) {
+        let jend = (j0 + TILE).min(n);
+        for r0 in (end..n).step_by(TILE) {
+            for r in r0..(r0 + TILE).min(n) {
                 for t in start..end {
                     let l = d[r * n + t];
                     let (head, tail) = d.split_at_mut(r * n);

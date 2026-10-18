@@ -293,7 +293,7 @@ impl Lp {
             dtol.push((dual / (cost_scale * r)).clamp(1e-12, 1e-7));
         }
         let mut lp = Self {
-            execution: if nnz >= 32_768 {
+            execution: if nnz >= 65_536 {
                 crate::parallel::Execution::new(controls.threads).map_err(Error::Backend)?
             } else {
                 crate::parallel::Execution::default()
