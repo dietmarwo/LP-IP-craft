@@ -177,3 +177,18 @@ Iteration 0 (main) on this host:
   its instructions (4.01 G → 2.05 G; 0.244 → 0.207 s), and 2171 drops from
   0.011 to 0.006 s. Held-out means drop 4–6% for every policy, including
   default.
+
+### 7. Divide cuts by their coefficient gcd before conversion — rejected
+
+- **Plan.** On assignment models, combined root time is mostly GMI derived
+  through earlier cut rows. Those rows carry full 53-bit binary64
+  coefficients, so later derivations work with long integers. Divide each
+  exact cut by the gcd of its integer-scaled coefficients: the same
+  inequality, often stored exactly as small integers, with only the RHS
+  rounded outward.
+- **Result.** Chaotic, as any change to the stored cuts is on these
+  instances. bell5 lost its proof under gmi, combined and heuristics, and
+  gt2 GMI-only went from 0.19 to 5.45 s. Against that, p0548 MIR-only
+  became solved (4.3 s) and gt2 combined went from 0.74 to 0.24 s.
+  Rejected by rule (lost cases). The tests caught a wrong RHS exponent in
+  the first draft.
