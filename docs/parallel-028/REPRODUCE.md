@@ -1,6 +1,6 @@
 # Reproduce the 0.28 eight-worker series
 
-Base: upstream `a1180e06a85685fa82ca977d521ef33f285f8f51`. Tags `lp-parallel-01`…`lp-parallel-30` preserve all 30 iterations; original 24–27 refs also preserve an explicitly recorded test-staging correction. Those corrections add the exact executed Python tests, changing no production or measured harness bytes. Full source history and an exact incremental patch ship with the archive. Nothing was pushed/published remotely.
+Base: upstream `a1180e06a85685fa82ca977d521ef33f285f8f51`. Tags `lp-parallel-01`…`lp-parallel-30` preserve all 30 iterations; original 24–27 refs also preserve an explicitly recorded test-staging correction. Those corrections add the exact executed Python tests, changing no production or measured harness bytes. Full source history and an exact incremental patch ship with the archive. The checkpoint history and tags were not pushed; they stay in the archive bundle, and GitHub keeps the commits under pull request #10. The review's corrections are listed in [REVIEW.md](REVIEW.md).
 
 ## Build and validate
 

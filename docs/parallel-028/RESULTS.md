@@ -1,6 +1,8 @@
 # LP-IP-craft 0.28.0: 30 eight-worker performance iterations
 
-Implemented a new 30-checkpoint series on the requested current upstream, `a1180e06a85685fa82ca977d521ef33f285f8f51`, including its existing 20 MIP iterations and current presolve/coefficient-tightening defaults. Each checkpoint has a plan, implemented change, complete regular release Rust test log, release benchmark build and original-model-checked paired timing. All source changes are local. The complete source, exact incremental patch, git history/tags and raw evidence ship together.
+> The review before the merge corrected four bugs: the Python batch width, stalls between concurrent callers, batch and residual panic handling, and the CI failures on macOS and Windows. See [REVIEW.md](REVIEW.md).
+
+Implemented a new 30-checkpoint series on the requested current upstream, `a1180e06a85685fa82ca977d521ef33f285f8f51`, including its existing 20 MIP iterations and current presolve/coefficient-tightening defaults. Each checkpoint has a plan, implemented change, complete regular release Rust test log, release benchmark build and original-model-checked paired timing. The series was developed offline. The complete source, exact incremental patch, git history/tags and raw evidence ship together in the delivery archive; on GitHub it is one squashed commit (see [REVIEW.md](REVIEW.md)).
 
 The retained changes add explicit 1–8 numerical workers, owned reusable Rayon pools, parallel independent pricing outputs, disjoint dense-LU Schur rows and parallel packing root phases. Existing batch/component/tree/residual execution gains private ordered collection, bounded claims and budgeted mixed batches. Three losing prototypes were removed. This is 30 completed development iterations; measured wall time is not monotone and the release does not promise a speedup on every problem.
 
@@ -90,6 +92,6 @@ Validation ran on Linux x86_64, Rust 1.99.1 and CPython 3.12.14; minimum Rust 1.
 
 ## Review and reproduction
 
-Start with [all 30 detailed plans/outcomes](PLAN.md), [API](../api.md), [numerical/execution contract](VALIDITY.md), [commands](REPRODUCE.md) and [complete measurements](TABLES.md). The archive includes the full source, `history/lp-parallel.bundle`, `PATCH-0.28.0.diff`, `SOURCE-REVISION` and a root `MANIFEST.sha256`. The exact patch was applied to a fresh upstream tree and checked to reproduce the delivered release tree. Every archive entry other than the manifest is SHA-256 covered, and the completed ZIP is read back/tested before delivery. Nothing was pushed to the upstream repository.
+Start with [all 30 detailed plans/outcomes](PLAN.md), [API](../api.md), [numerical/execution contract](VALIDITY.md), [commands](REPRODUCE.md) and [complete measurements](TABLES.md). The archive includes the full source, `history/lp-parallel.bundle`, `PATCH-0.28.0.diff`, `SOURCE-REVISION` and a root `MANIFEST.sha256`. The exact patch was applied to a fresh upstream tree and checked to reproduce the delivered release tree. Every archive entry other than the manifest is SHA-256 covered, and the completed ZIP is read back/tested before delivery. The checkpoint history was not pushed; it stays in the archive bundle and under pull request #10.
 
 ![Measured scaling](assets/scaling.png)
