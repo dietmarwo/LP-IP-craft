@@ -156,6 +156,10 @@ fn probe(model: &Model, budget: &Budget<'_>, stats: &mut Stats) -> Option<Bounds
         .filter(|&j| model.kinds()[j].is_integral() && base.lower[j] == 0. && base.upper[j] == 1.)
         .take(PROBES)
         .collect();
+    // Trials run in place on `base` and are undone from `kept`, a copy of
+    // `base` between probes, over the columns they changed only; a probe
+    // costs its propagation, not a copy of every bound.
+    let mut kept = base.clone();
     for j in binaries {
         if budget.stop().is_some() {
             break;
@@ -164,17 +168,25 @@ fn probe(model: &Model, budget: &Budget<'_>, stats: &mut Stats) -> Option<Bounds
             continue;
         }
         stats.probed += 1;
-        let mut outcome = [None, None];
+        let mut outcome: [Option<Vec<(usize, f64, f64)>>; 2] = [None, None];
         for (side, value) in [0., 1.].into_iter().enumerate() {
-            let mut trial = base.clone();
-            trial.lower[j] = value;
-            trial.upper[j] = value;
+            base.lower[j] = value;
+            base.upper[j] = value;
             let mut columns = vec![j];
-            let feasible = domain.apply(&mut trial, &mut columns, budget);
-            domain.reset(&base, &columns);
+            let feasible = domain.apply(&mut base, &mut columns, budget);
             if feasible {
-                outcome[side] = Some((trial, columns));
+                outcome[side] = Some(
+                    columns
+                        .iter()
+                        .map(|&k| (k, base.lower[k], base.upper[k]))
+                        .collect(),
+                );
             }
+            for &k in &columns {
+                base.lower[k] = kept.lower[k];
+                base.upper[k] = kept.upper[k];
+            }
+            domain.reset(&base, &columns);
         }
         let mut tightened = Vec::new();
         match outcome {
@@ -186,10 +198,19 @@ fn probe(model: &Model, budget: &Budget<'_>, stats: &mut Stats) -> Option<Bounds
                 tightened.push(j);
                 stats.probe_fixed += 1;
             }
-            [Some((zero, c0)), Some((one, c1))] => {
-                for &k in c0.iter().chain(&c1) {
-                    let lo = zero.lower[k].min(one.lower[k]);
-                    let hi = zero.upper[k].max(one.upper[k]);
+            [Some(zero), Some(one)] => {
+                // A column one trial did not change keeps its bounds there.
+                let at = |trial: &[(usize, f64, f64)], k: usize| {
+                    trial
+                        .iter()
+                        .rev()
+                        .find(|t| t.0 == k)
+                        .map_or((kept.lower[k], kept.upper[k]), |t| (t.1, t.2))
+                };
+                for &(k, _, _) in zero.iter().chain(&one) {
+                    let (l0, u0) = at(&zero, k);
+                    let (l1, u1) = at(&one, k);
+                    let (lo, hi) = (l0.min(l1), u0.max(u1));
                     if lo > base.lower[k] || hi < base.upper[k] {
                         base.lower[k] = base.lower[k].max(lo);
                         base.upper[k] = base.upper[k].min(hi);
@@ -201,6 +222,10 @@ fn probe(model: &Model, budget: &Budget<'_>, stats: &mut Stats) -> Option<Bounds
         }
         if !tightened.is_empty() && !domain.apply(&mut base, &mut tightened, budget) {
             return None;
+        }
+        for &k in &tightened {
+            kept.lower[k] = base.lower[k];
+            kept.upper[k] = base.upper[k];
         }
     }
     Some(base)

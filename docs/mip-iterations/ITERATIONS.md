@@ -367,3 +367,36 @@ Iteration 0 (main) on this host:
   moved by 6%). sp150x300d's MIR bound improves only slightly, 37.8 → 38.6
   (GMI reaches 53.8; the optimum is 69). Its flow structure needs
   multi-row aggregation, which single-row MIR does not do.
+
+### 16. Sign-extension-aware in-place sums — rejected (too little gain)
+
+- **Plan.** In `Wide`, a carry or borrow that changes a column's sign walks
+  all 24 limbs. Track each column's used limbs instead, treat the limbs
+  above as the sign extension, and read values of at most 128 bits
+  without touching the full width. Search-identical by construction.
+- **Result.** Correct (unit tests pass) but small: instruction counts fell
+  0.4–4.6% (gap-2 combined −1.2%, p0548 −2.8%, lseu −0.4%, setcover-2
+  −4.6%). A line-level profile shows why. Sign flips are rare, and each
+  addition costs about 95 instructions of fixed overhead. Most of GMI's
+  remaining cost is spread over the exact formula itself: common-exponent
+  conversion, Euclidean division and allocation of long integers.
+  Reverted, as not worth the added complexity in an exactness-critical
+  component.
+
+### 17. Probing without copying the bounds — accepted
+
+- **Plan.** Iteration 10's probing copied every column's bounds for each
+  trial: two copies of n values per probe, and up to 2,000 probes. That is
+  negligible on the evaluation models, but quadratic-looking in practice
+  on large ones. It matters for any later promotion of MIP presolve to the
+  default. Run the trials in place and undo them from a copy kept between
+  probes, over the columns the trial changed only. The same propagation
+  calls on the same values, so the search must be identical.
+- **Result.** All 270 evaluation records are search-identical to
+  iteration 15. Means moved within noise; one profiling run overlapped the
+  evaluation. On seeded set-cover models with 2,000 probes each:
+
+  | Columns | MIP presolve before | After | Presolve policy total before → after |
+  |---:|---:|---:|---:|
+  | 40,000 | 0.147 s | 0.047 s | 0.31 → 0.19 s |
+  | 200,000 | 1.133 s | 0.186 s | 2.09 → 1.05 s (default: 1.10 s) |
