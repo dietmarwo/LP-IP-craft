@@ -1,0 +1,824 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "repeats": 3,
+  "cases": [
+    [
+      "dense",
+      384,
+      "single",
+      8,
+      1,
+      1
+    ],
+    [
+      "packing",
+      128,
+      "batch",
+      1,
+      8,
+      64
+    ]
+  ],
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "cpu_max": "800000 100000",
+  "builds": {
+    "previous": {
+      "path": "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+      "sha256": "3e5e0c23f2494512195f1755d22fe9d33c4c63920f4760e482d7aa0b1c589e98"
+    },
+    "candidate": {
+      "path": "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+      "sha256": "3e5e0c23f2494512195f1755d22fe9d33c4c63920f4760e482d7aa0b1c589e98"
+    }
+  },
+  "records": [
+    {
+      "build": "previous",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "warmup": true,
+      "repetition": 0,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+        "dense",
+        "384",
+        "single",
+        "8",
+        "1",
+        "1"
+      ],
+      "error": null,
+      "process_seconds": 0.18488867300038692,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"dense\",\"size\":384,\"mode\":\"single\",\"inner\":8,\"workers\":1,\"jobs\":1,\"completed\":1,\"seconds\":0.177498025,\"objective\":265627.20000000036,\"residual\":0.00000000001136868377216156,\"pivots\":384,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.290695,
+      "payload": {
+        "version": "0.27.0",
+        "family": "dense",
+        "size": 384,
+        "mode": "single",
+        "inner": 8,
+        "workers": 1,
+        "jobs": 1,
+        "completed": 1,
+        "seconds": 0.177498025,
+        "objective": 265627.20000000036,
+        "residual": 1.136868377216156e-11,
+        "pivots": 384,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "warmup": true,
+      "repetition": 0,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+        "dense",
+        "384",
+        "single",
+        "8",
+        "1",
+        "1"
+      ],
+      "error": null,
+      "process_seconds": 0.16747120500076562,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"dense\",\"size\":384,\"mode\":\"single\",\"inner\":8,\"workers\":1,\"jobs\":1,\"completed\":1,\"seconds\":0.158089957,\"objective\":265627.20000000036,\"residual\":0.00000000001136868377216156,\"pivots\":384,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.2620740000000001,
+      "payload": {
+        "version": "0.27.0",
+        "family": "dense",
+        "size": 384,
+        "mode": "single",
+        "inner": 8,
+        "workers": 1,
+        "jobs": 1,
+        "completed": 1,
+        "seconds": 0.158089957,
+        "objective": 265627.20000000036,
+        "residual": 1.136868377216156e-11,
+        "pivots": 384,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "warmup": false,
+      "repetition": 1,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+        "dense",
+        "384",
+        "single",
+        "8",
+        "1",
+        "1"
+      ],
+      "error": null,
+      "process_seconds": 0.17941924500337336,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"dense\",\"size\":384,\"mode\":\"single\",\"inner\":8,\"workers\":1,\"jobs\":1,\"completed\":1,\"seconds\":0.172984984,\"objective\":265627.20000000036,\"residual\":0.00000000001136868377216156,\"pivots\":384,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.2660149999999999,
+      "payload": {
+        "version": "0.27.0",
+        "family": "dense",
+        "size": 384,
+        "mode": "single",
+        "inner": 8,
+        "workers": 1,
+        "jobs": 1,
+        "completed": 1,
+        "seconds": 0.172984984,
+        "objective": 265627.20000000036,
+        "residual": 1.136868377216156e-11,
+        "pivots": 384,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "previous",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "warmup": false,
+      "repetition": 1,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+        "dense",
+        "384",
+        "single",
+        "8",
+        "1",
+        "1"
+      ],
+      "error": null,
+      "process_seconds": 0.15464208400226198,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"dense\",\"size\":384,\"mode\":\"single\",\"inner\":8,\"workers\":1,\"jobs\":1,\"completed\":1,\"seconds\":0.149100174,\"objective\":265627.20000000036,\"residual\":0.00000000001136868377216156,\"pivots\":384,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.24548499999999995,
+      "payload": {
+        "version": "0.27.0",
+        "family": "dense",
+        "size": 384,
+        "mode": "single",
+        "inner": 8,
+        "workers": 1,
+        "jobs": 1,
+        "completed": 1,
+        "seconds": 0.149100174,
+        "objective": 265627.20000000036,
+        "residual": 1.136868377216156e-11,
+        "pivots": 384,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "previous",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "warmup": false,
+      "repetition": 2,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+        "dense",
+        "384",
+        "single",
+        "8",
+        "1",
+        "1"
+      ],
+      "error": null,
+      "process_seconds": 0.15244424699631054,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"dense\",\"size\":384,\"mode\":\"single\",\"inner\":8,\"workers\":1,\"jobs\":1,\"completed\":1,\"seconds\":0.145736965,\"objective\":265627.20000000036,\"residual\":0.00000000001136868377216156,\"pivots\":384,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.24774600000000002,
+      "payload": {
+        "version": "0.27.0",
+        "family": "dense",
+        "size": 384,
+        "mode": "single",
+        "inner": 8,
+        "workers": 1,
+        "jobs": 1,
+        "completed": 1,
+        "seconds": 0.145736965,
+        "objective": 265627.20000000036,
+        "residual": 1.136868377216156e-11,
+        "pivots": 384,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "warmup": false,
+      "repetition": 2,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+        "dense",
+        "384",
+        "single",
+        "8",
+        "1",
+        "1"
+      ],
+      "error": null,
+      "process_seconds": 0.14770282499375753,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"dense\",\"size\":384,\"mode\":\"single\",\"inner\":8,\"workers\":1,\"jobs\":1,\"completed\":1,\"seconds\":0.142341948,\"objective\":265627.20000000036,\"residual\":0.00000000001136868377216156,\"pivots\":384,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.2402209999999998,
+      "payload": {
+        "version": "0.27.0",
+        "family": "dense",
+        "size": 384,
+        "mode": "single",
+        "inner": 8,
+        "workers": 1,
+        "jobs": 1,
+        "completed": 1,
+        "seconds": 0.142341948,
+        "objective": 265627.20000000036,
+        "residual": 1.136868377216156e-11,
+        "pivots": 384,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "warmup": false,
+      "repetition": 3,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+        "dense",
+        "384",
+        "single",
+        "8",
+        "1",
+        "1"
+      ],
+      "error": null,
+      "process_seconds": 0.15593464099947596,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"dense\",\"size\":384,\"mode\":\"single\",\"inner\":8,\"workers\":1,\"jobs\":1,\"completed\":1,\"seconds\":0.149237827,\"objective\":265627.20000000036,\"residual\":0.00000000001136868377216156,\"pivots\":384,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.2462310000000003,
+      "payload": {
+        "version": "0.27.0",
+        "family": "dense",
+        "size": 384,
+        "mode": "single",
+        "inner": 8,
+        "workers": 1,
+        "jobs": 1,
+        "completed": 1,
+        "seconds": 0.149237827,
+        "objective": 265627.20000000036,
+        "residual": 1.136868377216156e-11,
+        "pivots": 384,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "previous",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "warmup": false,
+      "repetition": 3,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+        "dense",
+        "384",
+        "single",
+        "8",
+        "1",
+        "1"
+      ],
+      "error": null,
+      "process_seconds": 0.14720515200315276,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"dense\",\"size\":384,\"mode\":\"single\",\"inner\":8,\"workers\":1,\"jobs\":1,\"completed\":1,\"seconds\":0.141454528,\"objective\":265627.20000000036,\"residual\":0.00000000001136868377216156,\"pivots\":384,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.23781100000000022,
+      "payload": {
+        "version": "0.27.0",
+        "family": "dense",
+        "size": 384,
+        "mode": "single",
+        "inner": 8,
+        "workers": 1,
+        "jobs": 1,
+        "completed": 1,
+        "seconds": 0.141454528,
+        "objective": 265627.20000000036,
+        "residual": 1.136868377216156e-11,
+        "pivots": 384,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "previous",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "warmup": true,
+      "repetition": 0,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+        "packing",
+        "128",
+        "batch",
+        "1",
+        "8",
+        "64"
+      ],
+      "error": null,
+      "process_seconds": 0.012208228996314574,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"packing\",\"size\":128,\"mode\":\"batch\",\"inner\":1,\"workers\":8,\"jobs\":64,\"completed\":64,\"seconds\":0.008020524,\"objective\":97536,\"residual\":0.00000000000005684341886080802,\"pivots\":8256,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.0591579999999996,
+      "payload": {
+        "version": "0.27.0",
+        "family": "packing",
+        "size": 128,
+        "mode": "batch",
+        "inner": 1,
+        "workers": 8,
+        "jobs": 64,
+        "completed": 64,
+        "seconds": 0.008020524,
+        "objective": 97536,
+        "residual": 5.684341886080802e-14,
+        "pivots": 8256,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "warmup": true,
+      "repetition": 0,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+        "packing",
+        "128",
+        "batch",
+        "1",
+        "8",
+        "64"
+      ],
+      "error": null,
+      "process_seconds": 0.012897405002149753,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"packing\",\"size\":128,\"mode\":\"batch\",\"inner\":1,\"workers\":8,\"jobs\":64,\"completed\":64,\"seconds\":0.008720448,\"objective\":97536,\"residual\":0.00000000000005684341886080802,\"pivots\":8256,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.06058199999999969,
+      "payload": {
+        "version": "0.27.0",
+        "family": "packing",
+        "size": 128,
+        "mode": "batch",
+        "inner": 1,
+        "workers": 8,
+        "jobs": 64,
+        "completed": 64,
+        "seconds": 0.008720448,
+        "objective": 97536,
+        "residual": 5.684341886080802e-14,
+        "pivots": 8256,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "warmup": false,
+      "repetition": 1,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+        "packing",
+        "128",
+        "batch",
+        "1",
+        "8",
+        "64"
+      ],
+      "error": null,
+      "process_seconds": 0.013167971002985723,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"packing\",\"size\":128,\"mode\":\"batch\",\"inner\":1,\"workers\":8,\"jobs\":64,\"completed\":64,\"seconds\":0.008689281,\"objective\":97536,\"residual\":0.00000000000005684341886080802,\"pivots\":8256,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.05483500000000063,
+      "payload": {
+        "version": "0.27.0",
+        "family": "packing",
+        "size": 128,
+        "mode": "batch",
+        "inner": 1,
+        "workers": 8,
+        "jobs": 64,
+        "completed": 64,
+        "seconds": 0.008689281,
+        "objective": 97536,
+        "residual": 5.684341886080802e-14,
+        "pivots": 8256,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "previous",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "warmup": false,
+      "repetition": 1,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+        "packing",
+        "128",
+        "batch",
+        "1",
+        "8",
+        "64"
+      ],
+      "error": null,
+      "process_seconds": 0.013236854996648617,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"packing\",\"size\":128,\"mode\":\"batch\",\"inner\":1,\"workers\":8,\"jobs\":64,\"completed\":64,\"seconds\":0.007896128,\"objective\":97536,\"residual\":0.00000000000005684341886080802,\"pivots\":8256,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.05914399999999986,
+      "payload": {
+        "version": "0.27.0",
+        "family": "packing",
+        "size": 128,
+        "mode": "batch",
+        "inner": 1,
+        "workers": 8,
+        "jobs": 64,
+        "completed": 64,
+        "seconds": 0.007896128,
+        "objective": 97536,
+        "residual": 5.684341886080802e-14,
+        "pivots": 8256,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "previous",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "warmup": false,
+      "repetition": 2,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+        "packing",
+        "128",
+        "batch",
+        "1",
+        "8",
+        "64"
+      ],
+      "error": null,
+      "process_seconds": 0.012485525003285147,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"packing\",\"size\":128,\"mode\":\"batch\",\"inner\":1,\"workers\":8,\"jobs\":64,\"completed\":64,\"seconds\":0.008367505,\"objective\":97536,\"residual\":0.00000000000005684341886080802,\"pivots\":8256,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.04868399999999973,
+      "payload": {
+        "version": "0.27.0",
+        "family": "packing",
+        "size": 128,
+        "mode": "batch",
+        "inner": 1,
+        "workers": 8,
+        "jobs": 64,
+        "completed": 64,
+        "seconds": 0.008367505,
+        "objective": 97536,
+        "residual": 5.684341886080802e-14,
+        "pivots": 8256,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "warmup": false,
+      "repetition": 2,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+        "packing",
+        "128",
+        "batch",
+        "1",
+        "8",
+        "64"
+      ],
+      "error": null,
+      "process_seconds": 0.011885074003657792,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"packing\",\"size\":128,\"mode\":\"batch\",\"inner\":1,\"workers\":8,\"jobs\":64,\"completed\":64,\"seconds\":0.007345691,\"objective\":97536,\"residual\":0.00000000000005684341886080802,\"pivots\":8256,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.05151000000000039,
+      "payload": {
+        "version": "0.27.0",
+        "family": "packing",
+        "size": 128,
+        "mode": "batch",
+        "inner": 1,
+        "workers": 8,
+        "jobs": 64,
+        "completed": 64,
+        "seconds": 0.007345691,
+        "objective": 97536,
+        "residual": 5.684341886080802e-14,
+        "pivots": 8256,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "warmup": false,
+      "repetition": 3,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/26/performance_parallel",
+        "packing",
+        "128",
+        "batch",
+        "1",
+        "8",
+        "64"
+      ],
+      "error": null,
+      "process_seconds": 0.016094990001874976,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"packing\",\"size\":128,\"mode\":\"batch\",\"inner\":1,\"workers\":8,\"jobs\":64,\"completed\":64,\"seconds\":0.010862696,\"objective\":97536,\"residual\":0.00000000000005684341886080802,\"pivots\":8256,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.06087599999999993,
+      "payload": {
+        "version": "0.27.0",
+        "family": "packing",
+        "size": 128,
+        "mode": "batch",
+        "inner": 1,
+        "workers": 8,
+        "jobs": 64,
+        "completed": 64,
+        "seconds": 0.010862696,
+        "objective": 97536,
+        "residual": 5.684341886080802e-14,
+        "pivots": 8256,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    },
+    {
+      "build": "previous",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "warmup": false,
+      "repetition": 3,
+      "command": [
+        "/workspace/scratch/f38b380ad117/lp-parallel-validation/checkpoints/25/performance_parallel",
+        "packing",
+        "128",
+        "batch",
+        "1",
+        "8",
+        "64"
+      ],
+      "error": null,
+      "process_seconds": 0.011964723002165556,
+      "returncode": 0,
+      "stdout": "{\"version\":\"0.27.0\",\"family\":\"packing\",\"size\":128,\"mode\":\"batch\",\"inner\":1,\"workers\":8,\"jobs\":64,\"completed\":64,\"seconds\":0.007511359,\"objective\":97536,\"residual\":0.00000000000005684341886080802,\"pivots\":8256,\"nodes\":0,\"status\":\"optimal\"}\n",
+      "stderr": "",
+      "cpu_seconds": 0.056005999999999556,
+      "payload": {
+        "version": "0.27.0",
+        "family": "packing",
+        "size": 128,
+        "mode": "batch",
+        "inner": 1,
+        "workers": 8,
+        "jobs": 64,
+        "completed": 64,
+        "seconds": 0.007511359,
+        "objective": 97536,
+        "residual": 5.684341886080802e-14,
+        "pivots": 8256,
+        "nodes": 0,
+        "status": "optimal"
+      }
+    }
+  ],
+  "summary": [
+    {
+      "build": "previous",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "samples": 3,
+      "seconds": 0.145736965,
+      "process_seconds": 0.15244424699631054,
+      "cpu_seconds": 0.24548499999999995,
+      "objective": 265627.20000000036,
+      "pivots": 384,
+      "nodes": 0
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "dense",
+        384,
+        "single",
+        8,
+        1,
+        1
+      ],
+      "samples": 3,
+      "seconds": 0.149237827,
+      "process_seconds": 0.15593464099947596,
+      "cpu_seconds": 0.2462310000000003,
+      "objective": 265627.20000000036,
+      "pivots": 384,
+      "nodes": 0
+    },
+    {
+      "build": "previous",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "samples": 3,
+      "seconds": 0.007896128,
+      "process_seconds": 0.012485525003285147,
+      "cpu_seconds": 0.056005999999999556,
+      "objective": 97536,
+      "pivots": 8256,
+      "nodes": 0
+    },
+    {
+      "build": "candidate",
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        64
+      ],
+      "samples": 3,
+      "seconds": 0.008689281,
+      "process_seconds": 0.013167971002985723,
+      "cpu_seconds": 0.05483500000000063,
+      "objective": 97536,
+      "pivots": 8256,
+      "nodes": 0
+    }
+  ]
+}
