@@ -157,3 +157,23 @@ Iteration 0 (main) on this host:
   incumbent the delivered heuristics never found. lseu gets 1165, rgn its
   optimum. No case is flagged. Other policies are untouched. Oracle gates:
   0 failures.
+
+### 6. Allocation-free gcd for the rational witness (default path) — accepted
+
+- **Plan.** issue-2173 (15 columns, 192 rows) costs 4 ms per node even
+  under default. 96% of its instructions are in `witness::upper`, the exact
+  rational incumbent witness. Each of its 3 attempts uses up its 8M-operation
+  budget and fails. Half of that is allocation inside the long division
+  that Euclid's gcd calls at every step. Compute gcd remainders in place
+  with reused buffers. The quotient-free remainder shares the division core
+  and charges exactly the same work. When the gcd is one, the two divisions
+  are skipped but still charged. Every witness outcome, and hence the
+  search, must stay identical.
+- **Test.** A new unit test checks the in-place remainder and gcd against
+  the old division and Euclid recurrence on 5,000 random pairs: same
+  values and the same charged work.
+- **Result.** All 270 evaluation records and all 6,330 oracle records
+  (both policies) are identical to iteration 5. issue-2173 default halves
+  its instructions (4.01 G → 2.05 G; 0.244 → 0.207 s), and 2171 drops from
+  0.011 to 0.006 s. Held-out means drop 4–6% for every policy, including
+  default.
