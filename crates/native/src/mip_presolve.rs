@@ -212,6 +212,9 @@ pub(crate) fn run(
             *model = Model::new(d)?;
         }
         if settings.coefficient_tightening {
+            // Each rewrite depends only on its own row and the column bounds,
+            // so one pass collects them and rebuilds the matrix once.
+            let mut rewrites = Vec::new();
             for i in 0..model.m() {
                 if budget.stop().is_some() || rational::work() >= settings.cut_exact_work {
                     break;
@@ -228,35 +231,42 @@ pub(crate) fn run(
                     continue;
                 };
                 if let Some(cut) = tighten_row(model, i, sign) {
-                    let mut data = model.data().clone();
-                    let a = model.matrix();
-                    let mut indices = Vec::new();
-                    let mut values = Vec::new();
-                    let mut ptr = vec![0];
-                    for row in 0..model.m() {
-                        if row == i {
+                    rewrites.push((i, sign, cut));
+                }
+            }
+            if !rewrites.is_empty() {
+                let mut data = model.data().clone();
+                let a = model.matrix();
+                let mut indices = Vec::new();
+                let mut values = Vec::new();
+                let mut ptr = vec![0];
+                let mut next = rewrites.iter().peekable();
+                for row in 0..model.m() {
+                    match next.next_if(|r| r.0 == row) {
+                        Some((_, sign, cut)) => {
                             for &(j, v) in &cut.terms {
                                 indices.push(j);
                                 values.push(sign * v);
                             }
-                        } else {
+                            if *sign > 0. {
+                                data.rows.upper[row] = cut.rhs;
+                            } else {
+                                data.rows.lower[row] = -cut.rhs;
+                            }
+                        }
+                        None => {
                             let range = a.pattern.indptr[row]..a.pattern.indptr[row + 1];
                             indices.extend_from_slice(&a.pattern.indices[range.clone()]);
                             values.extend_from_slice(&a.values[range]);
                         }
-                        ptr.push(values.len());
                     }
-                    data.matrix.pattern.indptr = ptr;
-                    data.matrix.pattern.indices = indices;
-                    data.matrix.values = values;
-                    if sign > 0. {
-                        data.rows.upper[i] = cut.rhs;
-                    } else {
-                        data.rows.lower[i] = -cut.rhs;
-                    }
-                    *model = Model::new(data)?;
-                    stats.coefficients += 1;
+                    ptr.push(values.len());
                 }
+                data.matrix.pattern.indptr = ptr;
+                data.matrix.pattern.indices = indices;
+                data.matrix.values = values;
+                *model = Model::new(data)?;
+                stats.coefficients += rewrites.len() as u64;
             }
         }
         if settings.dual_presolve {
@@ -375,6 +385,54 @@ mod tests {
                             .unwrap()
                             .feasible_candidate
                     );
+                }
+            }
+        }
+    }
+    #[test]
+    fn one_pass_rewrites_every_big_m_row_and_keeps_the_integer_set() {
+        // x0 binary, x1 x2 continuous in [0, 10]; one upper and one lower
+        // big-M row, plus an untouched row between them.
+        let m = model(
+            vec![1., 1., 1.],
+            vec![
+                VariableKind::Binary,
+                VariableKind::Continuous,
+                VariableKind::Continuous,
+            ],
+            vec![0., 0., 0.],
+            vec![1., 10., 10.],
+            vec![-100., 1., 0., 1., 1., 1., 100., 0., -1.],
+            vec![f64::NEG_INFINITY, f64::NEG_INFINITY, -5.],
+            vec![2., 15., f64::INFINITY],
+        );
+        let mut reduced = m.clone();
+        let s = NativeOptions {
+            coefficient_tightening: true,
+            ..Default::default()
+        };
+        let stats = run(
+            &mut reduced,
+            &s,
+            &Options::default(),
+            &CancellationToken::default(),
+            Instant::now(),
+        )
+        .unwrap();
+        assert!(stats.coefficients >= 2, "{}", stats.coefficients);
+        let a = reduced.matrix();
+        assert!(a.values[a.pattern.indptr[0]].abs() < 100.);
+        assert!(a.values[a.pattern.indptr[2]].abs() < 100.);
+        for b in [0., 1.] {
+            for p in 0..=20 {
+                for q in 0..=20 {
+                    let x = [b, p as f64 / 2., q as f64 / 2.];
+                    let f = |m: &Model| {
+                        check::evaluate(m, &x, &Options::default().tolerances)
+                            .unwrap()
+                            .feasible_candidate
+                    };
+                    assert_eq!(f(&m), f(&reduced), "{x:?}");
                 }
             }
         }

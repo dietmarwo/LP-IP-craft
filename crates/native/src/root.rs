@@ -358,7 +358,14 @@ pub(crate) fn solve(
         cancel,
         model,
     )?;
-    if let Some(b) = advanced_stats.bound {
+    // A checked root bound of the cut model also bounds every limited or
+    // failed child search; it says nothing about an infeasible or unbounded one.
+    if let Some(b) = advanced_stats.bound.filter(|_| {
+        !matches!(
+            result.status,
+            Status::Infeasible | Status::Unbounded | Status::InfeasibleOrUnbounded
+        )
+    }) {
         result.best_bound = Some(result.best_bound.map_or(b, |old| {
             if model.sense() == Sense::Minimize {
                 old.max(b)

@@ -144,21 +144,48 @@ pub struct NativeOptions {
     pub root_cuts: bool,
     /// LP-directed root cover separation, rebuilding caches before search.
     pub root_separation: bool,
+    /// MIP root presolve: bounded exact/outward bound propagation and removal
+    /// of rows the box proves redundant (rows are freed, not renumbered).
     pub mip_presolve: bool,
+    /// Exact big-M coefficient tightening on unfixed binary columns of
+    /// one-sided rows; keeps every integer-feasible point.
     pub coefficient_tightening: bool,
+    /// Objective-directed fixing of empty and singleton columns. Preserves an
+    /// optimum, not the feasible set.
     pub dual_presolve: bool,
+    /// Presolve passes, 0 through 32.
     pub mip_presolve_rounds: usize,
+    /// Gomory mixed-integer root cuts, derived exactly from advisory
+    /// optimal-tableau rows.
     pub gmi_cuts: bool,
+    /// Mixed-integer rounding root cuts on model rows, with exact
+    /// variable-upper-bound substitution.
     pub mir_cuts: bool,
+    /// Root cut rounds for GMI/MIR, 0 through 50. Rounds also stop after
+    /// three with under 0.1% objective change.
     pub mip_cut_rounds: usize,
+    /// Cuts selected per round, 1 through 64.
     pub mip_cut_limit: usize,
+    /// Exact-arithmetic work per separation round, in charged limb
+    /// operations, at most 100,000,000. Also bounds coefficient tightening.
     pub cut_exact_work: u64,
+    /// Checked root rounding, guided diving and L1 feasibility-pump
+    /// projections. Their LPs never supply bounds.
     pub root_heuristics: bool,
+    /// LP solves the root heuristics may use, 0 through 128.
     pub heuristic_lp_calls: usize,
+    /// Pseudocost score: `weighted_sum` (0.8 min + 0.2 max, the default) or
+    /// `product`.
     pub branching_score: String,
+    /// Floor on the branching step when normalizing pseudocost gains, in
+    /// 0..=0.5; zero keeps the unclamped gain.
     pub pseudocost_min_step: f64,
+    /// Branching decisions recorded in `diagnostics.branch_trace`, 0
+    /// through 256.
     pub branch_trace_limit: usize,
+    /// LP-directed cover separation rounds for `root_separation`, 0 through 4.
     pub root_cut_rounds: usize,
+    /// Lift the covers found by `root_separation`.
     pub cover_lifting: bool,
     /// Infer sound mixed MIP root bounds before finite-domain admission.
     pub root_propagation: bool,
@@ -1542,7 +1569,30 @@ impl NativeSolver {
                             })
                             .take(15),
                     );
-                    let candidates=columns.iter().map(|&k|format!("{{\"column\":{k},\"value\":{},\"down_sum\":{},\"up_sum\":{},\"down_count\":{},\"up_count\":{},\"down_estimate\":{},\"up_estimate\":{}}}",x[k],pseudocosts.sum[k][0],pseudocosts.sum[k][1],pseudocosts.count[k][0],pseudocosts.count[k][1],pseudocosts.estimate(k,false),pseudocosts.estimate(k,true))).collect::<Vec<_>>().join(",");
+                    // JSON has no infinities: non-finite values become null.
+                    let number = |v: f64| {
+                        if v.is_finite() {
+                            v.to_string()
+                        } else {
+                            "null".into()
+                        }
+                    };
+                    let candidates = columns
+                        .iter()
+                        .map(|&k| {
+                            format!(
+                                "{{\"column\":{k},\"value\":{},\"down_sum\":{},\"up_sum\":{},\"down_count\":{},\"up_count\":{},\"down_estimate\":{},\"up_estimate\":{}}}",
+                                number(x[k]),
+                                number(pseudocosts.sum[k][0]),
+                                number(pseudocosts.sum[k][1]),
+                                pseudocosts.count[k][0],
+                                pseudocosts.count[k][1],
+                                number(pseudocosts.estimate(k, false)),
+                                number(pseudocosts.estimate(k, true))
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",");
                     counters.branch_events.push(format!(
                         "{{\"node\":{},\"chosen\":{j},\"candidates\":[{candidates}]}}",
                         result.nodes

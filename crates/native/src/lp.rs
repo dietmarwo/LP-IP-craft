@@ -1532,10 +1532,10 @@ impl Lp {
         })
     }
 
-    /// Solves the LP from the current basis. `Optimal` is declared only with
-    /// primal and dual values recomputed from scratch and feasible; with
-    /// `fresh_optimum` (cold solves), also on a fresh factorization.
-    /// Advisory BTRAN rows in original row units; exact cut derivation keeps residuals.
+    /// For up to `limit` basic integer columns with the most fractional
+    /// values, the BTRAN row of the basis inverse in original row units.
+    /// Advisory only: the exact cut derivation re-aggregates the original
+    /// rows with these multipliers and keeps every residual.
     pub fn tableau_candidates(&mut self, model: &Model, limit: usize) -> Vec<(usize, Vec<f64>)> {
         let mut order: Vec<_> = self
             .basic
@@ -1573,7 +1573,9 @@ impl Lp {
         }
         out
     }
-    /// Preserve combinatorial basis and states; enlarged numerical factors are rebuilt.
+    /// The LP of `model`, which must extend this LP's model by appended rows:
+    /// the combinatorial basis and nonbasic states are kept, the new rows'
+    /// logicals become basic, and the enlarged factorization is rebuilt.
     pub fn extend_rows(&self, model: &Model) -> Result<Self> {
         let mut keep = vec![false; model.n()];
         for &j in &self.cols {
@@ -1590,6 +1592,9 @@ impl Lp {
         next.dual_stale = true;
         Ok(next)
     }
+    /// Solves the LP from the current basis. `Optimal` is declared only with
+    /// primal and dual values recomputed from scratch and feasible; with
+    /// `fresh_optimum` (cold solves), also on a fresh factorization.
     pub fn solve(&mut self, budget: &mut Budget<'_>, fresh_optimum: bool) -> Result<Status> {
         self.ray = None;
         self.basis_id = None;
