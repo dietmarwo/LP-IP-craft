@@ -783,7 +783,7 @@ impl Lp {
                             .is_some_and(|old| old.dense_dimension() > self.m / 8)
                 }
             };
-            match Lu::factor_with_workspace(
+            match Lu::factor_with_execution(
                 self.m,
                 column,
                 self.controls.max_factor_entries,
@@ -793,6 +793,7 @@ impl Lp {
                     search: self.controls.factor_pivot_search,
                     ordered,
                 },
+                &self.execution,
             ) {
                 Ok(mut lu) => {
                     #[cfg(feature = "kernel-profile")]

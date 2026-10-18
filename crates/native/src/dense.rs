@@ -18,7 +18,9 @@ impl DenseTail {
         mut rows: Vec<usize>,
         positions: Vec<usize>,
         m: usize,
+        execution: &crate::parallel::Execution,
     ) -> Option<Self> {
+        debug_assert!((1..=8).contains(&execution.threads()));
         let n = rows.len();
         let mut local = vec![usize::MAX; m];
         for (r, &i) in rows.iter().enumerate() {

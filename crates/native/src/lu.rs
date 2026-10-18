@@ -285,12 +285,30 @@ impl Lu {
             FactorOptions::default(),
         )
     }
+    #[cfg(any(test, feature = "basis-replay"))]
     pub fn factor_with_workspace(
+        m: usize,
+        column: impl FnMut(usize, &mut Vec<(usize, f64)>),
+        cap: usize,
+        workspace: &mut FactorWorkspace,
+        options: FactorOptions,
+    ) -> Result<Self, FactorError> {
+        Self::factor_with_execution(
+            m,
+            column,
+            cap,
+            workspace,
+            options,
+            &crate::parallel::Execution::default(),
+        )
+    }
+    pub fn factor_with_execution(
         m: usize,
         mut column: impl FnMut(usize, &mut Vec<(usize, f64)>),
         cap: usize,
         workspace: &mut FactorWorkspace,
         options: FactorOptions,
+        execution: &crate::parallel::Execution,
     ) -> Result<Self, FactorError> {
         let _profile = crate::profile::enter("factorization");
         let _assembly = crate::profile::enter("factor_assembly");
@@ -525,7 +543,7 @@ impl Lu {
             }
         }
         if !singular && lu.prow.len() < m {
-            lu.dense_phase(&a.cols, &mut row_done, &mut col_done, cap)?;
+            lu.dense_phase(&a.cols, &mut row_done, &mut col_done, cap, execution)?;
         }
         if lu.prow.len() < m {
             return Err(FactorError::Singular {
@@ -592,6 +610,7 @@ impl Lu {
         row_done: &mut [bool],
         col_done: &mut [bool],
         cap: usize,
+        execution: &crate::parallel::Execution,
     ) -> Result<(), FactorError> {
         let rows: Vec<_> = (0..self.m).filter(|&i| !row_done[i]).collect();
         let positions: Vec<_> = (0..self.m).filter(|&p| !col_done[p]).collect();
@@ -603,7 +622,9 @@ impl Lu {
                 .is_some_and(|v| v <= cap)
         {
             let _profile = crate::profile::enter("factor_dense");
-            if let Some(tail) = crate::dense::DenseTail::factor(cols, rows, positions, self.m) {
+            if let Some(tail) =
+                crate::dense::DenseTail::factor(cols, rows, positions, self.m, execution)
+            {
                 self.dense_dimension = n;
                 self.factor_work = self
                     .factor_work
