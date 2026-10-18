@@ -13,8 +13,11 @@ def model(*, sense="maximize", offset=-50.0, integral=True):
 
 
 def solve(m, **kwargs):
+    # The default MIP presolve would tighten 2x + 2y <= 3 to x + y <= 1 and
+    # change the expected root values; the trace is checked without it.
     control = dict(decompose=False, mip_diagnostics=True, objective_lattice=False,
-                   incumbent_heuristic=False, reduced_cost_fixing=False)
+                   incumbent_heuristic=False, reduced_cost_fixing=False,
+                   mip_presolve=False, coefficient_tightening=False)
     control.update(kwargs)
     return lp.solve(m, backend="native", backend_options=lp.NativeOptions(**control))
 

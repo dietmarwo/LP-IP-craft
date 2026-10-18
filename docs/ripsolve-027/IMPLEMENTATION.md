@@ -1,11 +1,11 @@
 # Native 0.27 implementation and controls
 
-Baseline is GitHub main 825ee42679c3892310d8658d2a71678b88cb6dd3. New algorithms are opt-in. Existing packing dispatch, generic defaults and all production numerical dependencies remain unchanged. `certified_cuts.rs`, `mip_presolve.rs`, `rootcuts.rs` and `primal.rs` contain the new numerical mechanisms, and `dyadic.rs` (added in review) their exact arithmetic; `root.rs` integrates them into preprocessing/separation. `lp.rs` exposes advisory BTRAN rows and retained combinatorial basis extension. Rust/Python options and metadata mirror one another.
+Baseline is GitHub main 825ee42679c3892310d8658d2a71678b88cb6dd3. New algorithms are opt-in. The one exception came later, as a separate change backed by held-out evidence: `mip_presolve` and `coefficient_tightening` are on by default ([../mip-iterations/ITERATIONS.md](../mip-iterations/ITERATIONS.md#default-change)). Existing packing dispatch, generic defaults and all production numerical dependencies remain unchanged. `certified_cuts.rs`, `mip_presolve.rs`, `rootcuts.rs` and `primal.rs` contain the new numerical mechanisms, and `dyadic.rs` (added in review) their exact arithmetic; `root.rs` integrates them into preprocessing/separation. `lp.rs` exposes advisory BTRAN rows and retained combinatorial basis extension. Rust/Python options and metadata mirror one another.
 
 | Control | Default | Meaning |
 |---|---:|---|
-| `mip_presolve` | false | Bounded root fixpoint using existing exact integer and outward mixed propagation; box-proven redundant rows are freed without renumbering. Since the iterations, the first round also probes up to 2,000 binaries with the exact integer propagation. |
-| `coefficient_tightening` | false | Binary big-M reduction, with an exact i128 fast path and an exact dyadic fallback (Rat in 0.27.0). |
+| `mip_presolve` | true (false in 0.27.0) | Bounded root fixpoint using existing exact integer and outward mixed propagation; box-proven redundant rows are freed without renumbering. Since the iterations, the first round also probes up to 2,000 binaries with the exact integer propagation. |
+| `coefficient_tightening` | true (false in 0.27.0) | Binary big-M reduction, with an exact i128 fast path and an exact dyadic fallback (Rat in 0.27.0). |
 | `dual_presolve` | false | Optimum-preserving empty/singleton objective fixes; never treat this as feasible-set equality. |
 | `mip_presolve_rounds` | 8 | 0–32 bounded rounds. |
 | `gmi_cuts` | false | Exact reaggregation and GMI from advisory optimal-basis rows. |

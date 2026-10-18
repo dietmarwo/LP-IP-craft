@@ -14,8 +14,11 @@ def knapsack(weights=(3., 3., 3., 4.), capacity=5.):
 
 
 def run(m, **kwargs):
+    # The tree search is tested on the unreduced model, so root presolve
+    # (including the default MIP presolve) is off.
     settings = dict(decompose=False, mip_diagnostics=True, redundant_rows=False,
-                    singleton_presolve=False, root_propagation=False)
+                    singleton_presolve=False, root_propagation=False,
+                    mip_presolve=False, coefficient_tightening=False)
     settings.update(kwargs)
     return lp.solve(m, backend='native', backend_options=lp.NativeOptions(**settings))
 

@@ -553,8 +553,9 @@ Against the open issues at the start:
   cuts. Single-row MIR with VUB divisors only lifts its 3-second MIR bound
   from 37.8 to 38.6, and a quick probe with complemented binaries added
   nothing.
-- **Defaults.** Unchanged; iteration 20 gives the evidence for promoting
-  presolve without dual fixing in a separate change.
+- **Defaults.** Unchanged by the iterations; iteration 20 gave the
+  evidence for promoting presolve without dual fixing, done afterwards as
+  a separate change (see [Default change](#default-change)).
 
 ## Final verification
 
@@ -574,3 +575,47 @@ On the final code:
   and `--all-features`), 182 Rust tests (also `--all-targets
   --all-features`), 258 pytest tests, the CI oracle example scripts, the
   benchmark smoke runs and the dependency audit pass.
+
+## Default change
+
+Follow-up to iteration 20, as a separate change. `mip_presolve` and
+`coefficient_tightening` are now on by default in Rust and Python;
+`dual_presolve`, cuts and root heuristics stay off. Both enabled
+reductions keep every feasible point. Pass `mip_presolve=False,
+coefficient_tightening=False` for the previous behaviour. The benchmark
+harness's `default` policy follows the library defaults, and the new
+`legacy` policy runs the previous ones.
+
+New default against legacy, same build, one run each:
+
+| Set | Legacy | New default | Shifted ratio |
+|---|---:|---:|---:|
+| public (9) | 7/9, 0.522 s | 7/9, 0.320 s | ×0.62 |
+| synthetic dev (24) | 24/24, 0.0463 s | 24/24, 0.0457 s | ×0.99 |
+| held-out (11) | 9/11, 0.0316 s | 9/11, 0.0325 s | ×1.02 |
+| families (10) | 10/10, 0.0004 s | 10/10, 0.0004 s | ×1.01 |
+| synthetic test (24) | 24/24, 0.0328 s | 24/24, 0.0325 s | ×0.99 |
+
+No case is lost or gained, and no record has an issue. Legacy records
+equal the previous default's; new-default records equal the
+`presolve-nodual` records above (status, objective, nodes, pivots).
+egout drops from 0.54 to 0.013 s, gt2 from 3.8 to 2.2 s (72,182 → 38,867
+nodes) and lseu from 0.86 to 0.36 s. flugpl needs slightly more nodes
+(23,947 → 25,081; 0.33 → 0.35 s). rgn's search is unchanged.
+
+Verification:
+- **Frozen oracle.** 6,330 cases under the new default and under
+  combined, 0 failures. Against the previous default, no status changes;
+  165 node counts, 233 pivot counts and 33 objectives (within the
+  tolerance) change.
+- **Bound audit.** 0 unsafe bounds in the 400-model audit.
+- **SpOC4.** Vectors, objectives and bounds stay byte-identical to 0.26:
+  the packing dispatch's child solves already disable MIP presolve.
+- **CI equivalents.** The CI oracle scripts, smoke benchmarks, fmt and
+  clippy (default and all features) pass.
+- **Tests.** All Rust tests pass. Three Python tests exercise one
+  mechanism on an unreduced model: the search diagnostics trace, node
+  propagation and GMI on 2x + 2y ≤ 3. They now pin the two options off,
+  as they already pinned other preprocessing. A new test checks the
+  Python/Rust default agreement and that the default runs the
+  presolve.

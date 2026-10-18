@@ -22,7 +22,8 @@ def test_control_validation_before_cancellation(field,value):
 def test_gmi_root_strengthens_both_senses_and_preserves_user_start():
     for sense,sign in [('maximize',1),('minimize',-1)]:
         m=model([sign,sign],[[2.,2.]],[0.,0.],[2.,2.],[-math.inf],[3.],['integer']*2,sense)
-        r=solve(m,backend='native',start=[1.,0.],backend_options=NativeOptions(gmi_cuts=True,mip_cut_rounds=4,decompose=False))
+        # GMI on the unreduced model: presolve would tighten 2x+2y<=3 first.
+        r=solve(m,backend='native',start=[1.,0.],backend_options=NativeOptions(gmi_cuts=True,mip_cut_rounds=4,decompose=False,mip_presolve=False,coefficient_tightening=False))
         assert r.status=='optimal' and abs(r.evaluation.objective-sign)<1e-7
         d=r.backend.effective_options;stages=json.loads(d['diagnostics.root_stages'])
         assert int(d['diagnostics.gmi_cuts'])>0 and int(d['diagnostics.root_basis_reuses'])>0
@@ -89,3 +90,15 @@ def test_rens_incumbents_are_feasible_budgeted_and_keep_the_exhaustive_optimum()
             found+=int(d['diagnostics.root_rens_candidates'])
         assert run(mod).evaluation.objective==pytest.approx(optimum)
     assert found>0
+
+def test_default_presolve_keeps_the_feasible_set_and_matches_rust():
+    o=NativeOptions()
+    assert (o.mip_presolve,o.coefficient_tightening,o.dual_presolve)==(True,True,False)
+    for sense,sign in [('maximize',1),('minimize',-1)]:
+        m=model([sign,sign],[[2.,2.]],[0.,0.],[1.,1.],[-math.inf],[3.],['binary']*2,sense)
+        r=solve(m,backend='native',backend_options=NativeOptions(decompose=False,mip_diagnostics=True))
+        d=r.backend.effective_options
+        # Python and Rust defaults agree, and the default path runs MIP presolve.
+        assert (d['mip_presolve'],d['coefficient_tightening'],d['dual_presolve'])==('true','true','false')
+        assert int(d['diagnostics.mip_presolve_rounds'])>=1 and int(d['diagnostics.mip_presolve_coefficients'])>=1
+        assert r.status=='optimal' and abs(r.evaluation.objective-sign)<1e-7

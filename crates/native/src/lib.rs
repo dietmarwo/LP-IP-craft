@@ -144,11 +144,12 @@ pub struct NativeOptions {
     pub root_cuts: bool,
     /// LP-directed root cover separation, rebuilding caches before search.
     pub root_separation: bool,
-    /// MIP root presolve: bounded exact/outward bound propagation and removal
-    /// of rows the box proves redundant (rows are freed, not renumbered).
+    /// MIP root presolve: bounded exact/outward bound propagation, probing
+    /// on binaries, and removal of rows the box proves redundant (rows are
+    /// freed, not renumbered). Keeps every feasible point. On by default.
     pub mip_presolve: bool,
     /// Exact big-M coefficient tightening on unfixed binary columns of
-    /// one-sided rows; keeps every integer-feasible point.
+    /// one-sided rows; keeps every integer-feasible point. On by default.
     pub coefficient_tightening: bool,
     /// Objective-directed fixing of empty and singleton columns. Preserves an
     /// optimum, not the feasible set.
@@ -297,8 +298,8 @@ impl Default for NativeOptions {
             component_parallel_min_entries: 2048,
             root_cuts: false,
             root_separation: false,
-            mip_presolve: false,
-            coefficient_tightening: false,
+            mip_presolve: true,
+            coefficient_tightening: true,
             dual_presolve: false,
             mip_presolve_rounds: 8,
             gmi_cuts: false,
