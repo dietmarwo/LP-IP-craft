@@ -1,9 +1,6 @@
 //! Independent-job parallelism; no shared basis, tree or numerical workspace.
 use crate::*;
-use std::sync::{
-    Mutex,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 impl NativeSolver {
     /// Solve independent models in input order using 1..=16 workers. Each job
     /// has its own limits and result/error. A shared cancellation token affects
@@ -36,40 +33,41 @@ impl NativeSolver {
                 .collect());
         }
         let next = AtomicUsize::new(0);
-        let out: Mutex<Vec<Option<Result<SolveResult>>>> =
-            Mutex::new((0..models.len()).map(|_| None).collect());
-        std::thread::scope(|scope| -> Result<()> {
+        let results = std::thread::scope(|scope| -> Result<Vec<_>> {
             let mut handles = Vec::new();
             for _ in 0..workers {
-                let (settings, next, out) = (settings.clone(), &next, &out);
+                let (settings, next) = (settings.clone(), &next);
                 let handle = std::thread::Builder::new()
                     .name("lpip-batch".into())
-                    .spawn_scoped(scope, move || -> Result<()> {
+                    .spawn_scoped(scope, move || {
                         let mut solver = NativeSolver::new(settings);
+                        let mut out = Vec::with_capacity(models.len() / workers);
                         loop {
                             let i = next.fetch_add(1, Ordering::Relaxed);
                             if i >= models.len() {
                                 break;
                             }
-                            let r = solver.solve(models[i], options, None, cancel);
-                            out.lock().map_err(|_| {
-                                Error::Backend("batch result lock poisoned".into())
-                            })?[i] = Some(r);
+                            out.push((i, solver.solve(models[i], options, None, cancel)));
                         }
-                        Ok(())
+                        out
                     })
                     .map_err(|e| Error::Backend(format!("batch worker creation: {e}")))?;
                 handles.push(handle);
             }
+            let mut out = Vec::with_capacity(models.len());
             for h in handles {
-                h.join()
-                    .map_err(|_| Error::Backend("batch worker panicked".into()))??;
+                out.extend(
+                    h.join()
+                        .map_err(|_| Error::Backend("batch worker panicked".into()))?,
+                );
             }
-            Ok(())
+            Ok(out)
         })?;
-        out.into_inner()
-            .map_err(|_| Error::Backend("batch result lock poisoned".into()))?
-            .into_iter()
+        let mut out: Vec<_> = (0..models.len()).map(|_| None).collect();
+        for (i, result) in results {
+            out[i] = Some(result);
+        }
+        out.into_iter()
             .map(|r| r.ok_or_else(|| Error::Backend("batch result missing".into())))
             .collect()
     }

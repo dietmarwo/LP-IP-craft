@@ -77,3 +77,38 @@ fn batch_empty_invalid_and_cancelled() {
             .all(|r| r.unwrap().status == Status::Cancelled)
     );
 }
+
+#[test]
+fn many_distinct_jobs_and_claim_boundaries_keep_original_order() {
+    let models: Vec<_> = (0..513)
+        .map(|i| {
+            let mut data = model(false).data().clone();
+            data.objective_offset = i as f64;
+            data.variables.upper[0] = (1 + i % 19) as f64;
+            Model::new(data).unwrap()
+        })
+        .collect();
+    let solver = NativeSolver::default();
+    for count in [0, 1, 7, 8, 9, 63, 64, 65, 513] {
+        for workers in [1, 2, 4, 8, 16] {
+            let refs = models[..count].iter().collect::<Vec<_>>();
+            let results = solver
+                .solve_batch(
+                    &refs,
+                    &Options::default(),
+                    workers,
+                    &CancellationToken::default(),
+                )
+                .unwrap();
+            assert_eq!(results.len(), count);
+            for (i, result) in results.into_iter().enumerate() {
+                let result = result.unwrap();
+                assert_eq!(result.status, Status::Optimal);
+                assert_eq!(
+                    result.evaluation.unwrap().objective,
+                    (i + 1 + i % 19) as f64
+                );
+            }
+        }
+    }
+}
