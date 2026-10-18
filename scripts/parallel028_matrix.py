@@ -1,6 +1,7 @@
 """Reproduce final scaling, immutable-upstream, held-out and mixed-budget timings."""
 
 import argparse
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -14,6 +15,7 @@ def main():
     p.add_argument("--baseline", type=Path, required=True)
     p.add_argument("--baseline-python", type=Path, required=True)
     p.add_argument("--output", type=Path, default=ROOT / "docs/parallel-028/data")
+    p.add_argument("--rust-only", action="store_true")
     a = p.parse_args()
     a.output.mkdir(parents=True, exist_ok=True)
 
@@ -33,6 +35,11 @@ def main():
             subprocess.run(
                 command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True
             )
+        evidence = json.loads((a.output / (name + ".json")).read_text())
+        assert evidence["status"] == "passed", name
+        assert len(evidence["records"]) == len(cases) * (2 if baseline else 1) * (
+            repeats + 1
+        ), name
         print("COMPLETED", name, flush=True)
 
     primary = []
@@ -102,6 +109,8 @@ def main():
         True,
         repeats=7,
     )
+    if a.rust_only:
+        return
     for kind in ["public", "spoc"]:
         command = [
             sys.executable,

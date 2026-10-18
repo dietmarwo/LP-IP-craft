@@ -1,6 +1,6 @@
-# LP-IP-craft0.28: thirty eight-thread performance iterations
+# LP-IP-craft 0.28: thirty eight-thread performance iterations
 
-Base: current upstream `a1180e06a85685fa82ca977d521ef33f285f8f51`, including its20 MIP iterations and default MIP presolve/coefficient tightening. The earlier local0.27 working copy is preserved independently. This is a new parallel series01–30.
+Base: current upstream `a1180e06a85685fa82ca977d521ef33f285f8f51`, including its 20 MIP iterations and default MIP presolve/coefficient tightening. The earlier local 0.27 working copy is preserved independently. This is a new parallel series 01–30.
 
 ## Execution and numerical contract
 
@@ -40,7 +40,13 @@ Each listed plan is provisional until its checkpoint; adapt to measured findings
 | 24 | [Stress concurrent solves and isolation](iteration-24-plan.md) | [Outcome](iteration-24-results.md) |
 | 25 | [Make benchmark failures impossible to hide](iteration-25-plan.md) | [Outcome](iteration-25-results.md) |
 | 26 | [Independent serial/eight numerical audit](iteration-26-plan.md) | [Outcome](iteration-26-results.md) |
-| 27 | [Tune measured outer scheduling](iteration-27-plan.md) | [Outcome](iteration-27-results.md) |
-| 28 | [Run application and held-out matrix](iteration-28-plan.md) | [Outcome](iteration-28-results.md) |
-| 29 | [Document eight-thread API and reproducibility](iteration-29-plan.md) | [Outcome](iteration-29-results.md) |
-| 30 | [Freeze0.28 and complete release gates](iteration-30-plan.md) | [Outcome](iteration-30-results.md) |
+| 27 | [Gate actual work; parallelize packing root](iteration-27-plan.md) | [Outcome](iteration-27-results.md) |
+| 28 | [Run public/SpOC4 and held-out applications](iteration-28-plan.md) | [Outcome](iteration-28-results.md) |
+| 29 | [Fuse root phases within the owned pool; document APIs](iteration-29-plan.md) | [Outcome](iteration-29-results.md) |
+| 30 | [Freeze 0.28, repair scalar fallbacks and benchmark provenance](iteration-30-plan.md) | [Outcome](iteration-30-results.md) |
+
+## Completion and evidence
+
+All 30 checkpoints have an implemented change, release build, complete regular Rust test log and checked paired timing record. Iterations 18–19 and 23 were reverted by later checkpoints after losses; the series is not 30 monotone wins. Plans 27–30 record application-driven adaptations before execution. See [final results](RESULTS.md), [complete tables](TABLES.md), and `data/validation-summary.json` for exact revisions, counts and log hashes.
+
+The original iteration 30 timing table used an instrumented example and is excluded from production claims. Final production campaigns explicitly reject profiling builds; all eight Rust campaign JSONs pass complete-count validation. An incomplete final factor journal was retained and rerun in full; journal writes now flush/sync and replace atomically, and the matrix driver reopens and validates completed evidence.

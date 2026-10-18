@@ -79,3 +79,10 @@ def test_actual_driver_persists_failed_child(tmp_path):
     assert record["status"] == "failed"
     assert len(record["records"]) == 1 and record["records"][0]["error"]
     assert record["records"][0]["build"] == "bad"
+
+
+def test_profiling_binary_is_rejected():
+    p = valid()
+    p["kernel_profile"] = True
+    with pytest.raises(ValueError, match="profiling-enabled"):
+        driver.validate(p, CASE)

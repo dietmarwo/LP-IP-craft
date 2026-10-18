@@ -218,7 +218,8 @@ fn main() {
         assert_eq!(jobs, 3);
         let q = lp_ip_craft_native::parallel_bench::run(n, inner).unwrap();
         println!(
-            "{{\"version\":\"{}\",\"family\":\"factor\",\"size\":{n},\"mode\":\"{mode}\",\"inner\":{inner},\"workers\":1,\"jobs\":3,\"completed\":3,\"seconds\":{},\"workflow_seconds\":{},\"resource_seconds\":{},\"objective\":0.0,\"residual\":{},\"checksum\":{},\"pivots\":0,\"nodes\":0,\"status\":\"checked\"}}",
+            "{{\"kernel_profile\":{},\"version\":\"{}\",\"family\":\"factor\",\"size\":{n},\"mode\":\"{mode}\",\"inner\":{inner},\"workers\":1,\"jobs\":3,\"completed\":3,\"seconds\":{},\"workflow_seconds\":{},\"resource_seconds\":{},\"objective\":0.0,\"residual\":{},\"checksum\":{},\"pivots\":0,\"nodes\":0,\"status\":\"checked\"}}",
+            cfg!(feature = "kernel-profile"),
             env!("CARGO_PKG_VERSION"),
             q.seconds,
             q.workflow_seconds,
@@ -300,7 +301,8 @@ fn main() {
         nodes += r.nodes;
     }
     println!(
-        "{{\"version\":\"{}\",\"family\":\"{family}\",\"size\":{n},\"mode\":\"{mode}\",\"inner\":{inner},\"workers\":{workers},\"jobs\":{jobs},\"completed\":{jobs},\"seconds\":{seconds},\"objective\":{objective},\"residual\":{residual},\"pivots\":{pivots},\"nodes\":{nodes},\"status\":\"optimal\"}}",
+        "{{\"kernel_profile\":{},\"version\":\"{}\",\"family\":\"{family}\",\"size\":{n},\"mode\":\"{mode}\",\"inner\":{inner},\"workers\":{workers},\"jobs\":{jobs},\"completed\":{jobs},\"seconds\":{seconds},\"objective\":{objective},\"residual\":{residual},\"pivots\":{pivots},\"nodes\":{nodes},\"status\":\"optimal\"}}",
+        cfg!(feature = "kernel-profile"),
         env!("CARGO_PKG_VERSION")
     );
 }

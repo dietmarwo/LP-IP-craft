@@ -68,3 +68,21 @@ The complete release also saves explicit common-upstream, predeclared held-out, 
 For independent small LP/MIPs: `solve_batch(models, workers=8, options=Options(threads=1))`. For one large numeric/root workload: `solve(..., options=Options(threads=8), ...)`. For existing packing residual parallelism: numerical width1 plus packing_workers8. Mixed native batches support1×8/2×4/4×2/8×1; serial-inner outer16 remains compatible. Compatible live owners share pools and can use less concurrency than the maximum product. Per-job limits apply independently, while batch resource startup belongs to the full batch workflow. No global Rayon pool is changed.
 
 Results, numerical boundaries, all30 detailed plans/results and archive checksums accompany the package. Original scalar defaults, limits, tolerances and independent acceptance remain in force; experimental losses and public failures are not hidden.
+
+## Build-mode guard
+
+Forced all-target/all-feature tests can overwrite the example alias with a kernel-profile build. Always rebuild `cargo build --release --locked --examples --features parallel-bench` after every correctness/lint/doc gate and before copying/timing the executable. Modern benchmark JSON explicitly reports `kernel_profile`; the driver rejects true, and a real instrumented-binary negative test is retained. Final Rust measurements require false. Baseline checkpoint01 was built without profiling. Instrumented initial30 campaigns are retained separately and excluded from all production claims. The nonprofiled Python extension and its application/oracle results were unaffected; extension hashes prove this.
+
+Run `python scripts/parallel028_report.py --plot` after all timing finishes to regenerate tables, CSV, compact metrics and exported PNG/SVG (matplotlib is optional). All candidate vectors in application evidence are retained as SHA-checked little-endian float64 files; repeated storage is deduplicated only after each solve/check completes.
+
+The matrix can be run as one command after building both native executables and the preserved baseline extension:
+
+```bash
+python scripts/parallel028_matrix.py --binary target/release/examples/performance_parallel \
+  --baseline /tmp/lp-common-target/release/examples/performance_parallel \
+  --baseline-python /tmp/lp-base-python --output docs/parallel-028/data
+```
+
+`--rust-only` repeats only native campaigns. A separate three-build production isolation in `data/scalar-isolation-production.json` compares upstream, `lp-parallel-30-initial`, and final numerical `lp-parallel-30`; build each without profiling before measurement. `lp-parallel-release-0.28.0` includes the final evidence/guard/documentation additions; numerical implementation is identical to checkpoint 30. JSON journal writes use synced atomic replacement and the matrix driver independently verifies completion/counts after each child exits. An incomplete 127/128 factor journal is retained separately; only its complete fresh rerun enters final tables.
+
+The standalone native comparison lockfile was updated to 0.28 and Rayon. The legacy ripsolve comparison lockfile was also resolved, but offline metadata could not download its uncached `bitflags`; that comparison binary was not built in this series. `benchmarks/reference/harness` still needs its original `native-0.16.0` bootstrap. Neither historical optional harness supplies the new measurements or affects the production workspace.

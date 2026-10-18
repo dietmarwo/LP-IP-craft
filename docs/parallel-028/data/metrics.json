@@ -1,0 +1,560 @@
+{
+  "factor": {
+    "384": {
+      "one_ms": 13.276467,
+      "eight_ms": 13.884430000000002,
+      "speedup": 0.9562126064951891,
+      "one_cpu_ms": 22.793999999999983,
+      "eight_cpu_ms": 41.56700000000002
+    },
+    "512": {
+      "one_ms": 37.556814,
+      "eight_ms": 32.660999,
+      "speedup": 1.1498978950398917,
+      "one_cpu_ms": 53.767999999999816,
+      "eight_cpu_ms": 85.00400000000008
+    },
+    "768": {
+      "one_ms": 108.448856,
+      "eight_ms": 54.805266,
+      "speedup": 1.9788035697153628,
+      "one_cpu_ms": 147.67500000000044,
+      "eight_cpu_ms": 212.707
+    },
+    "1024": {
+      "one_ms": 271.48512200000005,
+      "eight_ms": 141.568288,
+      "speedup": 1.9176972882514483,
+      "one_cpu_ms": 330.71100000000087,
+      "eight_cpu_ms": 520.4069999999988
+    }
+  },
+  "large_lp": {
+    "768": {
+      "one_ms": 1180.24708,
+      "eight_ms": 1006.799008,
+      "speedup": 1.172276760924262,
+      "one_cpu_ms": 1194.3830000000003,
+      "eight_cpu_ms": 1456.9189999999992
+    },
+    "1024": {
+      "one_ms": 3344.793285,
+      "eight_ms": 2567.953667,
+      "speedup": 1.3025130974841688,
+      "one_cpu_ms": 3368.2589999999946,
+      "eight_cpu_ms": 4052.7189999999964
+    }
+  },
+  "batch128_jobs64": {
+    "one_ms": 36.888757,
+    "eight_ms": 7.548604,
+    "speedup": 4.886831657880053,
+    "one_cpu_ms": 40.928999999999775,
+    "eight_cpu_ms": 53.61600000000033
+  },
+  "component_skew128": {
+    "one_ms": 18.438491000000003,
+    "eight_ms": 10.279459,
+    "speedup": 1.7937219264165558,
+    "one_cpu_ms": 21.05699999999988,
+    "eight_cpu_ms": 27.256999999999643
+  },
+  "same_eight_upstream": [
+    {
+      "case": [
+        "packing",
+        128,
+        "skewbatch",
+        1,
+        8,
+        36
+      ],
+      "baseline_ms": 15.442855999999999,
+      "final_ms": 10.974239,
+      "speedup": 1.4071915146006935,
+      "baseline_cpu_ms": 67.81500000000001,
+      "final_cpu_ms": 78.22699999999993
+    },
+    {
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        128
+      ],
+      "baseline_ms": 15.667133999999999,
+      "final_ms": 16.792465,
+      "speedup": 0.9329859553079313,
+      "baseline_cpu_ms": 100.6140000000002,
+      "final_cpu_ms": 110.06900000000019
+    },
+    {
+      "case": [
+        "packing",
+        128,
+        "skewcomponents",
+        1,
+        8,
+        1
+      ],
+      "baseline_ms": 9.630448,
+      "final_ms": 9.698771,
+      "speedup": 0.9929554992070645,
+      "baseline_cpu_ms": 23.894000000000304,
+      "final_cpu_ms": 22.864999999999913
+    }
+  ],
+  "scalar_loop_isolation": [
+    {
+      "case": [
+        "packing",
+        128,
+        "single",
+        1,
+        1,
+        1
+      ],
+      "baseline_ms": 0.6505070000000001,
+      "before_ms": 0.76467,
+      "final_ms": 0.69843,
+      "before_to_final": 1.094841286886302
+    },
+    {
+      "case": [
+        "packing",
+        512,
+        "single",
+        1,
+        1,
+        1
+      ],
+      "baseline_ms": 4.726625,
+      "before_ms": 4.976091,
+      "final_ms": 5.287389,
+      "before_to_final": 0.9411244377896161
+    },
+    {
+      "case": [
+        "packing",
+        128,
+        "batch",
+        1,
+        8,
+        128
+      ],
+      "baseline_ms": 16.715468,
+      "before_ms": 15.912211,
+      "final_ms": 15.239689,
+      "before_to_final": 1.0441296407032976
+    },
+    {
+      "case": [
+        "packing",
+        128,
+        "skewcomponents",
+        1,
+        8,
+        1
+      ],
+      "baseline_ms": 10.736269,
+      "before_ms": 9.237056,
+      "final_ms": 9.130195,
+      "before_to_final": 1.0117041311823023
+    },
+    {
+      "case": [
+        "dense",
+        384,
+        "single",
+        1,
+        1,
+        1
+      ],
+      "baseline_ms": 119.730238,
+      "before_ms": 116.54541,
+      "final_ms": 119.174504,
+      "before_to_final": 0.9779391236232877
+    }
+  ],
+  "spoc": {
+    "i": {
+      "upstream_api_ms": 50.30024600273464,
+      "serial_api_ms": 49.84937299741432,
+      "eight_api_ms": 48.447495995787904,
+      "upstream_root_ms": 21.802664999999998,
+      "serial_root_ms": 21.809319000000002,
+      "eight_root_ms": 20.833732,
+      "upstream_workflow_ms": 303.0518889936502,
+      "eight_workflow_ms": 275.09538799495203,
+      "api_speedup_vs_upstream": 1.0382424306739777,
+      "root_speedup_vs_upstream": 1.04650789402494,
+      "root_speedup_vs_current1": 1.0468272799131715
+    },
+    "ii": {
+      "upstream_api_ms": 233.3409849961754,
+      "serial_api_ms": 241.29956700198818,
+      "eight_api_ms": 202.99971000349615,
+      "upstream_root_ms": 105.165314,
+      "serial_root_ms": 102.863687,
+      "eight_root_ms": 76.10644900000001,
+      "upstream_workflow_ms": 761.3628129984136,
+      "eight_workflow_ms": 746.032702998491,
+      "api_speedup_vs_upstream": 1.149464622349247,
+      "root_speedup_vs_upstream": 1.3818186944972297,
+      "root_speedup_vs_current1": 1.3515764872961027
+    }
+  },
+  "public": {
+    "baseline1": {
+      "cases": 20,
+      "all_repeats_optimal": 11,
+      "statuses": {
+        "avgas": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "bell5": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "egout": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "flugpl": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "gt2": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "lseu": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "p0548": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "p01": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "rgn": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "2171": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "bound_implied": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "infeasible-mip0": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "infeasible-mip1": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "issue-2095": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2173": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2204": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2290": [
+          "error",
+          "error",
+          "error"
+        ],
+        "issue-2402": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "issue-2874-3": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "sp150x300d": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ]
+      }
+    },
+    "final1": {
+      "cases": 20,
+      "all_repeats_optimal": 11,
+      "statuses": {
+        "avgas": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "bell5": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "egout": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "flugpl": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "gt2": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "lseu": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "p0548": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "p01": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "rgn": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "2171": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "bound_implied": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "infeasible-mip0": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "infeasible-mip1": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "issue-2095": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2173": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2204": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2290": [
+          "error",
+          "error",
+          "error"
+        ],
+        "issue-2402": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "issue-2874-3": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "sp150x300d": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ]
+      }
+    },
+    "final8": {
+      "cases": 20,
+      "all_repeats_optimal": 11,
+      "statuses": {
+        "avgas": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "bell5": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "egout": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "flugpl": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "gt2": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "lseu": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "p0548": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ],
+        "p01": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "rgn": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "2171": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "bound_implied": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "infeasible-mip0": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "infeasible-mip1": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "issue-2095": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2173": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2204": [
+          "optimal",
+          "optimal",
+          "optimal"
+        ],
+        "issue-2290": [
+          "error",
+          "error",
+          "error"
+        ],
+        "issue-2402": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "issue-2874-3": [
+          "infeasible",
+          "infeasible",
+          "infeasible"
+        ],
+        "sp150x300d": [
+          "time_limit",
+          "time_limit",
+          "time_limit"
+        ]
+      }
+    }
+  },
+  "audit": {
+    "total_solver_calls": 15255,
+    "calls_per_mode": 5085,
+    "paired_comparisons": 10170,
+    "optimal_counts": {
+      "baseline": 3153,
+      "serial": 3153,
+      "parallel": 3153
+    },
+    "issues": [],
+    "status_or_acceptance_changes": [],
+    "node_or_pivot_changes": 0,
+    "point_changes": 0,
+    "max_objective_difference": 0.0,
+    "versions": {
+      "baseline": "0.27.0",
+      "serial": "0.28.0",
+      "parallel": "0.28.0"
+    },
+    "extension_sha256": {
+      "baseline": "8ac8408ef7623ee32fb90f34ff89d0e654a42da98782821a2eed1e6cbff037bb",
+      "serial": "5be53be1e99a04957317d38b6dd70cb4188b2205c0e6851f65467dfc9f35e8c5",
+      "parallel": "5be53be1e99a04957317d38b6dd70cb4188b2205c0e6851f65467dfc9f35e8c5"
+    },
+    "journal_sha256": {
+      "baseline": "11dce24bae63fae9e2e730faba6825d0c3806a4fc35c109bc96d42fb2b1c9c59",
+      "serial": "8e007a6e24e734a7b67e4e999d36ece57521d5bc83914cf1483622b025bc84af",
+      "parallel": "e105a03735d7915d945abdbff6a7e604d4b78834e21cca40891b5c0591df24fa"
+    },
+    "note": "Calls include configurations; optimality is numerical, not an exact tree certificate. Existing original corpus is unchanged; larger planted LPs are a separate supplement."
+  }
+}

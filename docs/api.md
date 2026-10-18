@@ -45,8 +45,8 @@ Version 0.16 removed `sparse`, `max_tableau_entries`, `fast_pivots` and
 fail loudly instead of being ignored.
 
 `Options` keeps original-unit feasibility/integrality tolerances (1e-7 each)
-and `threads=1` for each numerical kernel; other values are unsupported.
-`NativeOptions.component_threads` controls the independent-component workers.
+and a maximum native numerical width `threads` in1..8 (default1). Dummy accepts only1. Numerical widths above8 are explicitly unsupported.
+`NativeOptions.component_threads` controls independent-component workers when numerical width is1. Numerical width>1 serializes component/tree/residual nesting, and the effective report records `numeric_threads`.
 Independent solves can also use external threads/processes; choose a component
 worker cap appropriate to the total CPU and memory budget. Node controls have
 no effect on an LP; the node count remains zero. A primal start is evaluated
@@ -261,3 +261,19 @@ NativeOptions(packing_root=True, packing_neighborhoods=64,
 ```
 
 Use `packing_cuts=True` to test bounded cross-resource clique/odd-cycle cuts. Use `tree_threads=4, tree_split_depth=2` to test a disjoint binary frontier. These options are experimental; see the application measurements before enabling more modes. For sixteen tree workers use at least depth 4, and account for private full-model/factor memory. Neighborhood workers share immutable incidence and exchange complete candidates at batch boundaries. The existing component control remains separate.
+
+## Bounded numerical and mixed batch execution (0.28)
+
+```python
+from lp_ip_craft import Options, NativeOptions, solve, solve_batch
+r = solve(model, backend="native", options=Options(threads=8),
+          backend_options=NativeOptions(decompose=False, component_threads=1))
+results = solve_batch(models, workers=8, options=Options(threads=1))
+mixed = solve_batch(models, workers=2, options=Options(threads=4))
+```
+
+Rust uses the same `Options { threads:8, ..Default::default() }` and `solver.solve_batch(&model_refs, &options, workers, &cancel)` contracts. Mixed numerical batches require outer×inner≤8. The legacy serial-inner outer limit remains16. Results/errors retain input order. Models are borrowed; worker-local numerical state is not shared. Numeric resources stay owned for the batch, while per-job deadlines begin at each solve; batch setup belongs to whole-batch workflow time.
+
+A width is a maximum. Small/sparse work can use scalar paths; compatible simultaneous owners share a pool, so a mixed product need not be fully busy. For packing neighborhoods use numerical width1 plus packing_workers8; numerical width8 selects within-root/kernel work and serializes outer repair/tree/component execution. No Python callback is introduced and the GIL remains released during native work. Independent callers must manage their combined budgets.
+
+Large structural reduced-cost/column-pricing outputs, retained dense Schur rows and independent packing primal-dual root phases can run in parallel. Scalar within-output operation order and ordered merges are preserved. Sparse Markowitz pivot selection, factor/triangular dependencies, dual-bound certification and acceptance checks remain ordered. Worker setup is charged to a direct solve deadline; pre-cancelled/expired calls skip unnecessary resources. Validation remains ahead of cancellation. See [validity](parallel-028/VALIDITY.md) and [reproduction](parallel-028/REPRODUCE.md).

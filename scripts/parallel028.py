@@ -14,6 +14,8 @@ import time
 
 def validate(payload, case):
     family, size, mode, inner, outer, jobs = case
+    if payload.get("kernel_profile", False) is not False:
+        raise ValueError("profiling-enabled binaries are not production timing inputs")
     if (
         payload.get("status") != ("checked" if family == "factor" else "optimal")
         or payload.get("completed") != jobs
@@ -125,7 +127,12 @@ def main():
     a.output.parent.mkdir(parents=True, exist_ok=True)
 
     def save():
-        a.output.write_text(json.dumps(result, indent=2) + "\n")
+        temporary = a.output.with_suffix(a.output.suffix + ".tmp")
+        with temporary.open("w") as out:
+            out.write(json.dumps(result, indent=2) + "\n")
+            out.flush()
+            os.fsync(out.fileno())
+        temporary.replace(a.output)
 
     save()
     try:
@@ -209,6 +216,9 @@ def main():
         save()
         raise
     save()
+    persisted = json.loads(a.output.read_text())
+    assert persisted["status"] == "passed"
+    assert len(persisted["records"]) == len(cases) * len(builds) * (a.repeats + 1)
     print(
         json.dumps(
             {
