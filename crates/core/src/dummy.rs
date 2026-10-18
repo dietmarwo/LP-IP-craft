@@ -38,6 +38,12 @@ impl LpIpSolver for DummySolver {
         cancel: &CancellationToken,
     ) -> Result<SolveResult> {
         options.validate()?;
+        if options.threads != 1 {
+            return Err(crate::Error::Unsupported(format!(
+                "threads = {}: dummy supports one worker",
+                options.threads
+            )));
+        }
         if let Some(start) = start {
             check_point(model, &start.primal, "start")?;
         }

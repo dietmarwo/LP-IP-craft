@@ -20,6 +20,11 @@ impl NativeSolver {
                 "batch workers must be in 1..=16".into(),
             ));
         }
+        if options.threads != 1 {
+            return Err(Error::Unsupported(
+                "mixed batch numerical budgets are not enabled yet".into(),
+            ));
+        }
         let mut settings = self.settings.clone();
         settings.component_threads = 1;
         settings.packing_workers = 1;

@@ -90,7 +90,7 @@ class Options:
     integrality_tolerance: float = DEFAULT_INTEGRALITY_TOLERANCE
     """Largest accepted distance of an integer variable to an integer, in (0, 0.5)."""
     threads: int = 1
-    """Threads per numerical kernel; use NativeOptions.component_threads for blocks."""
+    """Maximum native numerical workers1..8; selecting>1 serializes outer mechanisms."""
 
 
 @dataclass(frozen=True, kw_only=True)

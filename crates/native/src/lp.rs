@@ -45,6 +45,7 @@ pub(crate) enum State {
 /// Kernel controls derived from the solver options.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Controls {
+    pub threads: usize,
     pub pivot_tolerance: f64,
     pub refactor_interval: usize,
     pub adaptive_refactor: bool,
@@ -107,6 +108,7 @@ enum Outcome {
 }
 
 pub(crate) struct Lp {
+    execution: crate::parallel::Execution,
     n: usize,
     m: usize,
     rows: Vec<usize>,
@@ -291,6 +293,11 @@ impl Lp {
             dtol.push((dual / (cost_scale * r)).clamp(1e-12, 1e-7));
         }
         let mut lp = Self {
+            execution: if nnz >= 32_768 {
+                crate::parallel::Execution::new(controls.threads).map_err(Error::Backend)?
+            } else {
+                crate::parallel::Execution::default()
+            },
             n,
             m,
             rows,
@@ -884,6 +891,7 @@ impl Lp {
     fn compute_dual(&mut self) {
         let _profile = crate::profile::enter("recompute_dual");
         self.dual_stale = false;
+        debug_assert!(self.execution.threads() <= self.controls.threads);
         let n = self.n;
         for p in 0..self.m {
             self.pi[p] = self.cost[self.basic[p]];
@@ -1807,6 +1815,7 @@ mod tests {
 
     fn controls() -> Controls {
         Controls {
+            threads: 1,
             pivot_tolerance: 1e-9,
             refactor_interval: 16,
             adaptive_refactor: true,
