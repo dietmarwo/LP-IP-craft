@@ -223,3 +223,27 @@ Iteration 0 (main) on this host:
   lost under gmi, combined and heuristics. With GMI, gt2 goes from 0.19 to
   2.20 s, p0548 from 0.61 to 4.19 s and flugpl from 0.37 to 0.58 s. Small
   cases gain only a few milliseconds. Reverted; patience stays at three.
+
+### 10. Probing on binaries in MIP presolve — accepted
+
+- **Plan.** Target the plan's missed W1 goal, a presolved p0548 root of at
+  least 4,500 (it was 3,126). Probing is the gap to ripsolve's presolve the
+  0.27 plan noted. For each unfixed binary (at most 2,000 per call, first
+  presolve round only), propagate both values with the existing exact
+  integer propagation. A value that conflicts cannot occur in any feasible
+  point, so the binary is fixed to the other value. Otherwise every feasible
+  point lies in one of the two propagated boxes, so each column's bounds
+  shrink to the hull of its two intervals. Both reductions keep every
+  feasible point. The propagation domain gains a reset that undoes a trial
+  propagation. Counters: `diagnostics.mip_presolve_probed`,
+  `mip_presolve_probe_fixed`, `mip_presolve_probe_tightened`.
+- **Test.** A new exhaustive unit test runs 300 random binary/integer
+  models. It checks that every feasible point stays inside the probed
+  bounds, and that fixings and tightenings actually occur.
+- **Result.** On p0548, probing tightens 4 bounds. Its presolved root rises
+  from 3,126 to 4,571, meeting the W1 target. MIR-only now solves p0548
+  (time limit → 0.52 s; public MIR 7/9 → 8/9, mean 0.228 → 0.159 s).
+  Combined p0548 drops from 0.30 to 0.18 s (504 → 84 nodes). No other
+  record's search changed. Some means looked up to 9% slower, but
+  instruction counts on five search-identical cases changed by −0.4% to
+  +3.5%, so those differences are timing noise. Oracle gates: 0 failures.

@@ -147,6 +147,21 @@ impl Domain {
             self.pending.push_back(row);
         }
     }
+    /// Undoes a trial [`Self::apply`]: resets `columns` to `bounds` without
+    /// propagating and drops every pending row (probing).
+    pub(crate) fn reset(&mut self, bounds: &Bounds, columns: &[usize]) {
+        for &j in columns {
+            self.synchronize(
+                j,
+                bounds.lower[j].ceil() as i128,
+                bounds.upper[j].floor() as i128,
+            );
+        }
+        while let Some(i) = self.pending.pop_front() {
+            self.queued[i] = false;
+        }
+        self.last_changed.clear();
+    }
     fn synchronize(&mut self, j: usize, l: i128, u: i128) {
         let (old_l, old_u) = (self.lower[j], self.upper[j]);
         if l == old_l && u == old_u {
