@@ -20,7 +20,7 @@ pub struct Sample {
 pub fn run(n: usize, threads: usize) -> Result<Sample> {
     if !(32..=2048).contains(&n) {
         return Err(Error::InvalidInput(
-            "factor benchmark size must lie in32..=2048".into(),
+            "factor benchmark size must lie in 32..=2048".into(),
         ));
     }
     let workflow = Instant::now();

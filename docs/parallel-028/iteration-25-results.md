@@ -1,6 +1,6 @@
-# Iteration25: results
+# Iteration 25: results
 
-The timing protocol now creates an exact build/case/repetition record before launching each child, preserving faults/timeouts instead of attributing them to a previous build. Regression tests inject incomplete jobs, nonoptimal outcomes, nonfinite/negative/invalid certificates, missing fields, CPU oversubscription and real child failures. Full Python suite is gated before timing. Checkpoint21 auxiliary factor data also received an explicitly recorded exact-executable rerun after its initial JSON was incomplete.
+The timing protocol now creates an exact build/case/repetition record before launching each child, preserving faults/timeouts instead of attributing them to a previous build. Regression tests inject incomplete jobs, nonoptimal outcomes, nonfinite/negative/invalid certificates, missing fields, CPU oversubscription and real child failures. Full Python suite is gated before timing. Checkpoint 21 auxiliary factor data also received an explicitly recorded exact-executable rerun after its initial JSON was incomplete.
 
 Regular release Rust tests: 197 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

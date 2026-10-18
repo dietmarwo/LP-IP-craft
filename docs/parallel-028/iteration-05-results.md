@@ -1,6 +1,6 @@
-# Iteration05: results
+# Iteration 05: results
 
-The caller runs one of the worker loops, so a width8 batch starts only seven helper OS threads. Local solver ownership and joined linear result collection remain; no ninth numerical worker is introduced.
+The caller runs one of the worker loops, so a width 8 batch starts only seven helper OS threads. Local solver ownership and joined linear result collection remain; no ninth numerical worker is introduced.
 
 Regular release Rust tests: 183 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

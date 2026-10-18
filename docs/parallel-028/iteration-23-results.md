@@ -1,4 +1,4 @@
-# Iteration23: results
+# Iteration 23: results
 
 Nonzero-weighted recursive splits balance highly skewed columns without output reductions or task-buffer allocation. Uniform matrices keep their ordinary partitions. Added empty/skewed prefix and ownership tests. Mixed batches retain compatible numeric resources across jobs; cold setup belongs to total workflow, with per-solve deadlines unchanged.
 

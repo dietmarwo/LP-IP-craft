@@ -1,4 +1,4 @@
-# Iteration19: results
+# Iteration 19: results
 
 Scalar Schur traversal now consumes a target row before the next row tile. Each output retains ascending panel arithmetic; serial/parallel factor bits and known solves match. Panel prototype evidence remains available for final selection.
 

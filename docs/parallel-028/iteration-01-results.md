@@ -1,4 +1,4 @@
-# Iteration01: results
+# Iteration 01: results
 
 Frozen common harness against current upstream numeric code. Existing eight-worker batches and component solves are baselines. Dense and old connected fixtures have planted primal/dual objectives; selection uses its unchanged independent dynamic program.
 

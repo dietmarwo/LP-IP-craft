@@ -1,6 +1,6 @@
-# Iteration17: results
+# Iteration 17: results
 
-Raised dispatch gates to avoid fine-grained late updates: at least1,048,576 Schur operations and65,536 coefficient operations. Scalar fallbacks preserve the same values and ordered decisions.
+Raised dispatch gates to avoid fine-grained late updates: at least 1,048,576 Schur operations and 65,536 coefficient operations. Scalar fallbacks preserve the same values and ordered decisions.
 
 Regular release Rust tests: 193 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

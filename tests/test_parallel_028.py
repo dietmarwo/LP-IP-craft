@@ -50,7 +50,7 @@ def test_mixed_batch_uses_one_explicit_budget(workers, inner):
 
 @pytest.mark.parametrize("workers,inner", [(2, 8), (4, 4), (8, 2), (16, 2)])
 def test_mixed_batch_rejects_oversubscription(workers, inner):
-    with pytest.raises(ValueError, match="must not exceed8"):
+    with pytest.raises(ValueError, match="must not exceed 8"):
         lp.solve_batch([], workers=workers, options=lp.Options(threads=inner))
 
 

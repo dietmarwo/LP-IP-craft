@@ -1,6 +1,6 @@
-# Iteration02: results
+# Iteration 02: results
 
-Removed the shared result mutex. Each worker retains indexed outputs and one private solver; post-join linear collection preserves per-input errors and order. Added513 distinct-job and claim-boundary checks across1/2/4/8/16 workers.
+Removed the shared result mutex. Each worker retains indexed outputs and one private solver; post-join linear collection preserves per-input errors and order. Added 513 distinct-job and claim-boundary checks across 1/2/4/8/16 workers.
 
 Regular release Rust tests: 183 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

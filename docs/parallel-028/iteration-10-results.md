@@ -1,4 +1,4 @@
-# Iteration10: results
+# Iteration 10: results
 
 Residual rounds use linear indexed gather instead of sorting, retaining skipped tasks, deterministic snapshot merges, task counters and original full-model admission checks.
 

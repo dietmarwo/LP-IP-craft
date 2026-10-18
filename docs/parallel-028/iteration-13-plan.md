@@ -1,4 +1,4 @@
-# Iteration13: Parallelize fresh reduced costs
+# Iteration 13: Parallelize fresh reduced costs
 
 ## Change and purpose
 

@@ -22,7 +22,7 @@ impl NativeSolver {
         }
         if options.threads > 1 && workers.saturating_mul(options.threads) > 8 {
             return Err(Error::InvalidInput(
-                "batch outer workers times numerical threads must not exceed8".into(),
+                "batch outer workers times numerical threads must not exceed 8".into(),
             ));
         }
         // Batch-owned resources keep mixed inner jobs from repeatedly rebuilding pools.

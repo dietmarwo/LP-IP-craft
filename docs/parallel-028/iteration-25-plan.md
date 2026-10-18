@@ -1,4 +1,4 @@
-# Iteration25: Make benchmark failures impossible to hide
+# Iteration 25: Make benchmark failures impossible to hide
 
 ## Change and purpose
 

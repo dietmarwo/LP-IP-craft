@@ -1,4 +1,4 @@
-# Iteration02: Remove batch result mutex
+# Iteration 02: Remove batch result mutex
 
 ## Change and purpose
 

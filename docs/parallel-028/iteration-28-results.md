@@ -1,6 +1,6 @@
-# Iteration28: results
+# Iteration 28: results
 
-Added isolated public/SpOC4 application checks with original NumPy/resource feasibility, reference objectives, conservative-bound checks, full point/source/extension hashes and separate construction, workflow, API and root-phase time. Exploratory15-configuration/30-run application matrix passed with fixed64 root iterations. Also repaired omitted top-level Python test staging in checkpoints24–27: exact executed tests are now included, numerical/harness bytes unchanged, original refs preserved and mapping recorded.
+Added isolated public/SpOC4 application checks with original NumPy/resource feasibility, reference objectives, conservative-bound checks, full point/source/extension hashes and separate construction, workflow, API and root-phase time. Exploratory 15-configuration/30-run application matrix passed with fixed64 root iterations. Also repaired omitted top-level Python test staging in checkpoints 24–27: exact executed tests are now included, numerical/harness bytes unchanged, original refs preserved and mapping recorded.
 
 Regular release Rust tests: 198 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

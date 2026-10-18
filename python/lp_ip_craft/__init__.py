@@ -90,7 +90,8 @@ class Options:
     integrality_tolerance: float = DEFAULT_INTEGRALITY_TOLERANCE
     """Largest accepted distance of an integer variable to an integer, in (0, 0.5)."""
     threads: int = 1
-    """Maximum native numerical workers1..8; selecting>1 serializes outer mechanisms."""
+    """Maximum native numerical workers, 1 through 8. A width above 1 serializes
+    the outer mechanisms (component, residual and tree workers)."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -356,7 +357,7 @@ def solve_batch(models: Iterable[Model], *, workers: int = 1, options: Optional[
     if not 1 <= workers <= 16:
         raise ValueError("workers must be in 1..16")
     if options.threads > 1 and options.threads * workers > 8:
-        raise ValueError("batch outer workers times numerical threads must not exceed8")
+        raise ValueError("batch outer workers times numerical threads must not exceed 8")
     raw = _solve_batch_native(list(models), workers, options.feasibility_tolerance,
                              options.integrality_tolerance,
                              cancellation if cancellation is not None else Cancellation(),

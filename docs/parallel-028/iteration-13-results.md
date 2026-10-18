@@ -1,4 +1,4 @@
-# Iteration13: results
+# Iteration 13: results
 
 Fresh structural reduced costs use disjoint column outputs with original subtraction order. Added nonlogical dense-basis1/2/4/8 tests with bitwise reduced-cost/pivot-row/support identity, nonzero prices and changed costs on retained resources.
 

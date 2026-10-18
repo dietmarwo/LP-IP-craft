@@ -136,7 +136,7 @@ impl Tolerances {
 pub struct Options {
     /// Tolerances of the candidate check.
     pub tolerances: Tolerances,
-    /// Maximum numerical kernel workers,1 through8. Backends may reject
+    /// Maximum numerical kernel workers, 1 through 8. Backends may reject
     /// widths they do not implement; native defaults to one.
     pub threads: usize,
 }
@@ -158,7 +158,7 @@ impl Options {
         ensure(self.threads > 0, || "threads must be at least 1".into())?;
         if self.threads > 8 {
             return Err(Error::Unsupported(format!(
-                "threads = {}: maximum numerical budget is8",
+                "threads = {}: maximum numerical budget is 8",
                 self.threads
             )));
         }

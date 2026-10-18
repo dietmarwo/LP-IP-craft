@@ -1,6 +1,6 @@
-# Iteration20: results
+# Iteration 20: results
 
-Matched pool creation to65,536-coefficient work and skip already-expired entry deadlines. Reverted losing panel18 and scalar traversal19 prototypes, preserving original panel/tile arithmetic and useful disjoint Schur rows. An overly broad clock edit was caught at compile time and restricted to solve entry before the successful full rerun.
+Matched pool creation to 65,536-coefficient work and skip already-expired entry deadlines. Reverted losing panel 18 and scalar traversal 19 prototypes, preserving original panel/tile arithmetic and useful disjoint Schur rows. An overly broad clock edit was caught at compile time and restricted to solve entry before the successful full rerun.
 
 Regular release Rust tests: 193 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

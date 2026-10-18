@@ -1,4 +1,4 @@
-# Iteration09: results
+# Iteration 09: results
 
 Frontier outputs use linear indexed collection with explicit duplicate/out-of-range/missing guards, preserving subtree merge order and original task quotas. Sparse/incomplete collections are represented explicitly for residual reuse.
 

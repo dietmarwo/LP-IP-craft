@@ -1,4 +1,4 @@
-//! Frozen known-answer performance protocol for the0.28 parallel series.
+//! Frozen known-answer performance protocol for the 0.28 parallel series.
 #[path = "support/parallel_fixtures.rs"]
 mod fixtures;
 use fixtures::{irregular, network, packing, selection};

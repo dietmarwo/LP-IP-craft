@@ -1,4 +1,4 @@
-# Iteration16: results
+# Iteration 16: results
 
 Blocked Schur updates partition trailing rows and share read-only solved panels; every cell retains original operation order.193/385-size1/2/4/8 tests require factor-bit/permutation identity and forward/transpose known solutions. An initial test fixture incorrectly used a private Entry literal; it now builds the actual indexed Active matrix before testing and full rerun passes.
 

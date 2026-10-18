@@ -1,4 +1,4 @@
-# Iteration21: results
+# Iteration 21: results
 
 Added benchmark-only dense factor/forward/transpose work: three changed matrices, constructed-point checks, factor-bit checksum, separate numeric/workflow/cold-resource time. Declared concentrated column-work LP before weighted scheduling. Kernel samples report checked, not LP optimality.
 
@@ -11,4 +11,4 @@ Regular release Rust tests: 194 passed, zero failed. Release examples built. Bui
 
 All raw samples, CPU time, binary hashes and failures are retained in `data/iteration-21.json`. Small differences may be shared-host noise; no monotone per-iteration speedup is inferred.
 
-The initial auxiliary factor JSON remained incomplete (11 records) despite its completion log, so it cannot certify the complete campaign. It is retained as `iteration-21-factor-incomplete.json`. The exact saved checkpoint21 executable was rerun at checkpoint25, with complete three-repeat data in `iteration-21-factor-recheck.json`. This does not affect the complete paired LP campaign above.
+The initial auxiliary factor JSON remained incomplete (11 records) despite its completion log, so it cannot certify the complete campaign. It is retained as `iteration-21-factor-incomplete.json`. The exact saved checkpoint 21 executable was rerun at checkpoint 25, with complete three-repeat data in `iteration-21-factor-recheck.json`. This does not affect the complete paired LP campaign above.

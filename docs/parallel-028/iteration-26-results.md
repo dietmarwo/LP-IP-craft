@@ -1,4 +1,4 @@
-# Iteration26: results
+# Iteration 26: results
 
 Added a fail-closed three-way audit using unchanged upstream randomized SciPy and exact integer/rational mixed generators. Every actual solve records actual-model/input fingerprints, point, solver-owned duals, objective/bound/status/work, plus independent NumPy feasibility/objective/stationarity. Supplemental larger planted LPs have independent known primal/dual objectives. Missing calls, mismatched inputs, wrong outcomes and inconsistent extensions have fault tests; quick audit gates this checkpoint before timing.
 

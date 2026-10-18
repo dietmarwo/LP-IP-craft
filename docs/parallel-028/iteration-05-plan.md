@@ -1,4 +1,4 @@
-# Iteration05: Let the batch caller participate
+# Iteration 05: Let the batch caller participate
 
 ## Change and purpose
 

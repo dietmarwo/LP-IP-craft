@@ -1,4 +1,4 @@
-# Iteration04: Schedule large batch models first
+# Iteration 04: Schedule large batch models first
 
 ## Change and purpose
 

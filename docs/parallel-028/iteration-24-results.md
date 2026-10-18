@@ -1,6 +1,6 @@
-# Iteration24: results
+# Iteration 24: results
 
-Added concurrent Rust and compiled-Python callers with total numeric budget8, immutable shared dense models, changed dimensions and independent private numerical state. Each worker exercises cancellation, invalid starts and zero deadlines before successful later solves; results retain original-model certificates. Full compiled Python suite is gated before timing.
+Added concurrent Rust and compiled-Python callers with total numeric budget 8, immutable shared dense models, changed dimensions and independent private numerical state. Each worker exercises cancellation, invalid starts and zero deadlines before successful later solves; results retain original-model certificates. Full compiled Python suite is gated before timing.
 
 Regular release Rust tests: 197 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

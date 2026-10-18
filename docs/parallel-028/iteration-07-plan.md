@@ -1,4 +1,4 @@
-# Iteration07: Collect component results privately
+# Iteration 07: Collect component results privately
 
 ## Change and purpose
 

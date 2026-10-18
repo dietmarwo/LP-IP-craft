@@ -1,4 +1,4 @@
-# Iteration09: Collect tree outputs in linear slots
+# Iteration 09: Collect tree outputs in linear slots
 
 ## Change and purpose
 

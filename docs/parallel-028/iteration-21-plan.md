@@ -1,4 +1,4 @@
-# Iteration21: Add kernel scaling and reuse measurements
+# Iteration 21: Add kernel scaling and reuse measurements
 
 ## Change and purpose
 
@@ -12,6 +12,6 @@ Require analytical forward/transpose checks and actual finite timing fields; dis
 
 Accept only a sound capability or a measured reduction of useful work; otherwise revert the prototype and preserve its evidence. Cheap fallbacks and the one-thread default remain. Final results will distinguish noisy/negative observations from retained wins.
 
-Freeze actual dense-LU development sizes384/768 and heldouts512/1024 before measuring its new standalone harness. Each sample factors three different diagonal perturbations and checks both solve directions against constructed points; numeric time, complete workflow and cold resource acquisition are separate. This is a standalone kernel, not whole-solver or SpOC4 performance.
+Freeze actual dense-LU development sizes 384/768 and heldouts 512/1024 before measuring its new standalone harness. Each sample factors three different diagonal perturbations and checks both solve directions against constructed points; numeric time, complete workflow and cold resource acquisition are separate. This is a standalone kernel, not whole-solver or SpOC4 performance.
 
-Also declare an irregular column-work LP before tuning weighted dispatch:8m variables, m private identity rows plus a concentrated dense tail of m/2 columns, with x=1 and y=1+i%5 giving a known dual objective. Development m384/512, heldouts320/640. This supplements all earlier unchanged fixtures.
+Also declare an irregular column-work LP before tuning weighted dispatch: 8m variables, m private identity rows plus a concentrated dense tail of m/2 columns, with x=1 and y=1+i%5 giving a known dual objective. Development m384/512, heldouts 320/640. This supplements all earlier unchanged fixtures.

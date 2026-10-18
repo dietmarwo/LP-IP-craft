@@ -1,4 +1,4 @@
-# Iteration17: Tune dense update dispatch thresholds
+# Iteration 17: Tune dense update dispatch thresholds
 
 ## Change and purpose
 

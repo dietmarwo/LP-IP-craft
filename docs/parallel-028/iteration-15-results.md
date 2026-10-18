@@ -1,4 +1,4 @@
-# Iteration15: results
+# Iteration 15: results
 
 Reusable numeric execution reaches LU dense-tail factorization through an explicit borrowed resource. Sparse Markowitz selection, replay, factor caps, singular fallback and current scalar arithmetic are unchanged.
 

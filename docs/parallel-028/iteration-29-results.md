@@ -1,6 +1,6 @@
-# Iteration29: results
+# Iteration 29: results
 
-Root iterations enter the owned pool once; gradients fuse with independent primal projections before row joins, avoiding a buffer pass and one phase. The original scalar loop is retained. Bitwise1/2/4/8 tests, compiled Python, warnings-denied Clippy/rustdoc and SpOC4 confirmation gate the checkpoint. Lint caught two unnecessary closure borrows and an equivalent benchmark range-loop style; corrected without changing model values. Added API, license, numerical and reproduction docs.
+Root iterations enter the owned pool once; gradients fuse with independent primal projections before row joins, avoiding a buffer pass and one phase. The original scalar loop is retained. Bitwise 1/2/4/8 tests, compiled Python, warnings-denied Clippy/rustdoc and SpOC4 confirmation gate the checkpoint. Lint caught two unnecessary closure borrows and an equivalent benchmark range-loop style; corrected without changing model values. Added API, license, numerical and reproduction docs.
 
 Regular release Rust tests: 198 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

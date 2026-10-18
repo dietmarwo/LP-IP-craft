@@ -1,8 +1,8 @@
-# Iteration26: Independent serial/eight numerical audit
+# Iteration 26: Independent serial/eight numerical audit
 
 ## Change and purpose
 
-Run a frozen generated LP/MIP corpus with independent SciPy/oracle checks under upstream, new1 and new8, plus public cases and conservative bound checks.
+Run a frozen generated LP/MIP corpus with independent SciPy/oracle checks under upstream, new 1 and new 8, plus public cases and conservative bound checks.
 
 ## Tests and measurement gate
 

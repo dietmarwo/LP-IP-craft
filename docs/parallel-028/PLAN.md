@@ -4,7 +4,7 @@ Base: current upstream `a1180e06a85685fa82ca977d521ef33f285f8f51`, including its
 
 ## Execution and numerical contract
 
-Plan, implement, test and measure each checkpoint before advancing. Target one total eight-thread CPU budget, with1/2/4/8 scaling and fixed-total-work batches. Existing independent batch/component/packing/tree parallelism is a baseline, not a new invention. Preserve scalar defaults, frozen models/seeds, objective/feasibility/integrality/KKT tolerances, finite-bound limits, conservative dual bounds, original-model validation, per-task budget accounting and schedule-independent ordered merges. No fast-math, unsafe parallel mutation or relaxed acceptance.
+Plan, implement, test and measure each checkpoint before advancing. Target one total eight-thread CPU budget, with 1/2/4/8 scaling and fixed-total-work batches. Existing independent batch/component/packing/tree parallelism is a baseline, not a new invention. Preserve scalar defaults, frozen models/seeds, objective/feasibility/integrality/KKT tolerances, finite-bound limits, conservative dual bounds, original-model validation, per-task budget accounting and schedule-independent ordered merges. No fast-math, unsafe parallel mutation or relaxed acceptance.
 
 Run builds/stress and timing sequentially. Timed children have eight-CPU affinity and record quota, workflow/native/CPU time, hashes, every sample and failures. Use one warmup plus at least three final repetitions, with build order rotated. Freeze primary and held-out families before tuning. Distinguish single-solve latency, standalone kernel time, multi-solve throughput and application progress under limits. Numerical equivalence is checked independently, not inferred from faster termination.
 

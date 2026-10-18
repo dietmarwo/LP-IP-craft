@@ -1,4 +1,4 @@
-# Iteration03: Bound batch task claims
+# Iteration 03: Bound batch task claims
 
 ## Change and purpose
 

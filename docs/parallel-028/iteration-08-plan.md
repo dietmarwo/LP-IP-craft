@@ -1,4 +1,4 @@
-# Iteration08: Use a serial residual fast path
+# Iteration 08: Use a serial residual fast path
 
 ## Change and purpose
 
@@ -12,4 +12,4 @@ Keep fixed-work packing incumbents and proof bounds unchanged; run existing resi
 
 Accept only a sound capability or a measured reduction of useful work; otherwise revert the prototype and preserve its evidence. Cheap fallbacks and the one-thread default remain. Final results will distinguish noisy/negative observations from retained wins.
 
-The selection fixture is not unit packing (rows have upper1.5 and a weighted capacity), so it cannot exercise residual search. Add an explicitly separate weighted binary cycle with unit-capacity conflict rows and an independent two-state dynamic-programming optimum; measure actual residual tasks at64 columns. Old fixtures remain unchanged.
+The selection fixture is not unit packing (rows have upper 1.5 and a weighted capacity), so it cannot exercise residual search. Add an explicitly separate weighted binary cycle with unit-capacity conflict rows and an independent two-state dynamic-programming optimum; measure actual residual tasks at 64 columns. Old fixtures remain unchanged.

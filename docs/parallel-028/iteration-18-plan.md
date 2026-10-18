@@ -1,4 +1,4 @@
-# Iteration18: Parallelize dense panel row updates
+# Iteration 18: Parallelize dense panel row updates
 
 ## Change and purpose
 

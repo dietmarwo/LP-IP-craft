@@ -1,4 +1,4 @@
-# Iteration07: results
+# Iteration 07: results
 
 Component workers retain private indexed results instead of locking a shared result vector. Post-join collection preserves missing/stopped parts and original-index error propagation; all existing component limits/cancellation tests pass.
 

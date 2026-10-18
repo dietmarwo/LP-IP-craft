@@ -1,4 +1,4 @@
-# Iteration06: Schedule expensive components first
+# Iteration 06: Schedule expensive components first
 
 ## Change and purpose
 

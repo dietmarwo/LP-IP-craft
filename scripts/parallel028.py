@@ -69,7 +69,7 @@ def validate(payload, case):
     if any(payload.get(k) != v for k, v in expected.items()):
         raise ValueError("child case mismatch")
     if inner * outer > 8 or min(inner, outer, jobs) < 1:
-        raise ValueError("CPU budget must be positive and at most8")
+        raise ValueError("CPU budget must be positive and at most 8")
     return payload
 
 

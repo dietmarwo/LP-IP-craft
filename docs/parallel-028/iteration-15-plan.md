@@ -1,4 +1,4 @@
-# Iteration15: Pass execution through basis factorization
+# Iteration 15: Pass execution through basis factorization
 
 ## Change and purpose
 

@@ -59,7 +59,7 @@ cases, where 0.15 failed on up to 2 of 550 per seed, and its MIP search needs
 
 MIPs still require finite bounds on **all** variables, including continuous
 variables, of magnitude at most 2^53-1 after justified root inference; unresolved
-infinities remain unsupported. Numerical kernels accept a maximum of 1–8 workers through `Options.threads`; small work stays scalar. Independent components, residual neighborhoods and binary frontiers keep their existing worker controls. Explicit numerical width>1 serializes these outer mechanisms. Ordered batches also support outer×inner≤8; the existing 16-worker serial-inner API remains compatible. The two real SpOC4 matching tables are now application benchmarks; their current quality/bound progress and remaining root bottleneck are documented in [the 0.26 results](docs/spoc4-026/RESULTS.md). GTOC application readiness remains unverified.
+infinities remain unsupported. Numerical kernels accept a maximum of 1–8 workers through `Options.threads`; small work stays scalar. Independent components, residual neighborhoods and binary frontiers keep their existing worker controls. Explicit numerical width > 1 serializes these outer mechanisms. Ordered batches also support outer × inner ≤ 8; the existing 16-worker serial-inner API remains compatible. The two real SpOC4 matching tables are now application benchmarks; their current quality/bound progress and remaining root bottleneck are documented in [the 0.26 results](docs/spoc4-026/RESULTS.md). GTOC application readiness remains unverified.
 
 ## Build and use
 
@@ -207,6 +207,6 @@ integer binary covers, inserted before factorization; no dynamic local cuts.
 
 ## Eight-worker execution (0.28)
 
-For independent small models use `solve_batch(models, workers=8)` with default `Options(threads=1)`. For a large single LP or packing root use `Options(threads=8)`; scalar reductions, sparse pivot selection, triangular dependencies and independent acceptance remain ordered. To use existing packing residual workers choose numerical width1 and `NativeOptions(packing_workers=8, ...)`. Do not multiply eight outer workers by eight numerical workers. Mixed batches support1×8,2×4,4×2 and8×1, with per-job limits and input-order results.
+For independent small models use `solve_batch(models, workers=8)` with default `Options(threads=1)`. For a large single LP or packing root use `Options(threads=8)`; scalar reductions, sparse pivot selection, triangular dependencies and independent acceptance remain ordered. To use existing packing residual workers choose numerical width 1 and `NativeOptions(packing_workers=8, ...)`. Do not multiply eight outer workers by eight numerical workers. Mixed batches support 1×8, 2×4, 4×2 and 8×1, with per-job limits and input-order results.
 
-The native implementation remains owned safe Rust; Rayon1.12 supplies scheduling, not an external LP/MIP algorithm or BLAS. Local pools are owned, compatible live widths share weakly indexed resources, and no global Rayon pool is configured. Separate callers must manage their combined budgets. See the detailed execution contract and benchmark scopes before interpreting1/8 ratios.
+The native implementation remains owned safe Rust; Rayon 1.12 supplies scheduling, not an external LP/MIP algorithm or BLAS. Local pools are owned, compatible live widths share weakly indexed resources, and no global Rayon pool is configured. Separate callers must manage their combined budgets. See the detailed execution contract and benchmark scopes before interpreting 1/8 ratios.

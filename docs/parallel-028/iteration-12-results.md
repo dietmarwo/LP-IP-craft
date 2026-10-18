@@ -1,6 +1,6 @@
-# Iteration12: results
+# Iteration 12: results
 
-Native Options.threads accepts1..8 and dummy still rejects multiple workers. Numerical budgets serialize outer nesting, reach LP controls, and charge worker setup to deadlines. The first test run caught duplicate aggregate numeric_threads metadata; final aggregation replaces the child key before adding the actual owner budget. Full suite rerun passes.
+Native Options.threads accepts 1..8 and dummy still rejects multiple workers. Numerical budgets serialize outer nesting, reach LP controls, and charge worker setup to deadlines. The first test run caught duplicate aggregate numeric_threads metadata; final aggregation replaces the child key before adding the actual owner budget. Full suite rerun passes.
 
 Regular release Rust tests: 191 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

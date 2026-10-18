@@ -1,4 +1,4 @@
-# Iteration14: Parallelize dense column pricing
+# Iteration 14: Parallelize dense column pricing
 
 ## Change and purpose
 

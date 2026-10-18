@@ -1,4 +1,4 @@
-# Iteration14: results
+# Iteration 14: results
 
 Dense column pricing computes independent dot outputs, then gathers touched indices in original column order. Basic/logical columns, DROP and exact-zero rules remain. The dense-basis bitwise/support test requires actual column-pricing dispatch.
 

@@ -1,4 +1,4 @@
-# Iteration19: Improve dense scalar tile locality
+# Iteration 19: Improve dense scalar tile locality
 
 ## Change and purpose
 

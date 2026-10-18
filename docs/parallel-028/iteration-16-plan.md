@@ -1,4 +1,4 @@
-# Iteration16: Parallelize blocked Schur updates
+# Iteration 16: Parallelize blocked Schur updates
 
 ## Change and purpose
 

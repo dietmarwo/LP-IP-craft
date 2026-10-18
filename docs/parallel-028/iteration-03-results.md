@@ -1,6 +1,6 @@
-# Iteration03: results
+# Iteration 03: results
 
-Bounded claims amortize atomic queue traffic in long queues; small queues retain individual claims. All513 distinct-job/boundary tests and original error/cancellation tests pass.
+Bounded claims amortize atomic queue traffic in long queues; small queues retain individual claims. All 513 distinct-job/boundary tests and original error/cancellation tests pass.
 
 Regular release Rust tests: 183 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

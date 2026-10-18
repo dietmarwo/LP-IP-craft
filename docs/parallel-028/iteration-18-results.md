@@ -1,6 +1,6 @@
-# Iteration18: results
+# Iteration 18: results
 
-Experimental panel elimination distributes target rows after ordered pivot/swap. The unchanged per-target arithmetic is checked by factor-bit tests that exercise the8192-operation gate. Prototype remains subject to measured rejection.
+Experimental panel elimination distributes target rows after ordered pivot/swap. The unchanged per-target arithmetic is checked by factor-bit tests that exercise the 8192-operation gate. Prototype remains subject to measured rejection.
 
 Regular release Rust tests: 193 passed, zero failed. Release examples built. Builds/tests completed before timing; timed children run serially with at most eight numerical workers, pinned to eight allowed CPUs under the recorded quota. Every child checks complete job counts, finite outputs, the frozen known objective, original-model feasibility and LP dual residuals. One warmup and three measured repetitions, rotated build order.
 

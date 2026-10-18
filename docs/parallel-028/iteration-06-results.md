@@ -1,4 +1,4 @@
-# Iteration06: results
+# Iteration 06: results
 
 Parallel component queues now dispatch costly parts first. Node/pivot reservations stay attached to the original part index, and bounded-work configurations retain original dispatch order.
 

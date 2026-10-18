@@ -22,8 +22,26 @@ def main():
         "scheduling-confirmation",
         "scalar-isolation-production",
     ]
+    # The raw journals are not tracked (`/docs/*/data/` in .gitignore); they
+    # ship in the delivery archive, see docs/EVIDENCE.md.
+    required = [n + ".json" for n in names] + [
+        "applications-public.json",
+        "applications-spoc.json",
+        "audit-full/audit.json",
+    ]
+    missing = [n for n in required if not (d / n).is_file()]
+    if missing:
+        p.error(
+            f"raw data missing under {d}: {', '.join(missing)}. The journals ship "
+            "in the 0.28 delivery archive (docs/EVIDENCE.md); pass its "
+            "docs/parallel-028 directory with --root."
+        )
     datasets = {n: json.loads((d / (n + ".json")).read_text()) for n in names}
     for name, x in datasets.items():
+        assert all(r["cpu_seconds"] is not None for r in x["summary"]), (
+            name + ": the tables need child CPU time, recorded only where "
+            "getrusage exists (POSIX)"
+        )
         assert x["status"] == "passed" and len(x["records"]) == (
             x["repeats"] + 1
         ) * len(x["cases"]) * len(x["builds"]), name

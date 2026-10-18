@@ -1,8 +1,8 @@
-# Iteration24: Stress concurrent solves and isolation
+# Iteration 24: Stress concurrent solves and isolation
 
 ## Change and purpose
 
-Add simultaneous independent callers with total budget8, immutable shared models, changing dimensions/options and cancellation/errors followed by recovery.
+Add simultaneous independent callers with total budget 8, immutable shared models, changing dimensions/options and cancellation/errors followed by recovery.
 
 ## Tests and measurement gate
 

@@ -1,4 +1,4 @@
-# Iteration01: Freeze eight-worker performance harness
+# Iteration 01: Freeze eight-worker performance harness
 
 ## Change and purpose
 
