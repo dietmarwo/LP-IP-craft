@@ -905,37 +905,51 @@ impl Lp {
                 self.pi[k] = 0.0;
             }
         }
-        let (state, cost, start, index, value, pi) = (
-            &self.state,
-            &self.cost,
-            &self.col_start,
-            &self.col_index,
-            &self.col_value,
-            &self.pi,
-        );
         let work = if self.execution.threads() > 1 {
             (0..n)
-                .filter(|&j| state[j] != State::Basic)
-                .map(|j| start[j + 1] - start[j])
-                .sum()
+                .filter(|&j| self.state[j] != State::Basic)
+                .map(|j| self.col_start[j + 1] - self.col_start[j])
+                .sum::<usize>()
         } else {
             0
         };
-        self.execution
-            .chunks_mut(&mut self.d[..n], 64, work, |offset, part| {
-                for (local, out) in part.iter_mut().enumerate() {
-                    let j = offset + local;
-                    *out = if state[j] == State::Basic {
-                        0.
-                    } else {
-                        let mut v = cost[j];
-                        for e in start[j]..start[j + 1] {
-                            v -= value[e] * pi[index[e]];
-                        }
-                        v
-                    };
-                }
-            });
+        if work >= 262_144 {
+            let (state, cost, start, index, value, pi) = (
+                &self.state,
+                &self.cost,
+                &self.col_start,
+                &self.col_index,
+                &self.col_value,
+                &self.pi,
+            );
+            self.execution
+                .chunks_mut(&mut self.d[..n], 64, work, |offset, part| {
+                    for (local, out) in part.iter_mut().enumerate() {
+                        let j = offset + local;
+                        *out = if state[j] == State::Basic {
+                            0.
+                        } else {
+                            let mut v = cost[j];
+                            for e in start[j]..start[j + 1] {
+                                v -= value[e] * pi[index[e]];
+                            }
+                            v
+                        };
+                    }
+                });
+        } else {
+            for j in 0..n {
+                self.d[j] = if self.state[j] == State::Basic {
+                    0.0
+                } else {
+                    let mut v = self.cost[j];
+                    for e in self.col_start[j]..self.col_start[j + 1] {
+                        v -= self.col_value[e] * self.pi[self.col_index[e]];
+                    }
+                    v
+                };
+            }
+        }
         for k in 0..self.m {
             self.d[n + k] = if self.state[n + k] == State::Basic {
                 0.0
@@ -1070,41 +1084,61 @@ impl Lp {
         {
             let _column = crate::profile::enter("pricing_column");
             self.stats.column_pricings += 1;
-            let (state, start, index, values, rho) = (
-                &self.state,
-                &self.col_start,
-                &self.col_index,
-                &self.col_value,
-                &self.rho,
-            );
             let work = if self.execution.threads() > 1 {
                 (0..n)
-                    .filter(|&j| state[j] != State::Basic)
-                    .map(|j| start[j + 1] - start[j])
-                    .sum()
+                    .filter(|&j| self.state[j] != State::Basic)
+                    .map(|j| self.col_start[j + 1] - self.col_start[j])
+                    .sum::<usize>()
             } else {
                 0
             };
-            self.execution
-                .chunks_mut(&mut self.alpha[..n], 64, work, |offset, part| {
-                    for (local, out) in part.iter_mut().enumerate() {
-                        let j = offset + local;
-                        let mut value = 0.;
-                        if state[j] != State::Basic {
-                            for e in start[j]..start[j + 1] {
-                                let r = rho[index[e]];
-                                if r.abs() > DROP {
-                                    value += r * values[e];
+            if work >= 262_144 {
+                let (state, start, index, values, rho) = (
+                    &self.state,
+                    &self.col_start,
+                    &self.col_index,
+                    &self.col_value,
+                    &self.rho,
+                );
+                self.execution
+                    .chunks_mut(&mut self.alpha[..n], 64, work, |offset, part| {
+                        for (local, out) in part.iter_mut().enumerate() {
+                            let j = offset + local;
+                            let mut value = 0.;
+                            if state[j] != State::Basic {
+                                for e in start[j]..start[j + 1] {
+                                    let r = rho[index[e]];
+                                    if r.abs() > DROP {
+                                        value += r * values[e];
+                                    }
                                 }
                             }
+                            *out = value;
                         }
-                        *out = value;
+                    });
+                for j in 0..n {
+                    if self.alpha[j] != 0. {
+                        self.marked[j] = true;
+                        self.touched.push(j);
                     }
-                });
-            for j in 0..n {
-                if self.alpha[j] != 0. {
-                    self.marked[j] = true;
-                    self.touched.push(j);
+                }
+            } else {
+                for j in 0..n {
+                    if self.state[j] == State::Basic {
+                        continue;
+                    }
+                    let mut value = 0.;
+                    for e in self.col_start[j]..self.col_start[j + 1] {
+                        let rho = self.rho[self.col_index[e]];
+                        if rho.abs() > DROP {
+                            value += rho * self.col_value[e];
+                        }
+                    }
+                    if value != 0. {
+                        self.alpha[j] = value;
+                        self.marked[j] = true;
+                        self.touched.push(j);
+                    }
                 }
             }
             for &k in &self.rho_index {
