@@ -193,10 +193,10 @@ fn subtract_dot(mut value: f64, a: &[f64], x: &[f64]) -> f64 {
 }
 
 fn schur_serial(d: &mut [f64], n: usize, start: usize, end: usize) {
-    for j0 in (end..n).step_by(TILE) {
-        let jend = (j0 + TILE).min(n);
-        for r0 in (end..n).step_by(TILE) {
-            for r in r0..(r0 + TILE).min(n) {
+    for r0 in (end..n).step_by(TILE) {
+        for r in r0..(r0 + TILE).min(n) {
+            for j0 in (end..n).step_by(TILE) {
+                let jend = (j0 + TILE).min(n);
                 for t in start..end {
                     let l = d[r * n + t];
                     let (head, tail) = d.split_at_mut(r * n);
