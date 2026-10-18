@@ -247,3 +247,17 @@ Iteration 0 (main) on this host:
   record's search changed. Some means looked up to 9% slower, but
   instruction counts on five search-identical cases changed by −0.4% to
   +3.5%, so those differences are timing noise. Oracle gates: 0 failures.
+
+### 11. Mixed-row propagation in probing — rejected
+
+- **Plan.** Probing used only the exact integer propagation, so it cannot
+  act through rows with continuous columns (bell5, egout, facility
+  location, lot sizing). Alternate it with the outward mixed propagation,
+  as presolve itself does. The mixed domain gains a reset.
+- **Result.** It found reductions only on bell5: 5 fixings and 12
+  tightenings. These lift bell5's presolved root from 8,608,418 to
+  8,908,552, and the GMI root from 8,931,303 to 8,935,255 (the 8.94M target
+  is still not met). But the tree got much worse: bell5 GMI-only needs
+  327,797 nodes at the 1M cap, against 52,495 before, and is lost at the
+  100k cap under gmi, combined and heuristics. Rejected; probing stays
+  exact-only.
