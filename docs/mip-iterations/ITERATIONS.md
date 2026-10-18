@@ -304,3 +304,28 @@ Iteration 0 (main) on this host:
   | gap-2 | 1.160 G | 0.902 G | −22% |
   | p0548 | 1.453 G | 1.357 G | −7% |
   | lseu | 3.316 G | 2.990 G | −10% |
+
+### 14. Warm-started feasibility pump — accepted
+
+- **Plan.** On small models the heuristics policy cost several times the
+  combined policy's root time. setcover-2 spent 911 root pivots against
+  64, almost all in the L1 feasibility pump: every round built a new
+  projection LP (n + |I| columns, m + 2|I| rows) and solved it from the
+  slack basis. Successive rounds differ only in the rounded target, which
+  enters the projection's row bounds and auxiliary column bounds, never its
+  costs. So build the projection LP once and move the bounds; the dual
+  simplex continues from the previous optimal basis, which stays dual
+  feasible. The LP gains `set_row_bounds`. Heuristics policy only.
+- **Result.** Heuristics policy:
+
+  | Set | Before | After |
+  |---|---:|---:|
+  | public | 0.155 s | 0.141 s |
+  | synthetic | 0.0470 s | 0.0414 s |
+  | held-out | 0.0388 s | 0.0358 s |
+  | families | 0.0018 s | 0.0015 s |
+
+  Root pivots drop, for example on p0548 from 4,085 to 1,040 (0.25 →
+  0.17 s), on gt2 from 2,009 to 671, and on setcover-2 from 911 to 244.
+  Searches are unchanged except for ±2 nodes on 10 records (the pump's own
+  LP calls), with the same results. Other policies are untouched.

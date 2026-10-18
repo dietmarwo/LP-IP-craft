@@ -123,6 +123,8 @@ pub(crate) struct Lp {
     row_value: Vec<f64>,
     col_scale: Vec<f64>,
     row_scale: Vec<f64>,
+    /// Contribution of dropped fixed columns to each LP row.
+    shift: Vec<f64>,
     cost_scale: f64,
     sign: f64,
     cost0: Vec<f64>,
@@ -303,6 +305,7 @@ impl Lp {
             row_value,
             col_scale,
             row_scale,
+            shift,
             cost_scale,
             sign,
             cost: cost0.clone(),
@@ -445,9 +448,22 @@ impl Lp {
         self.set_lp_bound(j, lower, upper)
     }
 
+    /// Replaces the bounds of LP row `k` (original units). The basis is kept.
+    pub fn set_row_bounds(&mut self, k: usize, lower: f64, upper: f64) -> Result<()> {
+        let l = scaled(lower - self.shift[k], self.row_scale[k])?;
+        let u = scaled(upper - self.shift[k], self.row_scale[k])?;
+        self.assign_bounds(self.n + k, l, u);
+        Ok(())
+    }
+
     fn set_lp_bound(&mut self, j: usize, lower: f64, upper: f64) -> Result<()> {
         let l = scaled(lower, 1.0 / self.col_scale[j])?;
         let u = scaled(upper, 1.0 / self.col_scale[j])?;
+        self.assign_bounds(j, l, u);
+        Ok(())
+    }
+
+    fn assign_bounds(&mut self, j: usize, l: f64, u: f64) {
         if l != self.lower[j] || u != self.upper[j] {
             self.price_dirty.fill(true);
             self.lower[j] = l;
@@ -457,7 +473,6 @@ impl Lp {
                 self.primal_stale = true;
             }
         }
-        Ok(())
     }
 
     /// Returns to the logical basis `−I` with unit steepest-edge weights.
