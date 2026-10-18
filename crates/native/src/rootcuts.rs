@@ -13,6 +13,8 @@ pub(crate) struct Stats {
     pub rejected: u64,
     pub vubs: u64,
     pub basis_reuses: u64,
+    /// Cut rows slack at the final root LP optimum, removed before search.
+    pub pruned: u64,
     pub bound: Option<f64>,
     pub initial_objective: Option<f64>,
     pub stages: Vec<String>,
@@ -54,6 +56,10 @@ pub(crate) fn run(
     };
     let mut stagnant = 0;
     let mut previous: Option<f64> = None;
+    // Rows from here on are root cuts; `last` is the latest accepted optimum
+    // and the row count it belongs to.
+    let cuts_from = model.m();
+    let mut last: Option<(usize, Vec<f64>)> = None;
     for round in 0..=rounds {
         if budget.stop().is_some() || settings.node_limit.is_some_and(|n| stats.nodes >= n) {
             break;
@@ -73,6 +79,7 @@ pub(crate) fn run(
             break;
         }
         let objective = check::evaluate(model, &x, &options.tolerances)?.objective;
+        last = Some((model.m(), x.clone()));
         let bound = safe_dual_bound_with_bounds(model, model.variables(), &duals.row_duals)?.bound;
         if let Some(b) = bound {
             stats.bound = Some(stats.bound.map_or(b, |old| {
@@ -148,6 +155,51 @@ pub(crate) fn run(
         lp = lp.extend_rows(model)?;
         stats.basis_reuses += 1;
     }
+    if let Some((rows, x)) = last {
+        if rows == model.m() && rows > cuts_from {
+            stats.pruned = prune_slack(model, cuts_from, &x)?;
+        }
+    }
     stats.pivots = budget.pivots;
     Ok(stats)
+}
+/// Removes cut rows (index `from` on) that are strictly slack at the root LP
+/// optimum `x`. Each has a zero dual there, so `x` and its duals stay
+/// optimal for the smaller LP and the root relaxation value is unchanged;
+/// dropping valid inequalities never removes a feasible point.
+fn prune_slack(model: &mut Model, from: usize, x: &[f64]) -> Result<u64> {
+    let a = model.matrix();
+    let rows = model.rows();
+    let slack = |i: usize| {
+        let activity: f64 = (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
+            .map(|k| a.values[k] * x[a.pattern.indices[k]])
+            .sum();
+        let margin = |b: f64| 1e-6 * (1. + b.abs());
+        (!rows.lower[i].is_finite() || activity > rows.lower[i] + margin(rows.lower[i]))
+            && (!rows.upper[i].is_finite() || activity < rows.upper[i] - margin(rows.upper[i]))
+    };
+    let keep: Vec<bool> = (0..model.m()).map(|i| i < from || !slack(i)).collect();
+    let removed = keep.iter().filter(|k| !**k).count() as u64;
+    if removed == 0 {
+        return Ok(0);
+    }
+    let mut data = model.data().clone();
+    let (mut indptr, mut indices, mut values) = (vec![0], Vec::new(), Vec::new());
+    let (mut lower, mut upper) = (Vec::new(), Vec::new());
+    for i in (0..model.m()).filter(|&i| keep[i]) {
+        let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
+        indices.extend_from_slice(&a.pattern.indices[range.clone()]);
+        values.extend_from_slice(&a.values[range]);
+        indptr.push(values.len());
+        lower.push(rows.lower[i]);
+        upper.push(rows.upper[i]);
+    }
+    data.matrix.pattern.rows = lower.len();
+    data.matrix.pattern.indptr = indptr;
+    data.matrix.pattern.indices = indices;
+    data.matrix.values = values;
+    data.rows.lower = lower;
+    data.rows.upper = upper;
+    *model = Model::new(data)?;
+    Ok(removed)
 }

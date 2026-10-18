@@ -381,6 +381,7 @@ pub(crate) fn solve(
         ("gmi_cuts", advanced_stats.gmi),
         ("mir_cuts", advanced_stats.mir),
         ("root_basis_reuses", advanced_stats.basis_reuses),
+        ("root_cuts_pruned", advanced_stats.pruned),
         ("cut_exact_work", advanced_stats.exact_work),
         ("cut_candidates", advanced_stats.candidates),
         ("cut_rejected", advanced_stats.rejected),
