@@ -282,3 +282,25 @@ Iteration 0 (main) on this host:
     tree elsewhere.
   Rejected by rule. Density control for combined separation is the most
   promising open direction from these iterations.
+
+### 13. Index GMI multipliers instead of copying them — accepted
+
+- **Plan.** After iteration 12, gap-2 combined still spent about a quarter
+  of its instructions in the allocator. The largest source was copying big
+  integer multipliers: the back-substitution copied each one once per row
+  entry it scales (290,659 copies on gap-2). Each addition also extracted
+  the multiplier's limbs again into a fresh vector. Store each multiplier
+  once, with its limbs prepared, and reference it by index. Form products
+  of large multipliers in a stack buffer. A magnitude that cannot fit is
+  refused before the product, exactly as the width check refused it
+  before; refused additions charge no work. The sums are unchanged, so the
+  search must be identical.
+- **Result.** All 270 evaluation records are search-identical to
+  iteration 10. Wall-clock means moved within noise. Instruction counts
+  (combined):
+
+  | Case | Iteration 10 | Iteration 13 | Change |
+  |---|---:|---:|---:|
+  | gap-2 | 1.160 G | 0.902 G | −22% |
+  | p0548 | 1.453 G | 1.357 G | −7% |
+  | lseu | 3.316 G | 2.990 G | −10% |

@@ -9,7 +9,7 @@
 //! so it, too, has integer coefficients. No gcd is ever needed.
 use crate::{
     Budget,
-    dyadic::{Dy, Int, Wide, exponent_of},
+    dyadic::{Dy, Int, Multiplier, Wide, exponent_of},
     lp::Lp,
     rational,
 };
@@ -314,8 +314,10 @@ enum Anchored {
 /// Exact column sums `Σ k v` for integer k and binary64 v: in place when they
 /// fit [`Wide`], otherwise in [`Dy`]. Both are exact, so the result does not
 /// depend on which one was used.
+/// Each term `(j, k, v)` adds `multipliers[k] * v` to column j.
 fn column_sums(
-    terms: &[(usize, Int, f64)],
+    terms: &[(usize, usize, f64)],
+    multipliers: &[Multiplier],
     wide: &mut Wide,
     acc: &mut Accumulator,
 ) -> Option<Vec<(usize, Dy)>> {
@@ -325,13 +327,19 @@ fn column_sums(
         .min()
         .unwrap_or(0);
     wide.reset(base);
-    if terms.iter().all(|(j, k, v)| wide.add_int_scaled(*j, k, *v)) {
+    if terms
+        .iter()
+        .all(|&(j, k, v)| wide.add_int_scaled(j, &multipliers[k], v))
+    {
         return Some(wide.drain());
     }
     wide.reset(base);
     acc.clear();
-    for (j, k, v) in terms {
-        acc.add(*j, &Dy::from_int(k.clone()).mul(&exact(*v)?)?)?;
+    for &(j, k, v) in terms {
+        acc.add(
+            j,
+            &Dy::from_int(multipliers[k].value.clone()).mul(&exact(v)?)?,
+        )?;
     }
     Some(acc.drain())
 }
@@ -352,6 +360,7 @@ fn gmi(
     // Exact identity Σ_j (Σ_i k_i a_ij) x_j - Σ_i k_i s_i = 0, s = A x.
     let mut used = Vec::new();
     let mut products = Vec::new();
+    let mut multipliers = Vec::new();
     for (i, k) in integer_weights(weights)?.into_iter().enumerate() {
         if k == 0 {
             continue;
@@ -360,12 +369,14 @@ fn gmi(
             return None;
         }
         let w = Int::from_i64(k);
+        let index = multipliers.len();
         for t in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
-            products.push((a.pattern.indices[t], w.clone(), a.values[t]));
+            products.push((a.pattern.indices[t], index, a.values[t]));
         }
-        used.push((i, Dy::from_int(w)));
+        used.push((i, Dy::from_int(w.clone())));
+        multipliers.push(Multiplier::new(w));
     }
-    let aggregate = column_sums(&products, wide, acc)?;
+    let aggregate = column_sums(&products, &multipliers, wide, acc)?;
     let p = aggregate
         .iter()
         .find(|t| t.0 == pivot)
@@ -429,7 +440,8 @@ fn gmi(
     // GMI Σ g z >= 1 times f0 g0: integer z gets r g0 (r <= f0) or
     // (p - r) f0, continuous z gets c g0 (c > 0) or -c f0, with r = c mod p.
     let mut rhs = Dy::from_int(f0.mul(&g0)?.neg());
-    let mut products = Vec::new();
+    products.clear();
+    multipliers.clear();
     for ((_, integer, term), c) in terms.into_iter().zip(&ints[2..]) {
         if stopped() {
             return None;
@@ -454,19 +466,25 @@ fn gmi(
             Anchored::Column(j, sign, bound) => {
                 let gs = signed_int(g, sign);
                 rhs = rhs.sub(&Dy::from_int(gs.clone()).mul(&bound)?)?;
-                products.push((j, gs.neg(), 1.));
+                products.push((j, multipliers.len(), 1.));
+                multipliers.push(Multiplier::new(gs.neg()));
             }
             Anchored::Row(i, sign, bound) => {
                 let gs = signed_int(g, sign);
                 rhs = rhs.sub(&Dy::from_int(gs.clone()).mul(&bound)?)?;
-                let minus = gs.neg();
                 for t in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
-                    products.push((a.pattern.indices[t], minus.clone(), a.values[t]));
+                    products.push((a.pattern.indices[t], multipliers.len(), a.values[t]));
                 }
+                multipliers.push(Multiplier::new(gs.neg()));
             }
         }
     }
-    enclose(model, column_sums(&products, wide, acc)?, &rhs, "gmi")
+    enclose(
+        model,
+        column_sums(&products, &multipliers, wide, acc)?,
+        &rhs,
+        "gmi",
+    )
 }
 #[derive(Clone)]
 struct Vub {
@@ -1602,18 +1620,21 @@ pub(crate) mod tests {
                     )
                     .unwrap();
             }
-            let got = column_sums(&terms, &mut wide, &mut acc).unwrap();
+            let multipliers: Vec<_> = terms.iter().map(|t| Multiplier::new(t.1.clone())).collect();
+            let indexed: Vec<_> = terms
+                .iter()
+                .enumerate()
+                .map(|(k, t)| (t.0, k, t.2))
+                .collect();
+            let got = column_sums(&indexed, &multipliers, &mut wide, &mut acc).unwrap();
             assert_eq!(got, expected.drain(), "case {case}");
         }
         // Cancellation to exactly zero leaves no column.
         let one = Int::from_u64(1);
-        let terms = vec![
-            (2, one.clone(), 0.75),
-            (2, one.neg(), 0.75),
-            (3, one, 1e-300),
-        ];
+        let multipliers = [Multiplier::new(one.clone()), Multiplier::new(one.neg())];
+        let terms = vec![(2, 0, 0.75), (2, 1, 0.75), (3, 0, 1e-300)];
         assert_eq!(
-            column_sums(&terms, &mut wide, &mut acc).unwrap(),
+            column_sums(&terms, &multipliers, &mut wide, &mut acc).unwrap(),
             vec![(3, Dy::from_f64(1e-300).unwrap())]
         );
     }

@@ -476,6 +476,25 @@ impl Dy {
     }
 }
 
+/// An integer prepared for repeated use in [`Wide::add_int_scaled`]: the
+/// limbs of a large magnitude are extracted once.
+pub(crate) struct Multiplier {
+    pub(crate) value: Int,
+    limbs: Vec<u64>,
+}
+impl Multiplier {
+    pub(crate) fn new(value: Int) -> Self {
+        let mut limbs = match &value.0 {
+            Repr::Small(_) => Vec::new(),
+            Repr::Big { .. } => value.magnitude_u64(),
+        };
+        while limbs.last() == Some(&0) {
+            limbs.pop();
+        }
+        Self { value, limbs }
+    }
+}
+
 /// 64-bit limbs per column of [`Wide`]: 1536 bits.
 const WIDE: usize = 24;
 
@@ -565,10 +584,11 @@ impl Wide {
         true
     }
     /// Adds `g * v` exactly (`v = 1` for a plain integer).
-    pub(crate) fn add_int_scaled(&mut self, j: usize, g: &Int, v: f64) -> bool {
+    pub(crate) fn add_int_scaled(&mut self, j: usize, g: &Multiplier, v: f64) -> bool {
         let Some((negative, mantissa, e)) = parts(v) else {
             return v == 0.;
         };
+        let (g, magnitude) = (&g.value, &g.limbs);
         if let Repr::Small(k) = &g.0 {
             // Inline multiplier: the product has at most 3 limbs.
             let k = k.unsigned_abs();
@@ -577,16 +597,25 @@ impl Wide {
             let product = [low as u64, high as u64, (high >> 64) as u64];
             return self.add_magnitude(j, negative != g.is_negative(), &product, e);
         }
-        let magnitude = g.magnitude_u64();
-        let mut product = Vec::with_capacity(magnitude.len() + 1);
+        // A magnitude of WIDE - 1 nonzero limbs or more never fits, and a
+        // refused addition charges nothing.
+        if magnitude.len() >= WIDE {
+            return false;
+        }
+        let mut product = [0u64; WIDE];
         let mut carry = 0u128;
-        for &limb in &magnitude {
+        for (slot, &limb) in product.iter_mut().zip(magnitude) {
             let t = u128::from(limb) * u128::from(mantissa) + carry;
-            product.push(t as u64);
+            *slot = t as u64;
             carry = t >> 64;
         }
-        product.push(carry as u64);
-        self.add_magnitude(j, negative != g.is_negative(), &product, e)
+        product[magnitude.len()] = carry as u64;
+        self.add_magnitude(
+            j,
+            negative != g.is_negative(),
+            &product[..=magnitude.len()],
+            e,
+        )
     }
     fn value(&self, j: usize) -> Dy {
         let column = &self.limbs[j];
