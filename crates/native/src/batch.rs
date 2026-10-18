@@ -82,25 +82,7 @@ impl NativeSolver {
             }
             out
         };
-        let results = std::thread::scope(|scope| -> Result<Vec<_>> {
-            let mut handles = Vec::new();
-            for _ in 1..workers {
-                handles.push(
-                    std::thread::Builder::new()
-                        .name("lpip-batch".into())
-                        .spawn_scoped(scope, work)
-                        .map_err(|e| Error::Backend(format!("batch worker creation: {e}")))?,
-                );
-            }
-            let mut out = work();
-            for h in handles {
-                out.extend(
-                    h.join()
-                        .map_err(|_| Error::Backend("batch worker panicked".into()))?,
-                );
-            }
-            Ok(out)
-        })?;
+        let results = run_shared(workers, work)?;
         let mut out: Vec<_> = (0..models.len()).map(|_| None).collect();
         for (i, result) in results {
             out[i] = Some(result);
@@ -108,5 +90,75 @@ impl NativeSolver {
         out.into_iter()
             .map(|r| r.ok_or_else(|| Error::Backend("batch result missing".into())))
             .collect()
+    }
+}
+
+/// Runs `work` on `workers` threads, the calling thread being one of them,
+/// and concatenates their outputs. Every thread is joined before returning,
+/// and a panic in any share, the caller's included, is reported as
+/// `Error::Backend`, as when every worker was a spawned thread.
+fn run_shared<T: Send>(workers: usize, work: impl Fn() -> Vec<T> + Sync) -> Result<Vec<T>> {
+    let panicked = || Error::Backend("batch worker panicked".into());
+    std::thread::scope(|scope| {
+        let work = &work;
+        let mut handles = Vec::new();
+        let mut creation = None;
+        for _ in 1..workers {
+            match std::thread::Builder::new()
+                .name("lpip-batch".into())
+                .spawn_scoped(scope, work)
+            {
+                Ok(h) => handles.push(h),
+                Err(e) => {
+                    creation = Some(Error::Backend(format!("batch worker creation: {e}")));
+                    break;
+                }
+            }
+        }
+        if let Some(e) = creation {
+            for h in handles {
+                let _ = h.join();
+            }
+            return Err(e);
+        }
+        let own = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work));
+        let joined: Vec<_> = handles.into_iter().map(|h| h.join()).collect();
+        let mut out = own.map_err(|_| panicked())?;
+        for share in joined {
+            out.extend(share.map_err(|_| panicked())?);
+        }
+        Ok(out)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn panicked(r: Result<Vec<usize>>) -> bool {
+        matches!(r, Err(Error::Backend(m)) if m == "batch worker panicked")
+    }
+
+    #[test]
+    fn every_share_runs_once() {
+        let calls = AtomicUsize::new(0);
+        let mut out = run_shared(4, || vec![calls.fetch_add(1, Ordering::Relaxed)]).unwrap();
+        out.sort_unstable();
+        assert_eq!(out, [0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn a_panic_on_the_calling_thread_is_an_error_like_a_worker_panic() {
+        let caller = std::thread::current().id();
+        let on_caller = || {
+            assert_ne!(std::thread::current().id(), caller, "injected");
+            vec![1]
+        };
+        let on_worker = || {
+            assert_eq!(std::thread::current().id(), caller, "injected");
+            vec![1]
+        };
+        assert!(panicked(run_shared(3, on_caller)));
+        assert!(panicked(run_shared(3, on_worker)));
     }
 }
