@@ -6,7 +6,6 @@ import json
 import math
 import os
 from pathlib import Path
-import resource
 import statistics
 import struct
 import subprocess
@@ -14,6 +13,40 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+
+try:  # POSIX only; child CPU time is recorded where available.
+    import resource
+except ImportError:
+    resource = None
+
+
+def allowed_cpus():
+    """The CPUs this process may run on, or None where the OS does not say."""
+    if hasattr(os, "sched_getaffinity"):
+        return sorted(os.sched_getaffinity(0))
+    return None
+
+
+def cgroup_cpu_max():
+    """The cgroup v2 CPU quota, or None outside a cgroup v2 hierarchy."""
+    try:
+        return Path("/sys/fs/cgroup/cpu.max").read_text().strip()
+    except OSError:
+        return None
+
+
+def children_cpu_seconds():
+    if resource is None:
+        return None
+    usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return usage.ru_utime + usage.ru_stime
+
+
+def pinning(cpus):
+    """A preexec function that pins a child to `cpus`, where supported."""
+    if cpus is None or not hasattr(os, "sched_setaffinity"):
+        return None
+    return lambda: os.sched_setaffinity(0, cpus)
 
 
 def sha(path):
@@ -274,7 +307,8 @@ def main():
         for instance in ["i", "ii"]:
             for scenario in (["root"] if a.quick else ["root", "repair"]):
                 cases.append(["spoc", instance, scenario])
-    affinity = sorted(os.sched_getaffinity(0))[:8]
+    cpus = allowed_cpus()
+    affinity = cpus[:8] if cpus is not None else None
     configurations = []
     for case in cases:
         configurations.append((case, "baseline", 1, 1))
@@ -288,7 +322,7 @@ def main():
         status="running",
         repeats=a.repeats,
         affinity=affinity,
-        cpu_max=Path("/sys/fs/cgroup/cpu.max").read_text().strip(),
+        cpu_max=cgroup_cpu_max(),
         configurations=configurations,
         records=records,
     )
@@ -340,7 +374,7 @@ def main():
                         error=None,
                     )
                     records.append(row)
-                    cpu = resource.getrusage(resource.RUSAGE_CHILDREN)
+                    cpu = children_cpu_seconds()
                     t = time.perf_counter()
                     proc = subprocess.run(
                         command,
@@ -349,13 +383,12 @@ def main():
                         capture_output=True,
                         text=True,
                         timeout=60,
-                        preexec_fn=lambda: os.sched_setaffinity(0, affinity),
+                        preexec_fn=pinning(affinity),
                     )
-                    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+                    after = children_cpu_seconds()
                     row.update(
                         process_seconds=time.perf_counter() - t,
-                        cpu_seconds=(after.ru_utime + after.ru_stime)
-                        - (cpu.ru_utime + cpu.ru_stime),
+                        cpu_seconds=None if cpu is None else after - cpu,
                         returncode=proc.returncode,
                         stdout=proc.stdout,
                         stderr=proc.stderr,
@@ -416,7 +449,11 @@ def main():
                     workflow_seconds=statistics.median(
                         r["payload"]["workflow_seconds"] for r in rows
                     ),
-                    cpu_seconds=statistics.median(r["cpu_seconds"] for r in rows),
+                    cpu_seconds=(
+                        None
+                        if any(r["cpu_seconds"] is None for r in rows)
+                        else statistics.median(r["cpu_seconds"] for r in rows)
+                    ),
                     statuses=[r["payload"]["result"]["status"] for r in rows],
                     objectives=[r["payload"]["result"].get("objective") for r in rows],
                     bounds=[r["payload"]["result"].get("bound") for r in rows],

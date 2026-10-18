@@ -6,10 +6,43 @@ import json
 import math
 import os
 from pathlib import Path
-import resource
 import statistics
 import subprocess
 import time
+
+try:  # POSIX only; child CPU time is recorded where available.
+    import resource
+except ImportError:
+    resource = None
+
+
+def allowed_cpus():
+    """The CPUs this process may run on, or None where the OS does not say."""
+    if hasattr(os, "sched_getaffinity"):
+        return sorted(os.sched_getaffinity(0))
+    return None
+
+
+def cgroup_cpu_max():
+    """The cgroup v2 CPU quota, or None outside a cgroup v2 hierarchy."""
+    try:
+        return Path("/sys/fs/cgroup/cpu.max").read_text().strip()
+    except OSError:
+        return None
+
+
+def children_cpu_seconds():
+    if resource is None:
+        return None
+    usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return usage.ru_utime + usage.ru_stime
+
+
+def pinning(cpus):
+    """A preexec function that pins a child to `cpus`, where supported."""
+    if cpus is None or not hasattr(os, "sched_setaffinity"):
+        return None
+    return lambda: os.sched_setaffinity(0, cpus)
 
 
 def validate(payload, case):
@@ -109,15 +142,15 @@ def main():
     for c in cases:
         if c[3] * c[4] > 8 or min(c[3:]) < 1:
             p.error("case exceeds eight-thread budget")
-    affinity = sorted(os.sched_getaffinity(0))[:8]
-    quota = Path("/sys/fs/cgroup/cpu.max")
+    cpus = allowed_cpus()
+    affinity = cpus[:8] if cpus is not None else None
     result = {
         "schema_version": 1,
         "status": "running",
         "repeats": a.repeats,
         "cases": cases,
         "affinity": affinity,
-        "cpu_max": quota.read_text().strip() if quota.exists() else None,
+        "cpu_max": cgroup_cpu_max(),
         "builds": {
             k: {"path": str(v), "sha256": hashlib.sha256(v.read_bytes()).hexdigest()}
             for k, v in builds.items()
@@ -144,7 +177,7 @@ def main():
                     + labels[: repetition % len(labels)]
                 ):
                     command = [str(builds[label]), *map(str, c)]
-                    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+                    before = children_cpu_seconds()
                     t = time.perf_counter()
                     row = {
                         "build": label,
@@ -161,7 +194,7 @@ def main():
                             capture_output=True,
                             text=True,
                             timeout=a.timeout,
-                            preexec_fn=lambda: os.sched_setaffinity(0, affinity),
+                            preexec_fn=pinning(affinity),
                         )
                         row.update(
                             process_seconds=time.perf_counter() - t,
@@ -169,10 +202,8 @@ def main():
                             stdout=proc.stdout,
                             stderr=proc.stderr,
                         )
-                        after = resource.getrusage(resource.RUSAGE_CHILDREN)
-                        row["cpu_seconds"] = (after.ru_utime + after.ru_stime) - (
-                            before.ru_utime + before.ru_stime
-                        )
+                        after = children_cpu_seconds()
+                        row["cpu_seconds"] = None if before is None else after - before
                         if proc.returncode:
                             raise ValueError("child exit " + str(proc.returncode))
                         row["payload"] = validate(json.loads(proc.stdout), c)
@@ -200,8 +231,10 @@ def main():
                         "process_seconds": statistics.median(
                             r["process_seconds"] for r in records
                         ),
-                        "cpu_seconds": statistics.median(
-                            r["cpu_seconds"] for r in records
+                        "cpu_seconds": (
+                            None
+                            if any(r["cpu_seconds"] is None for r in records)
+                            else statistics.median(r["cpu_seconds"] for r in records)
                         ),
                         "objective": records[0]["payload"]["objective"],
                         "pivots": records[0]["payload"]["pivots"],

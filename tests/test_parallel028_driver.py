@@ -58,6 +58,9 @@ def test_budget_and_missing_certificate_are_rejected():
         driver.validate(p, CASE)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="the failing child is a POSIX script"
+)
 def test_actual_driver_persists_failed_child(tmp_path):
     child = tmp_path / "bad.py"
     child.write_text("#!/usr/bin/env python3\nprint('{}')\n")
