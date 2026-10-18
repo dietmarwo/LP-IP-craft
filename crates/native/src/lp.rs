@@ -109,6 +109,7 @@ enum Outcome {
 
 pub(crate) struct Lp {
     execution: crate::parallel::Execution,
+    weighted_pricing: bool,
     n: usize,
     m: usize,
     rows: Vec<usize>,
@@ -293,6 +294,13 @@ impl Lp {
             dtol.push((dual / (cost_scale * r)).clamp(1e-12, 1e-7));
         }
         let mut lp = Self {
+            weighted_pricing: controls.threads > 1
+                && nnz >= 65_536
+                && (0..n)
+                    .map(|j| col_start[j + 1] - col_start[j])
+                    .max()
+                    .unwrap_or(0)
+                    > 4 * nnz / n.max(1),
             execution: if nnz >= 65_536 {
                 crate::parallel::Execution::new(controls.threads).map_err(Error::Backend)?
             } else {
@@ -913,25 +921,43 @@ impl Lp {
             &self.col_value,
             &self.pi,
         );
-        self.execution.chunks_mut(
-            &mut self.d[..n],
-            64,
-            self.col_value.len(),
-            |offset, part| {
-                for (local, out) in part.iter_mut().enumerate() {
-                    let j = offset + local;
-                    *out = if state[j] == State::Basic {
-                        0.
-                    } else {
-                        let mut v = cost[j];
-                        for e in start[j]..start[j + 1] {
-                            v -= value[e] * pi[index[e]];
-                        }
-                        v
-                    };
-                }
-            },
-        );
+        if self.weighted_pricing {
+            self.execution
+                .weighted_mut(&mut self.d[..n], &self.col_start, |offset, part| {
+                    for (local, out) in part.iter_mut().enumerate() {
+                        let j = offset + local;
+                        *out = if state[j] == State::Basic {
+                            0.
+                        } else {
+                            let mut v = cost[j];
+                            for e in start[j]..start[j + 1] {
+                                v -= value[e] * pi[index[e]];
+                            }
+                            v
+                        };
+                    }
+                });
+        } else {
+            self.execution.chunks_mut(
+                &mut self.d[..n],
+                64,
+                self.col_value.len(),
+                |offset, part| {
+                    for (local, out) in part.iter_mut().enumerate() {
+                        let j = offset + local;
+                        *out = if state[j] == State::Basic {
+                            0.
+                        } else {
+                            let mut v = cost[j];
+                            for e in start[j]..start[j + 1] {
+                                v -= value[e] * pi[index[e]];
+                            }
+                            v
+                        };
+                    }
+                },
+            );
+        }
         for k in 0..self.m {
             self.d[n + k] = if self.state[n + k] == State::Basic {
                 0.0
@@ -1073,26 +1099,48 @@ impl Lp {
                 &self.col_value,
                 &self.rho,
             );
-            self.execution.chunks_mut(
-                &mut self.alpha[..n],
-                64,
-                self.col_value.len(),
-                |offset, part| {
-                    for (local, out) in part.iter_mut().enumerate() {
-                        let j = offset + local;
-                        let mut value = 0.;
-                        if state[j] != State::Basic {
-                            for e in start[j]..start[j + 1] {
-                                let r = rho[index[e]];
-                                if r.abs() > DROP {
-                                    value += r * values[e];
+            if self.weighted_pricing {
+                self.execution.weighted_mut(
+                    &mut self.alpha[..n],
+                    &self.col_start,
+                    |offset, part| {
+                        for (local, out) in part.iter_mut().enumerate() {
+                            let j = offset + local;
+                            let mut value = 0.;
+                            if state[j] != State::Basic {
+                                for e in start[j]..start[j + 1] {
+                                    let r = rho[index[e]];
+                                    if r.abs() > DROP {
+                                        value += r * values[e];
+                                    }
                                 }
                             }
+                            *out = value;
                         }
-                        *out = value;
-                    }
-                },
-            );
+                    },
+                );
+            } else {
+                self.execution.chunks_mut(
+                    &mut self.alpha[..n],
+                    64,
+                    self.col_value.len(),
+                    |offset, part| {
+                        for (local, out) in part.iter_mut().enumerate() {
+                            let j = offset + local;
+                            let mut value = 0.;
+                            if state[j] != State::Basic {
+                                for e in start[j]..start[j + 1] {
+                                    let r = rho[index[e]];
+                                    if r.abs() > DROP {
+                                        value += r * values[e];
+                                    }
+                                }
+                            }
+                            *out = value;
+                        }
+                    },
+                );
+            }
             for j in 0..n {
                 if self.alpha[j] != 0. {
                     self.marked[j] = true;

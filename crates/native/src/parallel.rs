@@ -74,6 +74,55 @@ impl Execution {
         }
     }
 
+    /// Maps disjoint output ranges using cumulative nonnegative column work.
+    /// Each leaf keeps its original scalar arithmetic; no numeric reduction occurs.
+    pub fn weighted_mut<T, F>(&self, data: &mut [T], prefix: &[usize], f: F)
+    where
+        T: Send,
+        F: Fn(usize, &mut [T]) + Send + Sync,
+    {
+        assert_eq!(prefix.len(), data.len() + 1);
+        fn visit<T: Send, F: Fn(usize, &mut [T]) + Send + Sync>(
+            data: &mut [T],
+            prefix: &[usize],
+            offset: usize,
+            lanes: usize,
+            f: &F,
+        ) {
+            if lanes <= 1 || data.len() <= 1 {
+                f(offset, data);
+                return;
+            }
+            let total = prefix[prefix.len() - 1] - prefix[0];
+            let target = prefix[0] + total / 2;
+            let split = if total == 0 {
+                data.len() / 2
+            } else {
+                prefix
+                    .partition_point(|&w| w < target)
+                    .clamp(1, data.len() - 1)
+            };
+            let (left, right) = data.split_at_mut(split);
+            rayon::join(
+                || visit(left, &prefix[..=split], offset, lanes / 2, f),
+                || {
+                    visit(
+                        right,
+                        &prefix[split..],
+                        offset + split,
+                        lanes - lanes / 2,
+                        f,
+                    )
+                },
+            );
+        }
+        if let Some(pool) = &self.pool {
+            pool.install(|| visit(data, prefix, 0, self.threads() * 2, &f));
+        } else {
+            f(0, data);
+        }
+    }
+
     /// Creates private state on each worker and reuses it for dynamically
     /// assigned tasks. State itself need not be Send or Sync; only outputs do.
     pub fn map_with_init<S, T, I, F>(&self, count: usize, init: I, f: F) -> Vec<T>
@@ -231,5 +280,28 @@ mod state_tests {
                 .map_with_init::<(), usize, _, _>(0, |_| panic!("empty init"), |_, _| 0)
                 .is_empty()
         );
+    }
+}
+
+#[cfg(test)]
+mod weighted_tests {
+    #[test]
+    fn skewed_empty_columns_and_offsets_have_exactly_one_owner() {
+        for width in [1, 2, 4, 8] {
+            let e = super::Execution::new(width).unwrap();
+            for count in [0, 1, 7, 65, 1000] {
+                let mut prefix = vec![0];
+                for i in 0..count {
+                    prefix.push(prefix[i] + if i > count * 3 / 4 { 10000 } else { 0 });
+                }
+                let mut out = vec![usize::MAX; count];
+                e.weighted_mut(&mut out, &prefix, |first, part| {
+                    for (i, v) in part.iter_mut().enumerate() {
+                        *v = first + i;
+                    }
+                });
+                assert_eq!(out, (0..count).collect::<Vec<_>>());
+            }
+        }
     }
 }

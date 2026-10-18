@@ -25,6 +25,16 @@ impl NativeSolver {
                 "batch outer workers times numerical threads must not exceed8".into(),
             ));
         }
+        // Batch-owned resources keep mixed inner jobs from repeatedly rebuilding pools.
+        let _numeric_execution = if options.threads > 1
+            && !cancel.is_cancelled()
+            && self.settings.time_limit_seconds != Some(0.)
+            && models.iter().any(|m| m.nnz() >= 65_536)
+        {
+            crate::parallel::Execution::new(options.threads).map_err(Error::Backend)?
+        } else {
+            crate::parallel::Execution::default()
+        };
         let mut settings = self.settings.clone();
         settings.component_threads = 1;
         settings.packing_workers = 1;
