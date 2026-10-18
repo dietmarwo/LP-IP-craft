@@ -121,9 +121,9 @@ fn run_shared<T: Send>(workers: usize, work: impl Fn() -> Vec<T> + Sync) -> Resu
             }
             return Err(e);
         }
-        let own = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work));
+        let own = crate::ordered::inline("batch", work);
         let joined: Vec<_> = handles.into_iter().map(|h| h.join()).collect();
-        let mut out = own.map_err(|_| panicked())?;
+        let mut out = own?;
         for share in joined {
             out.extend(share.map_err(|_| panicked())?);
         }

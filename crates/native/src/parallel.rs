@@ -15,6 +15,14 @@ pub fn validate_threads(threads: usize) -> Result<(), String> {
     }
 }
 
+fn pool(threads: usize) -> Result<rayon::ThreadPool, String> {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .thread_name(|i| format!("lpip-worker-{i}"))
+        .build()
+        .map_err(|e| format!("native worker creation: {e}"))
+}
+
 /// Reusable owned execution resources; one means no worker pool.
 #[derive(Clone, Debug, Default)]
 pub struct Execution {
@@ -23,6 +31,11 @@ pub struct Execution {
 
 impl Execution {
     /// Creates at most `threads` workers. Supported budgets are 1 through 8.
+    ///
+    /// Live owners of the same width share one set of workers. A shared
+    /// worker that waits for its own subtasks runs other owners' queued tasks
+    /// meanwhile, so a long task of one owner can hold up another owner until
+    /// that task ends. Use [`Execution::exclusive`] for long tasks.
     pub fn new(threads: usize) -> Result<Self, String> {
         validate_threads(threads)?;
         if threads == 1 {
@@ -35,15 +48,21 @@ impl Execution {
         if let Some(pool) = pools.get(&threads).and_then(Weak::upgrade) {
             return Ok(Self { pool: Some(pool) });
         }
-        let pool = Arc::new(
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .thread_name(|i| format!("lpip-worker-{i}"))
-                .build()
-                .map_err(|e| format!("native worker creation: {e}"))?,
-        );
+        let pool = Arc::new(pool(threads)?);
         pools.insert(threads, Arc::downgrade(&pool));
         Ok(Self { pool: Some(pool) })
+    }
+
+    /// Creates at most `threads` workers that no other owner shares, for
+    /// long tasks such as the packing root loop, which runs as one task.
+    pub fn exclusive(threads: usize) -> Result<Self, String> {
+        validate_threads(threads)?;
+        if threads == 1 {
+            return Ok(Self::default());
+        }
+        Ok(Self {
+            pool: Some(Arc::new(pool(threads)?)),
+        })
     }
 
     /// Configured maximum numerical workers.
@@ -284,6 +303,43 @@ mod sharing_tests {
             c.pool.as_ref().unwrap(),
             d.pool.as_ref().unwrap()
         ));
+        let e = Execution::exclusive(8).unwrap();
+        assert_eq!(e.threads(), 8);
+        assert!(!Arc::ptr_eq(
+            d.pool.as_ref().unwrap(),
+            e.pool.as_ref().unwrap()
+        ));
+        assert!(Execution::exclusive(1).unwrap().pool.is_none());
+        assert!(Execution::exclusive(9).is_err());
+    }
+
+    /// A task of 0.1 s whose worker waits for its second half: on a pool
+    /// shared with a 1 s task queued meanwhile, it took the 1 s.
+    #[test]
+    fn a_long_exclusive_task_does_not_hold_up_another_owner() {
+        use std::time::{Duration, Instant};
+        let a = Execution::new(2).unwrap();
+        let b = Execution::exclusive(2).unwrap();
+        let worst = (0..3)
+            .map(|_| {
+                std::thread::scope(|s| {
+                    let short = s.spawn(|| {
+                        let t = Instant::now();
+                        a.map(2, |i| {
+                            std::thread::sleep(Duration::from_millis(40 + 60 * i as u64))
+                        });
+                        t.elapsed()
+                    });
+                    s.spawn(|| {
+                        std::thread::sleep(Duration::from_millis(60));
+                        b.map(1, |_| std::thread::sleep(Duration::from_secs(1)));
+                    });
+                    short.join().unwrap()
+                })
+            })
+            .max()
+            .unwrap();
+        assert!(worst < Duration::from_millis(600), "{worst:?}");
     }
 }
 

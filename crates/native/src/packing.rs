@@ -858,7 +858,7 @@ fn residual_search(
                 out
             };
             let results = if workers == 1 {
-                work()
+                crate::ordered::inline("residual", work)?
             } else {
                 std::thread::scope(|scope| -> Result<Vec<_>> {
                     let mut handles = Vec::new();
@@ -1304,8 +1304,10 @@ pub(crate) fn solve(
             .sum::<f64>();
     let greedy_seconds = began.elapsed().as_secs_f64();
     let t = Instant::now();
+    // The root loop is one long pool task: exclusive workers keep it from
+    // holding up other owners of the same width (see `Execution::new`).
     let execution = if model.nnz() >= 131_072 {
-        crate::parallel::Execution::new(options.threads).map_err(Error::Backend)?
+        crate::parallel::Execution::exclusive(options.threads).map_err(Error::Backend)?
     } else {
         crate::parallel::Execution::default()
     };
