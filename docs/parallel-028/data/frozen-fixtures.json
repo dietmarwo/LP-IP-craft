@@ -1,0 +1,54 @@
+{
+  "upstream": "a1180e06a85685fa82ca977d521ef33f285f8f51",
+  "source": "crates/native/examples/family_benchmark.rs",
+  "sha256": "8a7d9c60b4eeff227787107bc464869fd45b08569b1dbc71d52169a47880c225",
+  "primary": {
+    "packing": [
+      512,
+      1024
+    ],
+    "irregular": [
+      128,
+      256
+    ],
+    "selection": [
+      20,
+      28
+    ],
+    "dense": [
+      192,
+      384
+    ],
+    "components": [
+      64,
+      128
+    ],
+    "batch": [
+      32,
+      128
+    ]
+  },
+  "holdout": {
+    "packing": [
+      768,
+      1536
+    ],
+    "irregular": [
+      160,
+      320
+    ],
+    "selection": [
+      24,
+      30
+    ],
+    "dense": [
+      256,
+      512
+    ],
+    "components": [
+      96,
+      160
+    ]
+  },
+  "known_optimum": "Planted primal/dual construction for continuous families, independent dynamic program for selection."
+}
