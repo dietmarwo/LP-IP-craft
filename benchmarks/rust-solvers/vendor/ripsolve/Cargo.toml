@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/ripsolve", "crates/ripsolve-py"]
+
+[workspace.package]
+version = "0.4.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/ripsolve/ripsolve"
+homepage = "https://github.com/ripsolve/ripsolve"
+keywords = ["optimization", "mip", "solver", "simplex", "linear-programming"]
+categories = ["mathematics", "science", "algorithms"]
+
+[workspace.dependencies]
+ripsolve = { path = "crates/ripsolve", version = "0.4.0" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"
+lp_parser_rs = "4.1"
+pyo3 = "0.29"
+
+[profile.release]
+lto = true
+codegen-units = 1
+debug = 1
+
+# The test suite solves real instances to proven optimality, which is thousands of
+# simplex iterations. Unoptimized that takes minutes; optimized it takes seconds.
+# `debug-assertions` stays on, so the debug_assert! invariants still run.
+[profile.test]
+opt-level = 2

@@ -915,6 +915,12 @@ fn local_cliques(
 pub(crate) fn child_settings(settings: &NativeOptions, began: Instant) -> NativeOptions {
     let mut s = settings.clone();
     s.packing_root = false;
+    s.mip_presolve = false;
+    s.coefficient_tightening = false;
+    s.dual_presolve = false;
+    s.gmi_cuts = false;
+    s.mir_cuts = false;
+    s.root_heuristics = false;
     s.packing_neighborhoods = 0;
     s.packing_cuts = false;
     s.packing_rounds = 1;

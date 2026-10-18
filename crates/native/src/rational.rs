@@ -326,6 +326,22 @@ impl Rat {
         let ord = self.n.mul(&b.d)?.cmp(&b.n.mul(&self.d)?);
         Some(if self.negative { ord.reverse() } else { ord })
     }
+    /// Mathematical floor, including negative nonintegers.
+    pub fn floor(&self) -> Self {
+        let (q, r) = self.n.div_rem(&self.d);
+        Self {
+            negative: self.negative,
+            n: if self.negative && !r.zero() {
+                q.add(&Nat::small(1))
+            } else {
+                q
+            },
+            d: Nat::small(1),
+        }
+    }
+    pub fn frac(&self) -> Option<Self> {
+        self.sub(&self.floor())
+    }
     pub fn upper(&self) -> Option<f64> {
         if self.is_zero() {
             return Some(0.);

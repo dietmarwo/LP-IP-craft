@@ -6,6 +6,7 @@
 mod active;
 mod batch;
 mod boxed;
+mod certified_cuts;
 mod components;
 mod cuts;
 mod dense;
@@ -15,16 +16,19 @@ mod incumbent;
 mod jump;
 mod lp;
 mod lu;
+mod mip_presolve;
 mod mixed;
 mod ordering;
 mod packing;
 mod presolve;
+mod primal;
 pub mod profile;
 mod propagate;
 mod rational;
 #[cfg(feature = "basis-replay")]
 pub mod replay;
 mod root;
+mod rootcuts;
 mod tree;
 mod witness;
 
@@ -139,6 +143,20 @@ pub struct NativeOptions {
     pub root_cuts: bool,
     /// LP-directed root cover separation, rebuilding caches before search.
     pub root_separation: bool,
+    pub mip_presolve: bool,
+    pub coefficient_tightening: bool,
+    pub dual_presolve: bool,
+    pub mip_presolve_rounds: usize,
+    pub gmi_cuts: bool,
+    pub mir_cuts: bool,
+    pub mip_cut_rounds: usize,
+    pub mip_cut_limit: usize,
+    pub cut_exact_work: u64,
+    pub root_heuristics: bool,
+    pub heuristic_lp_calls: usize,
+    pub branching_score: String,
+    pub pseudocost_min_step: f64,
+    pub branch_trace_limit: usize,
     pub root_cut_rounds: usize,
     pub cover_lifting: bool,
     /// Infer sound mixed MIP root bounds before finite-domain admission.
@@ -251,6 +269,20 @@ impl Default for NativeOptions {
             component_parallel_min_entries: 2048,
             root_cuts: false,
             root_separation: false,
+            mip_presolve: false,
+            coefficient_tightening: false,
+            dual_presolve: false,
+            mip_presolve_rounds: 8,
+            gmi_cuts: false,
+            mir_cuts: false,
+            mip_cut_rounds: 8,
+            mip_cut_limit: 16,
+            cut_exact_work: 4_000_000,
+            root_heuristics: false,
+            heuristic_lp_calls: 16,
+            branching_score: "weighted_sum".into(),
+            pseudocost_min_step: 0.,
+            branch_trace_limit: 0,
             root_cut_rounds: 2,
             cover_lifting: true,
             root_propagation: true,
@@ -293,6 +325,45 @@ impl Default for NativeOptions {
 impl NativeOptions {
     /// Validate settings before cancellation or numerical work.
     pub fn validate(&self) -> Result<()> {
+        for (valid, message) in [
+            (
+                self.mip_presolve_rounds <= 32,
+                "mip_presolve_rounds must be at most 32",
+            ),
+            (
+                self.mip_cut_rounds <= 50,
+                "mip_cut_rounds must be at most 50",
+            ),
+            (
+                (1..=64).contains(&self.mip_cut_limit),
+                "mip_cut_limit must lie in 1..=64",
+            ),
+            (
+                self.cut_exact_work <= 100_000_000,
+                "cut_exact_work must be at most 100000000",
+            ),
+            (
+                self.heuristic_lp_calls <= 128,
+                "heuristic_lp_calls must be at most 128",
+            ),
+            (
+                self.branch_trace_limit <= 256,
+                "branch_trace_limit must be at most 256",
+            ),
+            (
+                ["weighted_sum", "product"].contains(&self.branching_score.as_str()),
+                "branching_score must be weighted_sum or product",
+            ),
+            (
+                self.pseudocost_min_step.is_finite()
+                    && (0.0..=0.5).contains(&self.pseudocost_min_step),
+                "pseudocost_min_step must be finite in 0..=0.5",
+            ),
+        ] {
+            if !valid {
+                return Err(Error::InvalidInput(message.into()));
+            }
+        }
         let phase = |t: Option<f64>| t.is_none_or(|t| t.is_finite() && t >= 0.);
         for (ok, message) in [
             (
@@ -791,6 +862,7 @@ struct Pseudocosts {
     count: Vec<[u32; 2]>,
     total: [f64; 2],
     total_count: [u32; 2],
+    min_step: f64,
 }
 impl Pseudocosts {
     fn new(n: usize) -> Self {
@@ -799,10 +871,12 @@ impl Pseudocosts {
             count: vec![[0; 2]; n],
             total: [0.0; 2],
             total_count: [0; 2],
+            min_step: 0.,
         }
     }
     fn record(&mut self, origin: Origin, objective: f64) {
-        let gain = (objective - origin.parent_objective).max(0.0) / origin.distance;
+        let gain =
+            (objective - origin.parent_objective).max(0.0) / origin.distance.max(self.min_step);
         if gain.is_finite() && origin.distance > 0.0 {
             let d = usize::from(origin.up);
             self.sum[origin.j][d] += gain;
@@ -928,6 +1002,7 @@ struct Counters {
     strong_work: u64,
     strong_work_exits: u64,
     reduced_cost_fixings: u64,
+    branch_events: Vec<String>,
 }
 
 impl NativeSolver {
@@ -1070,6 +1145,7 @@ impl NativeSolver {
             origin: None,
         });
         let mut pseudocosts = Pseudocosts::new(model.n());
+        pseudocosts.min_step = settings.pseudocost_min_step;
         let mut certifier = Certifier {
             lp: None,
             attempts: 0,
@@ -1361,7 +1437,8 @@ impl NativeSolver {
             if let Some(origin) = node.origin {
                 pseudocosts.record(origin, objective);
             }
-            let branch = branching_variable(model, node_bounds, &x, options, &pseudocosts);
+            let branch =
+                branching_variable(model, node_bounds, &x, options, &pseudocosts, settings);
             if branch.is_some()
                 && settings.incumbent_heuristic
                 && (result.nodes == 1 || !pool.upper.is_finite())
@@ -1453,6 +1530,23 @@ impl NativeSolver {
                 branch
             };
             if let Some(j) = branch {
+                if counters.branch_events.len() < settings.branch_trace_limit {
+                    let mut columns = vec![j];
+                    columns.extend(
+                        (0..model.n())
+                            .filter(|&k| {
+                                k != j
+                                    && model.kinds()[k].is_integral()
+                                    && (x[k] - x[k].round()).abs() > options.tolerances.integrality
+                            })
+                            .take(15),
+                    );
+                    let candidates=columns.iter().map(|&k|format!("{{\"column\":{k},\"value\":{},\"down_sum\":{},\"up_sum\":{},\"down_count\":{},\"up_count\":{},\"down_estimate\":{},\"up_estimate\":{}}}",x[k],pseudocosts.sum[k][0],pseudocosts.sum[k][1],pseudocosts.count[k][0],pseudocosts.count[k][1],pseudocosts.estimate(k,false),pseudocosts.estimate(k,true))).collect::<Vec<_>>().join(",");
+                    counters.branch_events.push(format!(
+                        "{{\"node\":{},\"chosen\":{j},\"candidates\":[{candidates}]}}",
+                        result.nodes
+                    ));
+                }
                 let fixes = if settings.reduced_cost_fixing && lattice && node.depth <= 8 {
                     reduced_cost_fixes(model, node_bounds, &x, &duals, pool.upper, bound, &budget)?
                 } else {
@@ -1660,6 +1754,12 @@ impl NativeSolver {
         result.iterations = budget.pivots;
         if let Some(trace) = pool.trace.take() {
             trace.finish(&mut result, domain.statistics(), diagnostic_original, model);
+        }
+        if settings.branch_trace_limit > 0 {
+            result.backend.effective_options.push((
+                "diagnostics.branch_trace".into(),
+                format!("[{}]", counters.branch_events.join(",")),
+            ));
         }
         result.message = format!(
             "Native dual simplex numerical solve: {} (not an exact certificate)",
@@ -1941,7 +2041,7 @@ fn strong_branch(
         }
     }
     if reliable {
-        Ok(branching_variable(model, bounds, x, options, pseudocosts).or(best))
+        Ok(branching_variable(model, bounds, x, options, pseudocosts, budget.settings).or(best))
     } else {
         Ok(best)
     }
@@ -1957,6 +2057,7 @@ fn branching_variable(
     x: &[f64],
     options: &Options,
     pseudocosts: &Pseudocosts,
+    settings: &NativeOptions,
 ) -> Option<usize> {
     let fraction = |j: usize| (j, (x[j] - x[j].round()).abs());
     let most = |a: &(usize, f64), b: &(usize, f64)| a.1.total_cmp(&b.1);
@@ -1971,7 +2072,11 @@ fn branching_variable(
                 let down = x[j] - x[j].floor();
                 let a = (pseudocosts.estimate(j, false) * down).max(1e-6);
                 let b = (pseudocosts.estimate(j, true) * (1.0 - down)).max(1e-6);
-                let score = 0.8 * a.min(b) + 0.2 * a.max(b);
+                let score = if settings.branching_score == "product" {
+                    a.sqrt() * b.sqrt()
+                } else {
+                    0.8 * a.min(b) + 0.2 * a.max(b)
+                };
                 (j, score + 1e-12 * f)
             })
             .max_by(most)
@@ -2088,6 +2193,23 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ("steepest_edge", s.steepest_edge.to_string()),
         ("root_cuts", s.root_cuts.to_string()),
         ("root_separation", s.root_separation.to_string()),
+        ("mip_presolve", s.mip_presolve.to_string()),
+        (
+            "coefficient_tightening",
+            s.coefficient_tightening.to_string(),
+        ),
+        ("dual_presolve", s.dual_presolve.to_string()),
+        ("mip_presolve_rounds", s.mip_presolve_rounds.to_string()),
+        ("gmi_cuts", s.gmi_cuts.to_string()),
+        ("mir_cuts", s.mir_cuts.to_string()),
+        ("mip_cut_rounds", s.mip_cut_rounds.to_string()),
+        ("mip_cut_limit", s.mip_cut_limit.to_string()),
+        ("cut_exact_work", s.cut_exact_work.to_string()),
+        ("root_heuristics", s.root_heuristics.to_string()),
+        ("heuristic_lp_calls", s.heuristic_lp_calls.to_string()),
+        ("branching_score", s.branching_score.to_string()),
+        ("pseudocost_min_step", s.pseudocost_min_step.to_string()),
+        ("branch_trace_limit", s.branch_trace_limit.to_string()),
         ("root_cut_rounds", s.root_cut_rounds.to_string()),
         ("cover_lifting", s.cover_lifting.to_string()),
         ("root_propagation", s.root_propagation.to_string()),
@@ -2301,5 +2423,55 @@ mod option_validation_tests {
             .validate()
             .is_ok()
         );
+    }
+}
+
+#[cfg(test)]
+mod branching_policy_tests {
+    use super::*;
+    use lp_ip_craft::{CsrMatrix, ModelData, VariableKind};
+    #[test]
+    fn product_and_weighted_sum_choose_distinct_planted_candidates() {
+        let m = Model::new(ModelData {
+            objective: vec![1.; 2],
+            objective_offset: 0.,
+            sense: Sense::Minimize,
+            variables: Bounds::new(vec![0.; 2], vec![2.; 2]),
+            kinds: vec![VariableKind::Integer; 2],
+            matrix: CsrMatrix::from_dense(0, 2, &[]).unwrap(),
+            rows: Bounds::free(0),
+        })
+        .unwrap();
+        let mut p = Pseudocosts::new(2);
+        p.sum = vec![[200., 20000.], [3000., 3000.]];
+        p.count = vec![[1000, 1000]; 2];
+        p.total = [3200., 23000.];
+        p.total_count = [2000, 2000];
+        for (score, expected) in [("weighted_sum", 0), ("product", 1)] {
+            let s = NativeOptions {
+                branching_score: score.into(),
+                ..Default::default()
+            };
+            assert_eq!(
+                branching_variable(&m, m.variables(), &[0.5, 0.5], &Options::default(), &p, &s),
+                Some(expected)
+            );
+        }
+    }
+    #[test]
+    fn pseudocost_step_floor_is_opt_in_and_does_not_inflate_tiny_steps() {
+        let origin = Origin {
+            j: 0,
+            up: false,
+            distance: 1e-8,
+            parent_objective: 0.,
+        };
+        let mut raw = Pseudocosts::new(1);
+        raw.record(origin, 1.);
+        let mut clamped = Pseudocosts::new(1);
+        clamped.min_step = 0.01;
+        clamped.record(origin, 1.);
+        assert_eq!(raw.sum[0][0], 1e8);
+        assert_eq!(clamped.sum[0][0], 100.);
     }
 }

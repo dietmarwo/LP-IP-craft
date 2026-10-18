@@ -1,0 +1,92 @@
+--- a/crates/ripsolve/Cargo.toml
++++ b/crates/ripsolve/Cargo.toml
+@@ -1,19 +1,19 @@
+ [package]
+ name = "ripsolve"
+ description = "A branch-and-cut solver for mixed-integer programs, in pure Rust. Fast on small and medium models."
+-homepage.workspace = true
+-keywords.workspace = true
+-categories.workspace = true
++homepage = "https://github.com/ripsolve/ripsolve"
++keywords = ["optimization", "mip", "solver"]
++categories = ["mathematics"]
+ readme = "README.md"
+ # The integration tests read model files from the repository's samples directory,
+ # which sits outside this package. Shipping them would hand every consumer a
+ # `cargo test` that fails on missing paths, so they stay in the repository where
+ # they work. The unit tests inside src/ are published and run normally.
+ exclude = ["tests/**"]
+-version.workspace = true
+-edition.workspace = true
+-license.workspace = true
+-repository.workspace = true
++version = "0.4.0"
++edition = "2024"
++license = "MIT"
++repository = "https://github.com/ripsolve/ripsolve"
+ documentation = "https://docs.rs/ripsolve"
+ 
+ # docs.rs builds with all features and shows which feature gates an item. Neither
+@@ -24,9 +24,9 @@
+ rustdoc-args = ["--cfg", "docsrs"]
+ 
+ [dev-dependencies]
+-lp_parser_rs.workspace = true
++lp_parser_rs = "4.1"
+ serde_json = "1"
+ 
+ [dependencies]
+-thiserror.workspace = true
+-lp_parser_rs.workspace = true
++thiserror = "2"
++lp_parser_rs = "4.1"
+--- a/crates/ripsolve/src/cuts.rs
++++ b/crates/ripsolve/src/cuts.rs
+@@ -462,6 +462,7 @@
+     x: &[f64],
+     limit: usize,
+ ) -> Vec<Cut> {
++    if std::env::var("RS_OFF").ok().as_deref()==Some("gomory") { return Vec::new(); }
+     let mut found: Vec<Cut> = lp
+         .gomory_cuts(basis, limit * 4)
+         .into_iter()
+@@ -564,6 +565,7 @@
+ /// nothing, because the optimal face is large enough that removing one vertex of it
+ /// leaves another worth the same. Eighteen of these move it to 52200 in two rounds.
+ pub fn separate_mod2(problem: &Problem, x: &[f64], limit: usize) -> Vec<Cut> {
++    if std::env::var("RS_OFF").ok().as_deref()==Some("mod2") { return Vec::new(); }
+     let tolerance = 1e-6;
+     let binary = |j: usize| {
+         problem.is_integer(j) && problem.col_lb[j] == 0.0 && problem.col_ub[j] == 1.0
+@@ -832,6 +834,7 @@
+ /// does not is a further step this does not take, so such rows are skipped rather than
+ /// cut incorrectly.
+ pub fn separate_mir(problem: &Problem, x: &[f64], limit: usize) -> Vec<Cut> {
++    if std::env::var("RS_OFF").ok().as_deref()==Some("mir") { return Vec::new(); }
+     let csr = problem.matrix.to_csr();
+     let vubs = variable_upper_bounds(problem);
+     let mut found: Vec<Cut> = Vec::new();
+@@ -1572,6 +1575,7 @@
+     x: &[f64],
+     limit: usize,
+ ) -> Vec<Cut> {
++    if std::env::var("RS_OFF").ok().as_deref()==Some("aggregation") { return Vec::new(); }
+     if conflicts.is_empty() {
+         return Vec::new();
+     }
+@@ -1786,6 +1790,7 @@
+     x: &[f64],
+     limit: usize,
+ ) -> Vec<Cut> {
++    if std::env::var("RS_OFF").ok().as_deref()==Some("clique") { return Vec::new(); }
+     if conflicts.is_empty() {
+         return Vec::new();
+     }
+@@ -1869,6 +1874,7 @@
+     limit: usize,
+     deadline: Option<std::time::Instant>,
+ ) -> Vec<Cut> {
++    if std::env::var("RS_OFF").ok().as_deref()==Some("cover") { return Vec::new(); }
+     let csr = problem.matrix.to_csr();
+     let mut found: Vec<Cut> = Vec::new();
+ 

@@ -1,5 +1,14 @@
 # Raw evidence for the native reports
 
+The 0.27 ripsolve delivery includes `docs/ripsolve-027/data/`, the two frozen
+oracle input/adjudication files below, comparison source and original held-out
+inputs. It does not duplicate all historical raw report directories. Its root
+`MANIFEST.sha256` covers the delivered source/evidence and baseline patch.
+See [the 0.27 results](ripsolve-027/RESULTS.md) and
+[reproduction instructions](ripsolve-027/REPRODUCE.md).
+
+## Historical 0.24 evidence archive
+
 The reports under `docs/*/RESULTS.md` were computed from raw observations
 (JSON records, logs and frozen inputs) kept in each report's `data/`
 directory. Those directories hold 427 files and 426.6 MB, almost all

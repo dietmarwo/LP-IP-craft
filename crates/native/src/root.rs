@@ -174,7 +174,13 @@ pub(crate) fn solve(
         || (!solver.settings.singleton_presolve
             && !solver.settings.root_propagation
             && !solver.settings.root_cuts
-            && !solver.settings.root_separation)
+            && !solver.settings.root_separation
+            && !solver.settings.mip_presolve
+            && !solver.settings.coefficient_tightening
+            && !solver.settings.dual_presolve
+            && !solver.settings.gmi_cuts
+            && !solver.settings.mir_cuts
+            && !solver.settings.root_heuristics)
         || cancel.is_cancelled()
         || solver.settings.time_limit_seconds == Some(0.)
         || solver.settings.iteration_limit == Some(0)
@@ -206,6 +212,17 @@ pub(crate) fn solve(
     } else {
         0
     };
+    let advanced =
+        solver.settings.gmi_cuts || solver.settings.mir_cuts || solver.settings.root_heuristics;
+    let presolve_stats = if model.is_mip()
+        && (solver.settings.mip_presolve
+            || solver.settings.coefficient_tightening
+            || solver.settings.dual_presolve)
+    {
+        mip_presolve::run(&mut reduced.model, &solver.settings, options, cancel, began)?
+    } else {
+        mip_presolve::Stats::default()
+    };
     let removed_rows = model.m() - reduced.model.m();
     let cuts = if solver.settings.root_cuts && model.is_mip() {
         cover_cuts(&mut reduced.model)?
@@ -219,7 +236,7 @@ pub(crate) fn solve(
     let mut cut_work = 0usize;
     let mut initial_bound = None;
     let mut initial_objective = None;
-    if solver.settings.root_separation && model.is_mip() && start.is_none() {
+    if solver.settings.root_separation && model.is_mip() && start.is_none() && !advanced {
         for _ in 0..solver.settings.root_cut_rounds {
             if cancel.is_cancelled()
                 || solver
@@ -277,7 +294,32 @@ pub(crate) fn solve(
             }
         }
     }
-    if reduced.model == *model && separation_nodes == 0 {
+    let advanced_stats = if advanced && model.is_mip() {
+        rootcuts::run(
+            &mut reduced.model,
+            options,
+            &solver.settings,
+            start,
+            cancel,
+            began,
+        )?
+    } else {
+        rootcuts::Stats::default()
+    };
+    separation_nodes += advanced_stats.nodes;
+    separation_pivots += advanced_stats.pivots;
+    let heuristic_start = advanced_stats
+        .seed
+        .as_ref()
+        .map(|x| WarmStart::from_primal(x.clone()));
+    let child_start = heuristic_start.as_ref().or(start);
+    if reduced.model == *model
+        && separation_nodes == 0
+        && !advanced
+        && !solver.settings.mip_presolve
+        && !solver.settings.coefficient_tightening
+        && !solver.settings.dual_presolve
+    {
         return original_after_preprocessing(solver, model, options, start, cancel, began);
     }
 
@@ -294,6 +336,12 @@ pub(crate) fn solve(
     settings.root_propagation = false;
     settings.root_cuts = false;
     settings.root_separation = false;
+    settings.mip_presolve = false;
+    settings.coefficient_tightening = false;
+    settings.dual_presolve = false;
+    settings.gmi_cuts = false;
+    settings.mir_cuts = false;
+    settings.root_heuristics = false;
     if let Some(n) = &mut settings.node_limit {
         *n = n.saturating_sub(separation_nodes);
     }
@@ -306,12 +354,54 @@ pub(crate) fn solve(
     let mut result = NativeSolver::new(settings).solve_internal(
         &reduced.model,
         options,
-        start,
+        child_start,
         cancel,
         model,
     )?;
+    if let Some(b) = advanced_stats.bound {
+        result.best_bound = Some(result.best_bound.map_or(b, |old| {
+            if model.sense() == Sense::Minimize {
+                old.max(b)
+            } else {
+                old.min(b)
+            }
+        }));
+    }
     result.nodes += separation_nodes;
     result.iterations += separation_pivots;
+    for (key, value) in [
+        ("mip_presolve_rounds", presolve_stats.rounds),
+        ("mip_presolve_bounds", presolve_stats.bounds),
+        ("mip_presolve_redundant", presolve_stats.redundant),
+        ("mip_presolve_forcing", presolve_stats.forcing),
+        ("mip_presolve_coefficients", presolve_stats.coefficients),
+        ("mip_presolve_dual_fixed", presolve_stats.dual_fixed),
+        ("mip_presolve_exact_work", presolve_stats.work),
+        ("mip_presolve_conflicts", presolve_stats.conflicts),
+        ("gmi_cuts", advanced_stats.gmi),
+        ("mir_cuts", advanced_stats.mir),
+        ("root_basis_reuses", advanced_stats.basis_reuses),
+        ("cut_exact_work", advanced_stats.exact_work),
+        ("cut_candidates", advanced_stats.candidates),
+        ("cut_rejected", advanced_stats.rejected),
+        ("mir_vubs", advanced_stats.vubs),
+        ("root_heuristic_lp_calls", advanced_stats.primal.calls),
+        (
+            "root_heuristic_candidates",
+            advanced_stats.primal.candidates,
+        ),
+        ("root_heuristic_cycles", advanced_stats.primal.cycles),
+        ("root_heuristic_failures", advanced_stats.primal.failures),
+    ] {
+        result
+            .backend
+            .effective_options
+            .push((format!("diagnostics.{key}"), value.to_string()));
+    }
+    result.backend.effective_options.push((
+        "diagnostics.root_stages".into(),
+        format!("[{}]", advanced_stats.stages.join(",")),
+    ));
     let number = |v: Option<f64>| v.map_or_else(|| "none".to_string(), |v| v.to_string());
     for (key, value) in [
         ("directed_root_cuts", directed_cuts.to_string()),
