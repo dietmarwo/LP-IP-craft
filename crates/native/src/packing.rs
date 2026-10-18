@@ -158,16 +158,88 @@ fn relaxation(
     began: Instant,
     seed: &[f64],
 ) -> Result<(Vec<f64>, Option<f64>, RootStats)> {
-    relaxation_with_execution(
-        pack,
-        model,
-        settings,
-        cancel,
-        began,
-        seed,
-        &crate::parallel::Execution::default(),
-    )
+    relaxation_scalar(pack, model, settings, cancel, began, seed)
 }
+fn relaxation_scalar(
+    pack: &Packing,
+    model: &Model,
+    settings: &NativeOptions,
+    cancel: &CancellationToken,
+    began: Instant,
+    seed: &[f64],
+) -> Result<(Vec<f64>, Option<f64>, RootStats)> {
+    let mut stats = RootStats::default();
+    let mut initial = vec![0f64; model.m()];
+    // Assign each column to one incident row: its maximum weight is a dual
+    // cover. Uncovered columns are handled by the variable-bound residual.
+    for j in 0..model.n() {
+        if let Some(&i) = pack.cols[j].first() {
+            initial[i] = initial[i].max(pack.weights[j]);
+        }
+    }
+    let mut bound = checked_bound(model, &initial, settings.objective_lattice)?;
+    stats.prices = initial;
+    let scale = pack.weights.iter().copied().fold(1., f64::max);
+    let max_row = pack.rows.iter().map(Vec::len).max().unwrap_or(1).max(1);
+    let max_col = pack.cols.iter().map(Vec::len).max().unwrap_or(1).max(1);
+    let step = 0.9 / ((max_row as f64) * (max_col as f64)).sqrt();
+    let mut x = seed.to_vec();
+    let mut avg = vec![0.; model.n()];
+    let mut y = vec![0.; model.m()];
+    let mut avg_y = y.clone();
+    let mut grad = vec![0.; model.n()];
+    let mut extrapolated = x.clone();
+    let step_work = (2 * model.nnz() + 4 * model.n() + 4 * model.m()) as u64;
+    for iteration in 0..if settings.packing_root {
+        settings.packing_root_iterations
+    } else {
+        0
+    } {
+        if stopped(settings, cancel, began)
+            || step_work > settings.packing_root_work.saturating_sub(stats.work)
+        {
+            break;
+        }
+        grad.fill(0.);
+        for (i, row) in pack.rows.iter().enumerate() {
+            for &j in row {
+                grad[j] += y[i];
+            }
+        }
+        for j in 0..model.n() {
+            let next = (x[j] + step * (pack.weights[j] / scale - grad[j]))
+                .clamp(model.variables().lower[j], model.variables().upper[j]);
+            extrapolated[j] = 2. * next - x[j];
+            x[j] = next;
+            avg[j] += (next - avg[j]) / ((iteration + 1) as f64);
+        }
+        for (i, row) in pack.rows.iter().enumerate() {
+            let activity: f64 = row.iter().map(|&j| extrapolated[j]).sum();
+            y[i] = (y[i] + step * (activity - 1.)).max(0.);
+            avg_y[i] += (y[i] - avg_y[i]) / ((iteration + 1) as f64);
+        }
+        stats.iterations += 1;
+        stats.work += step_work;
+        if iteration % 32 == 31 || iteration + 1 == settings.packing_root_iterations {
+            for prices in [&y, &avg_y] {
+                let prices: Vec<_> = prices.iter().map(|v| v * scale).collect();
+                if prices.iter().all(|v| v.is_finite()) {
+                    if let Some(b) = checked_bound(model, &prices, settings.objective_lattice)? {
+                        if bound.is_none_or(|old| b < old) {
+                            bound = Some(b);
+                            stats.prices = prices;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if stats.iterations == 0 {
+        avg = x;
+    }
+    Ok((avg, bound, stats))
+}
+
 fn relaxation_with_execution(
     pack: &Packing,
     model: &Model,
@@ -177,6 +249,9 @@ fn relaxation_with_execution(
     seed: &[f64],
     execution: &crate::parallel::Execution,
 ) -> Result<(Vec<f64>, Option<f64>, RootStats)> {
+    if execution.threads() == 1 {
+        return relaxation_scalar(pack, model, settings, cancel, began, seed);
+    }
     let mut stats = RootStats::default();
     let mut initial = vec![0f64; model.m()];
     // Assign each column to one incident row: its maximum weight is a dual
@@ -1229,7 +1304,7 @@ pub(crate) fn solve(
             .sum::<f64>();
     let greedy_seconds = began.elapsed().as_secs_f64();
     let t = Instant::now();
-    let execution = if model.nnz() >= 65_536 {
+    let execution = if model.nnz() >= 131_072 {
         crate::parallel::Execution::new(options.threads).map_err(Error::Backend)?
     } else {
         crate::parallel::Execution::default()

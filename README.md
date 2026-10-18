@@ -24,7 +24,7 @@
 
 # LP-IP-craft — native Rust LP/MIP solver
 
-Version **0.27.0** extends the 0.16 architecture, which replaced both 0.15
+Version **0.28.0** extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine

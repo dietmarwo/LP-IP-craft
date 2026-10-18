@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import resource
 import statistics
+import struct
 import subprocess
 import sys
 import time
@@ -369,6 +370,28 @@ def main():
                         math.isfinite(row["payload"][k])
                         for k in ["seconds", "workflow_seconds", "construction_seconds"]
                     )
+                    outcome = row["payload"]["result"]
+                    point = outcome.pop("point", None)
+                    if point is not None:
+                        data = struct.pack("<" + str(len(point)) + "d", *point)
+                        digest = hashlib.sha256(data).hexdigest()
+                        assert digest == outcome["point_sha256"]
+                        folder = a.output.parent / "points"
+                        folder.mkdir(exist_ok=True)
+                        dest = folder / (digest + ".f64")
+                        if dest.exists():
+                            assert (
+                                hashlib.sha256(dest.read_bytes()).hexdigest() == digest
+                            )
+                        else:
+                            dest.write_bytes(data)
+                        outcome.update(
+                            point_file="points/" + dest.name, point_length=len(point)
+                        )
+                    row["stdout_sha256"] = hashlib.sha256(
+                        proc.stdout.encode()
+                    ).hexdigest()
+                    row["stdout"] = None
                     save()
         summary = []
         for case, build, inner, outer in configurations:
@@ -407,6 +430,21 @@ def main():
                     ),
                 )
             )
+        # Fixed-work SpOC4 equality is checked across every actual call, including warmups.
+        fixed_work = []
+        for case in cases:
+            if case[0] != "spoc":
+                continue
+            rows = [r["payload"]["result"] for r in records if r["case"] == case]
+            reference = rows[0]
+            fields = ["point_sha256", "objective", "bound", "nodes", "pivots"]
+            assert all(
+                all(q.get(k) == reference.get(k) for k in fields) for q in rows
+            ), "fixed-work SpOC4 outcome changed"
+            fixed_work.append(
+                dict(case=case, checked_calls=len(rows), fields=fields, identical=True)
+            )
+        result["fixed_work_agreement"] = fixed_work
         result["summary"] = summary
         result["status"] = "passed"
     except Exception as e:

@@ -67,7 +67,16 @@ def default_cases(full=False, numeric=False):
                 cases.append(["packing", 64, mode, 1, t, 1])
         for mode in ["tree", "residual"]:
             for t in [1, 2, 4, 8]:
-                cases.append(["selection", 28, mode, 1, t, 1])
+                cases.append(
+                    [
+                        "ring" if mode == "residual" else "selection",
+                        64 if mode == "residual" else 28,
+                        mode,
+                        1,
+                        t,
+                        1,
+                    ]
+                )
     return cases
 
 

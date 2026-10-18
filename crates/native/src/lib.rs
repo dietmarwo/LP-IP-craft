@@ -2347,8 +2347,38 @@ impl LpIpSolver for NativeSolver {
                 ));
             }
         }
+        if options.threads == 1 {
+            let mut result = (|| {
+                if self.settings.packing_root
+                    || self.settings.packing_neighborhoods > 0
+                    || self.settings.packing_cuts
+                {
+                    if let Some(r) = packing::solve(self, model, options, start, cancel)? {
+                        return Ok(r);
+                    }
+                }
+                if self.settings.tree_threads > 1 {
+                    if let Some(r) = tree::solve(self, model, options, start, cancel, None, None)? {
+                        return Ok(r);
+                    }
+                }
+                root::solve(self, model, options, start, cancel)
+            })()?;
+            result
+                .backend
+                .effective_options
+                .retain(|(k, _)| k != "numeric_threads");
+            result
+                .backend
+                .effective_options
+                .push(("numeric_threads".into(), "1".into()));
+            return Ok(result);
+        }
         let eligible = options.threads > 1
             && model.nnz() >= 65_536
+            && !(self.settings.packing_root
+                && self.settings.packing_proof_seconds == Some(0.)
+                && model.nnz() < 131_072)
             && !cancel.is_cancelled()
             && !self
                 .settings
