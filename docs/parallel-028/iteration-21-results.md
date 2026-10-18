@@ -10,3 +10,5 @@ Regular release Rust tests: 194 passed, zero failed. Release examples built. Bui
 | dense / 384 / single / 8 / 1 / 1 | 140.823 | 156.111 | 0.902 |
 
 All raw samples, CPU time, binary hashes and failures are retained in `data/iteration-21.json`. Small differences may be shared-host noise; no monotone per-iteration speedup is inferred.
+
+The initial auxiliary factor JSON remained incomplete (11 records) despite its completion log, so it cannot certify the complete campaign. It is retained as `iteration-21-factor-incomplete.json`. The exact saved checkpoint21 executable was rerun at checkpoint25, with complete three-repeat data in `iteration-21-factor-recheck.json`. This does not affect the complete paired LP campaign above.
