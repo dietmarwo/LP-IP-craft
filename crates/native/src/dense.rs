@@ -85,7 +85,7 @@ impl DenseTail {
             let work = remaining
                 .saturating_mul(remaining)
                 .saturating_mul(end - start);
-            if execution.threads() > 1 && work >= 32_768 {
+            if execution.threads() > 1 && work >= 1_048_576 {
                 let (panel, trailing) = d.split_at_mut(end * n);
                 execution.chunks_mut(trailing, n * 16, work, |_, rows| {
                     for row in rows.chunks_mut(n) {

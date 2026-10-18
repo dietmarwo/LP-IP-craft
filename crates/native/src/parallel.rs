@@ -60,7 +60,7 @@ impl Execution {
     {
         assert!(chunk > 0);
         if let Some(pool) = &self.pool {
-            if work >= 32768 {
+            if work >= 65536 {
                 pool.install(|| {
                     data.par_chunks_mut(chunk)
                         .enumerate()
