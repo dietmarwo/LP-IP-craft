@@ -1,4 +1,4 @@
-//! Owned, dependency-free Rust LP/MIP solver: a bounded-variable dual
+//! Owned Rust LP/MIP solver (pure-Rust Rayon supplies bounded scheduling): a bounded-variable dual
 //! revised simplex on a sparse LU basis factorization, inside best-bound
 //! branch and bound with diving, pseudocost branching and independently
 //! checked results.
@@ -22,6 +22,7 @@ mod mixed;
 mod ordered;
 mod ordering;
 mod packing;
+pub mod parallel;
 mod presolve;
 mod primal;
 pub mod profile;

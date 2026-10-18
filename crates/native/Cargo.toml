@@ -12,3 +12,4 @@ basis-replay = ["kernel-profile"]
 
 [dependencies]
 lp-ip-craft = { path = "../core" }
+rayon = "=1.12.0"
