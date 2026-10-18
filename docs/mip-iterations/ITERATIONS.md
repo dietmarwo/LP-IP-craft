@@ -209,3 +209,17 @@ Iteration 0 (main) on this host:
   Supporting this domain needs exact dual certificates (an exact basis
   solve) or optimum-preserving domination bounds. That is a feature, not
   an iteration; no code changed.
+
+### 9. Stop the root loop at the first stagnant round — rejected
+
+- **Plan.** The loop stops after three consecutive rounds each improving
+  the bound by under 0.1%. On facility location, set cover and the
+  families, those trailing rounds cost GMI about 2× default with little
+  tree benefit. (Profiling first showed no search-identical win in the
+  tree itself: the LP kernel dominates, the per-node acceptance check is
+  linear in nonzeros, and propagation is small.) Stop at the first
+  stagnant round.
+- **Result.** The late, low-gain rounds matter on hard instances. bell5 is
+  lost under gmi, combined and heuristics. With GMI, gt2 goes from 0.19 to
+  2.20 s, p0548 from 0.61 to 4.19 s and flugpl from 0.37 to 0.58 s. Small
+  cases gain only a few milliseconds. Reverted; patience stays at three.
