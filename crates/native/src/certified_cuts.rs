@@ -127,6 +127,12 @@ pub(crate) fn enclose(
         if c.top() < TINY_TOP {
             choice = compensation(0.).map(|d| (0., d));
         }
+        if choice.is_none() && (lower[j] == 0. || upper[j] == 0.) {
+            // Rounding toward a zero bound needs no compensation; the other
+            // neighbour's is nonnegative (the other bound has that sign).
+            let (down, up) = c.bracket()?;
+            choice = Some((if lower[j] == 0. { down } else { up }, Dy::zero()));
+        }
         if choice.is_none() {
             let (down, up) = c.bracket()?;
             for q in [down, up] {
