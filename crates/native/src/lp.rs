@@ -904,17 +904,33 @@ impl Lp {
                 self.pi[k] = 0.0;
             }
         }
-        for j in 0..n {
-            self.d[j] = if self.state[j] == State::Basic {
-                0.0
-            } else {
-                let mut v = self.cost[j];
-                for e in self.col_start[j]..self.col_start[j + 1] {
-                    v -= self.col_value[e] * self.pi[self.col_index[e]];
+        let (state, cost, start, index, value, pi) = (
+            &self.state,
+            &self.cost,
+            &self.col_start,
+            &self.col_index,
+            &self.col_value,
+            &self.pi,
+        );
+        self.execution.chunks_mut(
+            &mut self.d[..n],
+            64,
+            self.col_value.len(),
+            |offset, part| {
+                for (local, out) in part.iter_mut().enumerate() {
+                    let j = offset + local;
+                    *out = if state[j] == State::Basic {
+                        0.
+                    } else {
+                        let mut v = cost[j];
+                        for e in start[j]..start[j + 1] {
+                            v -= value[e] * pi[index[e]];
+                        }
+                        v
+                    };
                 }
-                v
-            };
-        }
+            },
+        );
         for k in 0..self.m {
             self.d[n + k] = if self.state[n + k] == State::Basic {
                 0.0
@@ -1991,5 +2007,66 @@ mod tests {
         let (status, lp) = solve(&model);
         assert_eq!(status, Status::Infeasible);
         assert!(lp.infeasibility_verified());
+    }
+
+    #[test]
+    fn numeric_workers_preserve_dense_reduced_costs_prices_and_touched_order() {
+        let m = 193usize;
+        let n = 2 * m;
+        let mut a = vec![0.; m * n];
+        for i in 0..m {
+            for j in 0..n {
+                a[i * n + j] = if j == i {
+                    256.
+                } else if (i * 7 + j * 13) % 11 == 0 {
+                    0.
+                } else {
+                    ((i * 37 + j * 19) % 17 + 1) as f64 / 128.
+                };
+            }
+        }
+        let model = Model::new(lp_ip_craft::ModelData {
+            sense: Sense::Maximize,
+            objective: (0..n).map(|j| (1 + j % 7) as f64).collect(),
+            objective_offset: 0.,
+            variables: lp_ip_craft::Bounds::new(vec![0.; n], vec![2.; n]),
+            kinds: vec![lp_ip_craft::VariableKind::Continuous; n],
+            matrix: lp_ip_craft::CsrMatrix::from_dense(m, n, &a).unwrap(),
+            rows: lp_ip_craft::Bounds::new(vec![f64::NEG_INFINITY; m], vec![512.; m]),
+        })
+        .unwrap();
+        let mut expected = None;
+        for threads in [1, 2, 4, 8] {
+            let mut c = controls();
+            c.threads = threads;
+            let mut lp = Lp::new(&model, &vec![true; m], &vec![true; n], c).unwrap();
+            lp.state.fill(State::Lower);
+            for i in 0..m {
+                lp.basic[i] = i;
+                lp.state[i] = State::Basic;
+            }
+            assert!(!lp.refactor().unwrap());
+            lp.compute_dual();
+            let d: Vec<_> = lp.d.iter().map(|v| v.to_bits()).collect();
+            let mut prices = Vec::new();
+            for row in [0, m / 2, m - 1] {
+                lp.compute_row(row);
+                prices.push((
+                    lp.alpha.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                    lp.touched.clone(),
+                ));
+            }
+            assert_eq!(lp.stats.column_pricings, 3, "exercise dense column pricing");
+            let actual = (d, prices);
+            if let Some(e) = &expected {
+                assert_eq!(&actual, e, "width{threads}");
+            } else {
+                expected = Some(actual);
+            }
+            // Reusing the same execution and factor with changed costs must be fresh.
+            lp.cost[m] += 0.25;
+            lp.compute_dual();
+            assert_ne!(lp.d[m].to_bits(), expected.as_ref().unwrap().0[m]);
+        }
     }
 }
