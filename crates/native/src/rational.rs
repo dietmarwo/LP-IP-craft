@@ -8,7 +8,7 @@ use std::cell::Cell;
 use std::cmp::Ordering;
 const LIMBS: usize = 256;
 thread_local! { static WORK: Cell<u64> = const { Cell::new(0) }; }
-fn charge(amount: usize) {
+pub(crate) fn charge(amount: usize) {
     WORK.with(|w| w.set(w.get().saturating_add(amount as u64)));
 }
 /// Resets this thread's limb-operation counter.
@@ -20,32 +20,85 @@ pub(crate) fn work() -> u64 {
     WORK.with(Cell::get)
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Nat(Vec<u32>);
+pub(crate) struct Nat(Vec<u32>);
 impl Nat {
-    fn new(mut v: Vec<u32>) -> Self {
+    /// The empty (zero) natural, without allocating.
+    pub(crate) const fn empty() -> Self {
+        Self(Vec::new())
+    }
+    pub(crate) fn limbs(&self) -> usize {
+        self.0.len()
+    }
+    /// Number of low zero bits; zero for the zero natural.
+    pub(crate) fn trailing_zeros(&self) -> usize {
+        self.0
+            .iter()
+            .position(|&v| v != 0)
+            .map_or(0, |i| 32 * i + self.0[i].trailing_zeros() as usize)
+    }
+    /// `self >> k`, discarding the low k bits.
+    pub(crate) fn shr(&self, k: usize) -> Self {
+        let (words, bits) = (k / 32, k % 32);
+        if words >= self.0.len() {
+            return Self::empty();
+        }
+        let src = &self.0[words..];
+        let mut v = Vec::with_capacity(src.len());
+        for i in 0..src.len() {
+            let hi = if bits == 0 {
+                0
+            } else {
+                src.get(i + 1).map_or(0, |&h| h << (32 - bits))
+            };
+            v.push((src[i] >> bits) | hi);
+        }
+        Self::new(v)
+    }
+    pub(crate) fn from_u128(v: u128) -> Self {
+        Self::new(vec![
+            v as u32,
+            (v >> 32) as u32,
+            (v >> 64) as u32,
+            (v >> 96) as u32,
+        ])
+    }
+    /// The low 128 bits.
+    pub(crate) fn low_u128(&self) -> u128 {
+        self.0
+            .iter()
+            .take(4)
+            .enumerate()
+            .fold(0, |acc, (i, &v)| acc | (u128::from(v) << (32 * i)))
+    }
+    /// The low 64 bits.
+    pub(crate) fn low_u64(&self) -> u64 {
+        u64::from(self.0.first().copied().unwrap_or(0))
+            | (u64::from(self.0.get(1).copied().unwrap_or(0)) << 32)
+    }
+    pub(crate) fn new(mut v: Vec<u32>) -> Self {
         while v.last() == Some(&0) {
             v.pop();
         }
         Self(v)
     }
-    fn small(v: u64) -> Self {
+    pub(crate) fn small(v: u64) -> Self {
         Self::new(vec![v as u32, (v >> 32) as u32])
     }
-    fn zero(&self) -> bool {
+    pub(crate) fn zero(&self) -> bool {
         self.0.is_empty()
     }
-    fn cmp(&self, b: &Self) -> Ordering {
+    pub(crate) fn cmp(&self, b: &Self) -> Ordering {
         self.0
             .len()
             .cmp(&b.0.len())
             .then_with(|| self.0.iter().rev().cmp(b.0.iter().rev()))
     }
-    fn bits(&self) -> usize {
+    pub(crate) fn bits(&self) -> usize {
         self.0.last().map_or(0, |v| {
             32 * (self.0.len() - 1) + 32 - v.leading_zeros() as usize
         })
     }
-    fn add(&self, b: &Self) -> Self {
+    pub(crate) fn add(&self, b: &Self) -> Self {
         let mut v = Vec::new();
         let mut c = 0u64;
         for i in 0..self.0.len().max(b.0.len()) {
@@ -58,7 +111,7 @@ impl Nat {
         }
         Self(v)
     }
-    fn sub(&self, b: &Self) -> Self {
+    pub(crate) fn sub(&self, b: &Self) -> Self {
         debug_assert!(self.cmp(b) != Ordering::Less);
         let mut v = Vec::new();
         let mut borrow = 0i64;
@@ -69,7 +122,7 @@ impl Nat {
         }
         Self::new(v)
     }
-    fn mul(&self, b: &Self) -> Option<Self> {
+    pub(crate) fn mul(&self, b: &Self) -> Option<Self> {
         if self.0.len() + b.0.len() > LIMBS {
             return None;
         }
@@ -86,7 +139,7 @@ impl Nat {
         }
         Some(Self::new(v))
     }
-    fn shift(&self, k: usize) -> Option<Self> {
+    pub(crate) fn shift(&self, k: usize) -> Option<Self> {
         if self.zero() {
             return Some(self.clone());
         }
@@ -104,7 +157,7 @@ impl Nat {
     }
     /// Quotient and remainder by word-level long division (Knuth, TAOCP vol. 2,
     /// algorithm D, in the formulation of Hacker's Delight `divmnu`).
-    fn div_rem(&self, b: &Self) -> (Self, Self) {
+    pub(crate) fn div_rem(&self, b: &Self) -> (Self, Self) {
         assert!(!b.zero());
         if self.cmp(b) == Ordering::Less {
             return (Self::small(0), self.clone());
@@ -327,6 +380,7 @@ impl Rat {
         Some(if self.negative { ord.reverse() } else { ord })
     }
     /// Mathematical floor, including negative nonintegers.
+    #[cfg(test)]
     pub fn floor(&self) -> Self {
         let (q, r) = self.n.div_rem(&self.d);
         Self {
@@ -339,6 +393,7 @@ impl Rat {
             d: Nat::small(1),
         }
     }
+    #[cfg(test)]
     pub fn frac(&self) -> Option<Self> {
         self.sub(&self.floor())
     }

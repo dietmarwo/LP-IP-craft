@@ -1,9 +1,5 @@
 //! Opt-in primal reductions and optimum-preserving objective fixes.
-use crate::{
-    certified_cuts,
-    rational::{self, Rat},
-    *,
-};
+use crate::{certified_cuts, dyadic::Dy, rational, *};
 #[derive(Default)]
 pub(crate) struct Stats {
     pub rounds: u64,
@@ -15,8 +11,8 @@ pub(crate) struct Stats {
     pub work: u64,
     pub conflicts: u64,
 }
-fn rat(v: f64) -> Option<Rat> {
-    Rat::from(v)
+fn dy(v: f64) -> Option<Dy> {
+    Dy::from_f64(v)
 }
 /// Exact i128 fast path; every emitted integer is exactly representable in f64.
 fn tighten_integral(model: &Model, i: usize, sign: f64) -> Option<certified_cuts::Cut> {
@@ -89,47 +85,51 @@ fn tighten_row(model: &Model, i: usize, sign: f64) -> Option<certified_cuts::Cut
     if let Some(cut) = tighten_integral(model, i, sign) {
         return Some(cut);
     }
+    // Exact dyadic fallback: the maximum activity, its excess over the side
+    // and the replacement coefficient/RHS are sums and products of binary64
+    // data, so no division is needed.
     let a = model.matrix();
     let bound = if sign > 0. {
         model.rows().upper[i]
     } else {
         -model.rows().lower[i]
     };
-    let mut maximum = Rat::zero();
-    let mut coefficients = vec![Rat::zero(); model.n()];
+    let mut maximum = Dy::zero();
+    let mut row = Vec::new();
     for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
         let j = a.pattern.indices[k];
         let c = sign * a.values[k];
-        coefficients[j] = rat(c)?;
         let b = if c > 0. {
             model.variables().upper[j]
         } else {
             model.variables().lower[j]
         };
-        maximum = maximum.add(&rat(c)?.mul(&rat(b)?)?)?;
+        maximum = maximum.add(&dy(c)?.mul(&dy(b)?)?)?;
+        row.push((j, c));
     }
-    let delta = maximum.sub(&rat(bound)?)?;
-    if delta.cmp(&Rat::zero())? != std::cmp::Ordering::Greater {
+    row.sort_by_key(|t| t.0);
+    let delta = maximum.sub(&dy(bound)?)?;
+    if !delta.is_positive() {
         return None;
     }
-    for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
-        let j = a.pattern.indices[k];
-        let c = sign * a.values[k];
+    for &(j, c) in &row {
         if !model.kinds()[j].is_integral()
             || model.variables().lower[j] != 0.
             || model.variables().upper[j] != 1.
-            || rat(c.abs())?.cmp(&delta)? != std::cmp::Ordering::Greater
+            || dy(c.abs())?.cmp(&delta)? != std::cmp::Ordering::Greater
         {
             continue;
         }
-        let rhs = if c > 0. {
-            coefficients[j] = delta.clone();
-            maximum.sub(&rat(c)?)?
+        let (replacement, rhs) = if c > 0. {
+            (delta.clone(), maximum.sub(&dy(c)?)?)
         } else {
-            coefficients[j] = delta.neg();
-            rat(bound)?
+            (delta.neg(), dy(bound)?)
         };
-        return certified_cuts::enclose(model, &coefficients, &rhs, "tightening");
+        let coefficients = row
+            .iter()
+            .map(|&(k, v)| Some((k, if k == j { replacement.clone() } else { dy(v)? })))
+            .collect::<Option<Vec<_>>>()?;
+        return certified_cuts::enclose(model, coefficients, &rhs, "tightening");
     }
     None
 }

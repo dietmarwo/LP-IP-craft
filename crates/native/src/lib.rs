@@ -11,6 +11,7 @@ mod components;
 mod cuts;
 mod dense;
 mod diagnostics;
+mod dyadic;
 mod ft;
 mod incumbent;
 mod jump;

@@ -1,8 +1,17 @@
 //! Exact GMI/MIR derivation. Numerical multipliers are advice, not an equality.
+//!
+//! Every derivation is carried out in exact dyadic arithmetic
+//! ([`crate::dyadic`]). Aggregation, anchoring and substitution only add and
+//! multiply binary64 data, so they stay dyadic. The GMI and MIR rounding
+//! functions are applied to the equation scaled to integers at a common
+//! exponent, where `frac(a/p)` is the integer remainder `(a mod p)/p`; the
+//! resulting inequality is multiplied through by its positive denominators,
+//! so it, too, has integer coefficients. No gcd is ever needed.
 use crate::{
     Budget,
+    dyadic::{Dy, Int},
     lp::Lp,
-    rational::{self, Rat},
+    rational,
 };
 use lp_ip_craft::{Model, Result};
 use std::cmp::Ordering;
@@ -19,38 +28,122 @@ pub(crate) struct Stats {
     pub work: u64,
     pub vubs: u64,
 }
-fn r(v: f64) -> Option<Rat> {
-    Rat::from(v)
+
+/// Sparse exact accumulator over the model columns, reused across
+/// candidates so a derivation never allocates a dense vector.
+pub(crate) struct Accumulator {
+    values: Vec<Dy>,
+    seen: Vec<bool>,
+    touched: Vec<usize>,
 }
-fn positive(v: &Rat) -> Option<bool> {
-    Some(v.cmp(&Rat::zero())? == Ordering::Greater)
+impl Accumulator {
+    pub(crate) fn new(n: usize) -> Self {
+        Self {
+            values: vec![Dy::zero(); n],
+            seen: vec![false; n],
+            touched: Vec::new(),
+        }
+    }
+    fn add(&mut self, j: usize, v: &Dy) -> Option<()> {
+        if v.is_zero() {
+            return Some(());
+        }
+        if !self.seen[j] {
+            self.seen[j] = true;
+            self.touched.push(j);
+        }
+        self.values[j] = self.values[j].add(v)?;
+        Some(())
+    }
+    fn get(&self, j: usize) -> &Dy {
+        &self.values[j]
+    }
+    fn clear(&mut self) {
+        for &j in &self.touched {
+            self.values[j] = Dy::zero();
+            self.seen[j] = false;
+        }
+        self.touched.clear();
+    }
+    /// Nonzero entries in column order; leaves the accumulator empty.
+    fn drain(&mut self) -> Vec<(usize, Dy)> {
+        self.touched.sort_unstable();
+        let mut out = Vec::with_capacity(self.touched.len());
+        for &j in &self.touched {
+            let v = std::mem::replace(&mut self.values[j], Dy::zero());
+            self.seen[j] = false;
+            if !v.is_zero() {
+                out.push((j, v));
+            }
+        }
+        self.touched.clear();
+        out
+    }
 }
-/// Relax every coefficient conversion over the finite root box, exactly.
+
+fn exact(v: f64) -> Option<Dy> {
+    Dy::from_f64(v)
+}
+
+/// Magnitudes below 2^-37 (about 7e-12) of the largest coefficient may be
+/// dropped, when the box allows compensating for them.
+const TINY_TOP: i64 = -36;
+
+/// Converts the exact inequality `Σ c_j x_j <= rhs` to binary64.
+///
+/// The row is first scaled by a power of two (exactly) so its largest
+/// coefficient lies in [1, 2). Each coefficient c then becomes a binary64
+/// value q, either neighbour of c or zero for a tiny term, and the RHS grows
+/// by the exact maximum of `(q - c) x` over the root box `[l, u]`: that is
+/// `(q - c) u` for `q > c` and `(q - c) l` for `q < c`. Of the admissible
+/// choices (finite endpoint) the one with the smallest compensation is kept.
+/// Every point satisfying the exact row then satisfies the converted row.
 pub(crate) fn enclose(
     model: &Model,
-    coefficients: &[Rat],
-    rhs: &Rat,
+    coefficients: Vec<(usize, Dy)>,
+    rhs: &Dy,
     family: &'static str,
 ) -> Option<Cut> {
-    let mut bound = rhs.clone();
+    let top = coefficients.iter().map(|c| c.1.top()).max()?;
+    let scale = 1 - top;
+    let mut bound = rhs.scale2(scale);
     let mut terms = Vec::new();
-    for (j, c) in coefficients.iter().enumerate() {
-        if c.is_zero() {
-            continue;
-        }
-        let v = c.upper()?;
-        let v = if v.abs() < 1e-11 { 0. } else { v };
-        let delta = r(v)?.sub(c)?;
-        if !delta.is_zero() {
-            let endpoint = if positive(&delta)? {
-                model.variables().upper[j]
+    let (lower, upper) = (&model.variables().lower, &model.variables().upper);
+    for (j, c) in coefficients {
+        let c = c.scale2(scale);
+        let compensation = |q: f64| -> Option<Dy> {
+            let delta = exact(q)?.sub(&c)?;
+            if delta.is_zero() {
+                return Some(Dy::zero());
+            }
+            let endpoint = if delta.is_positive() {
+                upper[j]
             } else {
-                model.variables().lower[j]
+                lower[j]
             };
-            bound = bound.add(&delta.mul(&r(endpoint)?)?)?;
+            delta.mul(&exact(endpoint)?)
+        };
+        let mut choice = None;
+        if c.top() < TINY_TOP {
+            choice = compensation(0.).map(|d| (0., d));
         }
-        if v != 0. {
-            terms.push((j, v));
+        if choice.is_none() {
+            let (down, up) = c.bracket()?;
+            for q in [down, up] {
+                if let Some(d) = compensation(q) {
+                    if choice
+                        .as_ref()
+                        .is_none_or(|(_, old): &(f64, Dy)| d.cmp(old) == Some(Ordering::Less))
+                    {
+                        choice = Some((q, d));
+                    }
+                }
+            }
+        }
+        let (q, d) = choice?;
+        bound = bound.add(&d)?;
+        if q != 0. {
+            terms.push((j, q));
         }
     }
     if terms.is_empty() || terms.len() > 1024 {
@@ -139,14 +232,11 @@ pub(crate) fn select(model: &Model, mut cuts: Vec<Cut>, x: &[f64], limit: usize)
     }
     out
 }
-/// An affine nonnegative variable z = sum terms*x + constant.
-#[derive(Clone)]
-struct Term {
-    coefficients: Vec<(usize, Rat)>,
-    constant: Rat,
-    integer: bool,
-}
-fn anchor(lo: f64, hi: f64, value: f64, integer: bool) -> Option<(f64, f64)> {
+/// Nearest finite valid bound of a variable or row activity, as
+/// `(bound, sign, fixed)`: `z = sign * (v - bound) >= 0`. Integer quantities
+/// use integral bounds, so z is integral too. `fixed` means `z = 0` on every
+/// feasible point.
+fn anchor(lo: f64, hi: f64, value: f64, integer: bool) -> Option<(f64, f64, bool)> {
     let (lo, hi) = if integer {
         (lo.ceil(), hi.floor())
     } else {
@@ -156,13 +246,68 @@ fn anchor(lo: f64, hi: f64, value: f64, integer: bool) -> Option<(f64, f64)> {
         return None;
     }
     if lo.is_finite() && (!hi.is_finite() || value - lo <= hi - value) {
-        Some((lo, 1.))
+        Some((lo, 1., lo == hi))
     } else if hi.is_finite() {
-        Some((hi, -1.))
+        Some((hi, -1., lo == hi))
     } else {
         None
     }
 }
+fn signed(v: Dy, sign: f64) -> Dy {
+    if sign > 0. { v } else { v.neg() }
+}
+fn signed_int(v: Int, sign: f64) -> Int {
+    if sign > 0. { v } else { v.neg() }
+}
+/// Converts all values to integers at their smallest common exponent.
+fn integers(values: &[&Dy]) -> Option<Vec<Int>> {
+    let e = values
+        .iter()
+        .filter(|v| !v.is_zero())
+        .map(|v| v.exponent())
+        .min()
+        .unwrap_or(0);
+    values.iter().map(|v| v.int_at(e)).collect()
+}
+/// `0.005 <= f / d <= 0.995`, exactly.
+fn usable_fraction(f: &Int, d: &Int) -> Option<bool> {
+    let f200 = f.mul(&Int::from_u64(200))?;
+    Some(
+        f200.cmp(d) != Ordering::Less
+            && f200.cmp(&d.mul(&Int::from_u64(199))?) != Ordering::Greater,
+    )
+}
+/// Rounds advisory multipliers to integers on a grid relative to the
+/// largest one. Any multipliers give a valid aggregation; the grid only
+/// keeps the exact integers short.
+fn integer_weights(weights: &[f64]) -> Option<Vec<i64>> {
+    let largest = weights.iter().fold(0f64, |m, w| m.max(w.abs()));
+    if !(largest > 0. && largest.is_finite()) {
+        return None;
+    }
+    // largest lies in [2^(top-1), 2^top); scale it to [2^52, 2^53).
+    let shift = 53 - exact(largest)?.top();
+    let (a, b) = (shift / 2, shift - shift / 2);
+    let factor = |k: i64| 2f64.powi(k as i32);
+    Some(
+        weights
+            .iter()
+            .map(|&w| {
+                let k = (w * factor(a) * factor(b)).round();
+                if k.is_finite() && k.abs() <= 9_007_199_254_740_992. {
+                    k as i64
+                } else {
+                    0
+                }
+            })
+            .collect(),
+    )
+}
+enum Anchored {
+    Column(usize, f64, Dy),
+    Row(usize, f64, Dy),
+}
+#[allow(clippy::too_many_arguments)]
 fn gmi(
     model: &Model,
     pivot: usize,
@@ -170,116 +315,132 @@ fn gmi(
     x: &[f64],
     budget: &Budget<'_>,
     cap: u64,
+    acc: &mut Accumulator,
 ) -> Option<Cut> {
     let a = model.matrix();
-    let mut aggregate = vec![Rat::zero(); model.n()];
-    for (i, &weight) in weights.iter().enumerate() {
-        if weight == 0. {
+    acc.clear();
+    let stopped = || budget.stop().is_some() || rational::work() >= cap;
+    // Exact identity Σ_j (Σ_i k_i a_ij) x_j - Σ_i k_i s_i = 0, s = A x.
+    let mut used = Vec::new();
+    for (i, k) in integer_weights(weights)?.into_iter().enumerate() {
+        if k == 0 {
             continue;
         }
-        if budget.stop().is_some() || rational::work() >= cap {
+        if stopped() {
             return None;
         }
-        let w = r(weight)?;
-        for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
-            let j = a.pattern.indices[k];
-            aggregate[j] = aggregate[j].add(&w.mul(&r(a.values[k])?)?)?;
+        let w = Dy::from_int(Int::from_i64(k));
+        for t in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
+            acc.add(a.pattern.indices[t], &w.mul(&exact(a.values[t])?)?)?;
         }
+        used.push((i, w));
     }
-    let pivot_a = aggregate[pivot].clone();
-    if pivot_a.is_zero() {
+    let p = acc.get(pivot).clone();
+    if p.is_zero() {
         return None;
     }
-    let mut b = Rat::zero();
-    let mut transformed = Vec::new();
-    for (j, c) in aggregate.iter().enumerate() {
-        if j == pivot || c.is_zero() {
+    // Anchor every other column and row activity: p x_p + Σ c z = beta.
+    let mut beta = Dy::zero();
+    let mut terms: Vec<(Dy, bool, Anchored)> = Vec::new();
+    for (j, c) in acc.drain() {
+        if j == pivot {
             continue;
         }
-        let (bound, sign) = anchor(
+        let integer = model.kinds()[j].is_integral();
+        let (bound, sign, fixed) = anchor(
             model.variables().lower[j],
             model.variables().upper[j],
             x[j],
-            model.kinds()[j].is_integral(),
+            integer,
         )?;
-        let c = c.div(&pivot_a)?;
-        b = b.sub(&c.mul(&r(bound)?)?)?;
-        transformed.push((
-            c.mul(&r(sign)?)?,
-            Term {
-                coefficients: vec![(j, r(sign)?)],
-                constant: r(-sign * bound)?,
-                integer: model.kinds()[j].is_integral(),
-            },
-        ));
-    }
-    for (i, &weight) in weights.iter().enumerate() {
-        if weight == 0. {
-            continue;
+        let bound = exact(bound)?;
+        beta = beta.sub(&c.mul(&bound)?)?;
+        if !fixed {
+            terms.push((signed(c, sign), integer, Anchored::Column(j, sign, bound)));
         }
-        let integer = (a.pattern.indptr[i]..a.pattern.indptr[i + 1]).all(|k| {
-            a.values[k].fract() == 0. && model.kinds()[a.pattern.indices[k]].is_integral()
+    }
+    for (i, w) in used {
+        let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
+        let integer = range.clone().all(|t| {
+            a.values[t].fract() == 0. && model.kinds()[a.pattern.indices[t]].is_integral()
         });
-        let activity = (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
-            .map(|k| a.values[k] * x[a.pattern.indices[k]])
-            .sum();
-        let (bound, sign) = anchor(
+        let activity = range.map(|t| a.values[t] * x[a.pattern.indices[t]]).sum();
+        let (bound, sign, fixed) = anchor(
             model.rows().lower[i],
             model.rows().upper[i],
             activity,
             integer,
         )?;
-        let c = r(-weight)?.div(&pivot_a)?;
-        b = b.sub(&c.mul(&r(bound)?)?)?;
-        let coefficients = (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
-            .map(|k| Some((a.pattern.indices[k], r(sign)?.mul(&r(a.values[k])?)?)))
-            .collect::<Option<Vec<_>>>()?;
-        transformed.push((
-            c.mul(&r(sign)?)?,
-            Term {
-                coefficients,
-                constant: r(-sign * bound)?,
+        let bound = exact(bound)?;
+        // -w s = -w bound - w sign z.
+        beta = beta.add(&w.mul(&bound)?)?;
+        if !fixed {
+            terms.push((
+                signed(w.neg(), sign),
                 integer,
-            },
-        ));
+                Anchored::Row(i, sign, bound),
+            ));
+        }
     }
-    let f = b.frac()?;
-    let fv = f.upper()?;
-    if !(0.005..=0.995).contains(&fv) {
+    let mut values: Vec<&Dy> = vec![&p, &beta];
+    values.extend(terms.iter().map(|t| &t.0));
+    let mut ints = integers(&values)?;
+    if ints[0].is_negative() {
+        ints.iter_mut().for_each(|v| *v = v.neg());
+    }
+    let (p, beta) = (ints[0].clone(), ints[1].clone());
+    // x_p + Σ (c/p) z = beta/p with f0/p = frac(beta/p).
+    let (_, f0) = beta.div_rem_euclid(&p)?;
+    if !usable_fraction(&f0, &p)? {
         return None;
     }
-    let one = r(1.)?;
-    let om = one.sub(&f)?;
-    let mut coefficients = vec![Rat::zero(); model.n()];
-    let mut rhs = r(-1.)?;
-    for (c, term) in transformed {
-        if budget.stop().is_some() || rational::work() >= cap {
+    let g0 = p.sub(&f0)?;
+    // GMI Σ g z >= 1 times f0 g0: integer z gets r g0 (r <= f0) or
+    // (p - r) f0, continuous z gets c g0 (c > 0) or -c f0, with r = c mod p.
+    let mut rhs = Dy::from_int(f0.mul(&g0)?.neg());
+    for ((_, integer, term), c) in terms.into_iter().zip(&ints[2..]) {
+        if stopped() {
             return None;
         }
-        let g = if term.integer {
-            let fj = c.frac()?;
-            if fj.cmp(&f)? != Ordering::Greater {
-                fj.div(&f)?
+        let g = if integer {
+            let (_, r) = c.div_rem_euclid(&p)?;
+            if r.cmp(&f0) != Ordering::Greater {
+                r.mul(&g0)?
             } else {
-                one.sub(&fj)?.div(&om)?
+                p.sub(&r)?.mul(&f0)?
             }
-        } else if positive(&c)? {
-            c.div(&f)?
+        } else if c.is_positive() {
+            c.mul(&g0)?
         } else {
-            c.neg().div(&om)?
+            c.neg().mul(&f0)?
         };
-        // sum g*z >=1 -> -sum g*affine <= -1 + sum g*constant.
-        for (j, v) in term.coefficients {
-            coefficients[j] = coefficients[j].sub(&g.mul(&v)?)?;
+        if g.is_zero() {
+            continue;
         }
-        rhs = rhs.add(&g.mul(&term.constant)?)?;
+        // -g z <= ..., z = sign (v - bound).
+        match term {
+            Anchored::Column(j, sign, bound) => {
+                let gs = Dy::from_int(signed_int(g, sign));
+                acc.add(j, &gs.neg())?;
+                rhs = rhs.sub(&gs.mul(&bound)?)?;
+            }
+            Anchored::Row(i, sign, bound) => {
+                let gs = Dy::from_int(signed_int(g, sign));
+                for t in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
+                    acc.add(a.pattern.indices[t], &gs.neg().mul(&exact(a.values[t])?)?)?;
+                }
+                rhs = rhs.sub(&gs.mul(&bound)?)?;
+            }
+        }
     }
-    enclose(model, &coefficients, &rhs, "gmi")
+    enclose(model, acc.drain(), &rhs, "gmi")
 }
 #[derive(Clone)]
 struct Vub {
     binary: usize,
-    factor: Rat,
+    /// The VUB row reads `coefficient x - slope y <= 0` with both positive.
+    coefficient: f64,
+    slope: f64,
 }
 fn variable_bounds(model: &Model) -> Vec<Option<Vub>> {
     let mut out: Vec<Option<Vub>> = vec![None; model.n()];
@@ -307,111 +468,182 @@ fn variable_bounds(model: &Model) -> Vec<Option<Vub>> {
                     && c > 0.
                     && d < 0.
                 {
-                    if let Some(factor) = r(-d).and_then(|v| v.div(&r(c)?)) {
-                        out[j] = Some(Vub { binary: y, factor });
-                    }
+                    out[j] = Some(Vub {
+                        binary: y,
+                        coefficient: c,
+                        slope: -d,
+                    });
                 }
             }
         }
     }
     out
 }
-#[allow(clippy::too_many_arguments)]
-fn mir(
+/// Odd part of a positive binary64 value's mantissa.
+fn odd_part(v: f64) -> u64 {
+    let bits = v.to_bits();
+    let fraction = bits & ((1u64 << 52) - 1);
+    let mantissa = if (bits >> 52) & 2047 == 0 {
+        fraction
+    } else {
+        fraction | (1u64 << 52)
+    };
+    mantissa >> mantissa.trailing_zeros()
+}
+fn gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    a
+}
+enum MirTerm {
+    Column(usize, f64, Dy),
+    /// `t = slope y - coefficient x >= 0` for a VUB row on x.
+    Slack(usize, usize, Dy, Dy),
+}
+/// One row side `Σ a x <= beta`, scaled by `scale` > 0 and with VUB
+/// substitutions, anchored to `Σ c z <= beta` over nonnegative z.
+struct MirBase {
+    terms: Vec<(Dy, bool, MirTerm)>,
+    beta: Dy,
+    scale: Int,
+}
+fn mir_base(
     model: &Model,
     row: usize,
     sign: f64,
-    divisor: f64,
     x: &[f64],
     vubs: &[Option<Vub>],
-    budget: &Budget<'_>,
-    cap: u64,
-) -> Option<Cut> {
+    acc: &mut Accumulator,
+) -> Option<MirBase> {
     let a = model.matrix();
-    let bound = if sign > 0. {
+    acc.clear();
+    let range = a.pattern.indptr[row]..a.pattern.indptr[row + 1];
+    let side = if sign > 0. {
         model.rows().upper[row]
     } else {
         -model.rows().lower[row]
     };
-    let d = r(divisor)?;
-    let mut b = r(bound)?;
-    let mut coeff = vec![Rat::zero(); model.n()];
-    let mut substitutions = Vec::new();
-    for k in a.pattern.indptr[row]..a.pattern.indptr[row + 1] {
-        coeff[a.pattern.indices[k]] = r(sign * a.values[k])?;
-    }
-    // Replace continuous x by d*y-z for a certified nonnegative VUB slack.
-    for (j, vub) in vubs.iter().enumerate() {
-        if let Some(v) = vub {
-            if !coeff[j].is_zero() {
-                let c = coeff[j].clone();
-                coeff[v.binary] = coeff[v.binary].add(&c.mul(&v.factor)?)?;
-                coeff[j] = Rat::zero();
-                substitutions.push((
-                    c.neg(),
-                    Term {
-                        coefficients: vec![(v.binary, v.factor.clone()), (j, r(-1.)?)],
-                        constant: Rat::zero(),
-                        integer: false,
-                    },
-                ));
+    // A VUB coefficient with odd part o leaves a/c dyadic once the row is
+    // multiplied by a multiple of o; collect the least common multiple.
+    let mut scale = Int::from_u64(1);
+    let mut substituted = Vec::new();
+    for t in range.clone() {
+        let j = a.pattern.indices[t];
+        if let Some(v) = &vubs[j] {
+            let odd = odd_part(v.coefficient);
+            let (_, r) = scale.div_rem_euclid(&Int::from_u64(odd))?;
+            let factor = odd / gcd(r.to_u64()?, odd);
+            let next = scale.mul(&Int::from_u64(factor))?;
+            if next.bits() <= 256 {
+                scale = next;
+                substituted.push(j);
             }
         }
     }
-    for (j, c) in coeff.iter().enumerate() {
-        if c.is_zero() {
-            continue;
+    let scale_dy = Dy::from_int(scale.clone());
+    let mut slacks = Vec::new();
+    for t in range {
+        let j = a.pattern.indices[t];
+        let c = exact(sign * a.values[t])?.mul(&scale_dy)?;
+        match &vubs[j] {
+            Some(v) if substituted.contains(&j) => {
+                // c x = (c / coef) (slope y - t).
+                let coefficient = exact(v.coefficient)?;
+                let slope = exact(v.slope)?;
+                let ratio = c.div_exact(&coefficient)?;
+                acc.add(v.binary, &ratio.mul(&slope)?)?;
+                slacks.push((
+                    ratio.neg(),
+                    false,
+                    MirTerm::Slack(j, v.binary, slope, coefficient),
+                ));
+            }
+            _ => acc.add(j, &c)?,
         }
-        let (bound, sgn) = anchor(
+    }
+    let mut beta = exact(side)?.mul(&scale_dy)?;
+    let mut terms = Vec::new();
+    for (j, c) in acc.drain() {
+        let integer = model.kinds()[j].is_integral();
+        let (bound, s, fixed) = anchor(
             model.variables().lower[j],
             model.variables().upper[j],
             x[j],
-            model.kinds()[j].is_integral(),
+            integer,
         )?;
-        b = b.sub(&c.mul(&r(bound)?)?)?;
-        substitutions.push((
-            c.mul(&r(sgn)?)?,
-            Term {
-                coefficients: vec![(j, r(sgn)?)],
-                constant: r(-sgn * bound)?,
-                integer: model.kinds()[j].is_integral(),
-            },
-        ));
+        let bound = exact(bound)?;
+        beta = beta.sub(&c.mul(&bound)?)?;
+        if !fixed {
+            terms.push((signed(c, s), integer, MirTerm::Column(j, s, bound)));
+        }
     }
-    b = b.div(&d)?;
-    let f = b.frac()?;
-    let fv = f.upper()?;
-    if !(0.005..=0.995).contains(&fv) {
+    if !terms.iter().any(|t| t.1) {
         return None;
     }
-    let om = r(1.)?.sub(&f)?;
-    let mut rhs = b.floor();
-    let mut result = vec![Rat::zero(); model.n()];
-    for (c, t) in substitutions {
+    terms.extend(slacks);
+    Some(MirBase { terms, beta, scale })
+}
+fn mir(
+    model: &Model,
+    base: &MirBase,
+    divisor: f64,
+    budget: &Budget<'_>,
+    cap: u64,
+    acc: &mut Accumulator,
+) -> Option<Cut> {
+    acc.clear();
+    let d = exact(divisor)?.mul_int(&base.scale)?;
+    let mut values: Vec<&Dy> = vec![&d, &base.beta];
+    values.extend(base.terms.iter().map(|t| &t.0));
+    let ints = integers(&values)?;
+    let (d, beta) = (&ints[0], &ints[1]);
+    let (q0, f0) = beta.div_rem_euclid(d)?;
+    if !usable_fraction(&f0, d)? {
+        return None;
+    }
+    let g0 = d.sub(&f0)?;
+    // MIR times g0 = d (1 - f): integer c -> floor(c/d) g0 + max(0, r - f0),
+    // continuous c -> min(0, c), RHS floor(beta/d) g0.
+    let mut rhs = Dy::from_int(q0.mul(&g0)?);
+    for ((_, integer, term), c) in base.terms.iter().zip(&ints[2..]) {
         if budget.stop().is_some() || rational::work() >= cap {
             return None;
         }
-        let c = c.div(&d)?;
-        let rounded = if t.integer {
-            let base = c.floor();
-            let fraction = c.frac()?;
-            if fraction.cmp(&f)? == Ordering::Greater {
-                base.add(&fraction.sub(&f)?.div(&om)?)?
+        let h = if *integer {
+            let (q, r) = c.div_rem_euclid(d)?;
+            let extra = r.sub(&f0)?;
+            let rounded = q.mul(&g0)?;
+            if extra.is_positive() {
+                rounded.add(&extra)?
             } else {
-                base
+                rounded
             }
-        } else if positive(&c)? {
-            Rat::zero()
+        } else if c.is_negative() {
+            c.clone()
         } else {
-            c.div(&om)?
+            continue;
         };
-        for (j, v) in t.coefficients {
-            result[j] = result[j].add(&rounded.mul(&v)?)?;
+        if h.is_zero() {
+            continue;
         }
-        rhs = rhs.sub(&rounded.mul(&t.constant)?)?;
+        let h = Dy::from_int(h);
+        match term {
+            MirTerm::Column(j, sign, bound) => {
+                let hs = signed(h, *sign);
+                acc.add(*j, &hs)?;
+                rhs = rhs.add(&hs.mul(bound)?)?;
+            }
+            MirTerm::Slack(j, y, slope, coefficient) => {
+                acc.add(*y, &h.mul(slope)?)?;
+                acc.add(*j, &h.mul(coefficient)?.neg())?;
+            }
+        }
     }
-    enclose(model, &result, &rhs, "mir")
+    enclose(model, acc.drain(), &rhs, "mir")
 }
+/// Separates GMI cuts from the optimal tableau and MIR cuts from every row,
+/// including earlier cuts (rank-2 MIR closes most of gt2's root gap).
 pub(crate) fn separate(
     model: &Model,
     lp: &mut Lp,
@@ -423,6 +655,7 @@ pub(crate) fn separate(
     let mut output = Vec::new();
     let settings = budget.settings;
     let cap = settings.cut_exact_work;
+    let mut acc = Accumulator::new(model.n());
     if settings.gmi_cuts {
         let gmi_cap = if settings.mir_cuts { cap / 2 } else { cap };
         let candidates = lp.tableau_candidates(model, settings.mip_cut_limit * 4);
@@ -431,7 +664,7 @@ pub(crate) fn separate(
                 break;
             }
             stats.candidates += 1;
-            if let Some(c) = gmi(model, pivot, &weights, x, budget, gmi_cap) {
+            if let Some(c) = gmi(model, pivot, &weights, x, budget, gmi_cap, &mut acc) {
                 output.push(c);
             } else {
                 stats.rejected += 1;
@@ -460,15 +693,21 @@ pub(crate) fn separate(
                     }
                 }
                 divisors.truncate(6);
+                if budget.stop().is_some() || rational::work() >= cap {
+                    break 'rows;
+                }
+                let base = mir_base(model, i, sign, x, &vubs, &mut acc);
                 for divisor in divisors {
                     if budget.stop().is_some() || rational::work() >= cap {
                         break 'rows;
                     }
                     stats.candidates += 1;
-                    if let Some(c) = mir(model, i, sign, divisor, x, &vubs, budget, cap) {
-                        output.push(c);
-                    } else {
-                        stats.rejected += 1;
+                    match base
+                        .as_ref()
+                        .and_then(|b| mir(model, b, divisor, budget, cap, &mut acc))
+                    {
+                        Some(c) => output.push(c),
+                        None => stats.rejected += 1,
                     }
                 }
             }
@@ -483,6 +722,344 @@ pub(crate) mod tests {
     use super::*;
     use crate::*;
     use lp_ip_craft::{Bounds, CsrMatrix, ModelData, VariableKind};
+
+    /// The 0.27.0 derivation in gcd-normalized rationals, kept as an
+    /// independent oracle for the dyadic implementation.
+    #[allow(clippy::too_many_arguments)]
+    mod reference {
+        use super::super::Cut;
+        use crate::{
+            Budget,
+            rational::{self, Rat},
+        };
+        use lp_ip_craft::Model;
+        use std::cmp::Ordering;
+        fn r(v: f64) -> Option<Rat> {
+            Rat::from(v)
+        }
+        fn positive(v: &Rat) -> Option<bool> {
+            Some(v.cmp(&Rat::zero())? == Ordering::Greater)
+        }
+        /// Relax every coefficient conversion over the finite root box, exactly.
+        pub(super) fn enclose(
+            model: &Model,
+            coefficients: &[Rat],
+            rhs: &Rat,
+            family: &'static str,
+        ) -> Option<Cut> {
+            let mut bound = rhs.clone();
+            let mut terms = Vec::new();
+            for (j, c) in coefficients.iter().enumerate() {
+                if c.is_zero() {
+                    continue;
+                }
+                let v = c.upper()?;
+                let v = if v.abs() < 1e-11 { 0. } else { v };
+                let delta = r(v)?.sub(c)?;
+                if !delta.is_zero() {
+                    let endpoint = if positive(&delta)? {
+                        model.variables().upper[j]
+                    } else {
+                        model.variables().lower[j]
+                    };
+                    bound = bound.add(&delta.mul(&r(endpoint)?)?)?;
+                }
+                if v != 0. {
+                    terms.push((j, v));
+                }
+            }
+            if terms.is_empty() || terms.len() > 1024 {
+                return None;
+            }
+            let max = terms.iter().map(|t| t.1.abs()).fold(0., f64::max);
+            let min = terms
+                .iter()
+                .map(|t| t.1.abs())
+                .fold(f64::INFINITY, f64::min);
+            if max / min > 1e6 {
+                return None;
+            }
+            Some(Cut {
+                terms,
+                rhs: bound.upper()?,
+                family,
+            })
+        }
+        /// An affine nonnegative variable z = sum terms*x + constant.
+        #[derive(Clone)]
+        struct Term {
+            coefficients: Vec<(usize, Rat)>,
+            constant: Rat,
+            integer: bool,
+        }
+        fn anchor(lo: f64, hi: f64, value: f64, integer: bool) -> Option<(f64, f64)> {
+            let (lo, hi) = if integer {
+                (lo.ceil(), hi.floor())
+            } else {
+                (lo, hi)
+            };
+            if lo > hi {
+                return None;
+            }
+            if lo.is_finite() && (!hi.is_finite() || value - lo <= hi - value) {
+                Some((lo, 1.))
+            } else if hi.is_finite() {
+                Some((hi, -1.))
+            } else {
+                None
+            }
+        }
+        pub(super) fn gmi(
+            model: &Model,
+            pivot: usize,
+            weights: &[f64],
+            x: &[f64],
+            budget: &Budget<'_>,
+            cap: u64,
+        ) -> Option<Cut> {
+            let a = model.matrix();
+            let mut aggregate = vec![Rat::zero(); model.n()];
+            for (i, &weight) in weights.iter().enumerate() {
+                if weight == 0. {
+                    continue;
+                }
+                if budget.stop().is_some() || rational::work() >= cap {
+                    return None;
+                }
+                let w = r(weight)?;
+                for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
+                    let j = a.pattern.indices[k];
+                    aggregate[j] = aggregate[j].add(&w.mul(&r(a.values[k])?)?)?;
+                }
+            }
+            let pivot_a = aggregate[pivot].clone();
+            if pivot_a.is_zero() {
+                return None;
+            }
+            let mut b = Rat::zero();
+            let mut transformed = Vec::new();
+            for (j, c) in aggregate.iter().enumerate() {
+                if j == pivot || c.is_zero() {
+                    continue;
+                }
+                let (bound, sign) = anchor(
+                    model.variables().lower[j],
+                    model.variables().upper[j],
+                    x[j],
+                    model.kinds()[j].is_integral(),
+                )?;
+                let c = c.div(&pivot_a)?;
+                b = b.sub(&c.mul(&r(bound)?)?)?;
+                transformed.push((
+                    c.mul(&r(sign)?)?,
+                    Term {
+                        coefficients: vec![(j, r(sign)?)],
+                        constant: r(-sign * bound)?,
+                        integer: model.kinds()[j].is_integral(),
+                    },
+                ));
+            }
+            for (i, &weight) in weights.iter().enumerate() {
+                if weight == 0. {
+                    continue;
+                }
+                let integer = (a.pattern.indptr[i]..a.pattern.indptr[i + 1]).all(|k| {
+                    a.values[k].fract() == 0. && model.kinds()[a.pattern.indices[k]].is_integral()
+                });
+                let activity = (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
+                    .map(|k| a.values[k] * x[a.pattern.indices[k]])
+                    .sum();
+                let (bound, sign) = anchor(
+                    model.rows().lower[i],
+                    model.rows().upper[i],
+                    activity,
+                    integer,
+                )?;
+                let c = r(-weight)?.div(&pivot_a)?;
+                b = b.sub(&c.mul(&r(bound)?)?)?;
+                let coefficients = (a.pattern.indptr[i]..a.pattern.indptr[i + 1])
+                    .map(|k| Some((a.pattern.indices[k], r(sign)?.mul(&r(a.values[k])?)?)))
+                    .collect::<Option<Vec<_>>>()?;
+                transformed.push((
+                    c.mul(&r(sign)?)?,
+                    Term {
+                        coefficients,
+                        constant: r(-sign * bound)?,
+                        integer,
+                    },
+                ));
+            }
+            let f = b.frac()?;
+            let fv = f.upper()?;
+            if !(0.005..=0.995).contains(&fv) {
+                return None;
+            }
+            let one = r(1.)?;
+            let om = one.sub(&f)?;
+            let mut coefficients = vec![Rat::zero(); model.n()];
+            let mut rhs = r(-1.)?;
+            for (c, term) in transformed {
+                if budget.stop().is_some() || rational::work() >= cap {
+                    return None;
+                }
+                let g = if term.integer {
+                    let fj = c.frac()?;
+                    if fj.cmp(&f)? != Ordering::Greater {
+                        fj.div(&f)?
+                    } else {
+                        one.sub(&fj)?.div(&om)?
+                    }
+                } else if positive(&c)? {
+                    c.div(&f)?
+                } else {
+                    c.neg().div(&om)?
+                };
+                // sum g*z >=1 -> -sum g*affine <= -1 + sum g*constant.
+                for (j, v) in term.coefficients {
+                    coefficients[j] = coefficients[j].sub(&g.mul(&v)?)?;
+                }
+                rhs = rhs.add(&g.mul(&term.constant)?)?;
+            }
+            enclose(model, &coefficients, &rhs, "gmi")
+        }
+        #[derive(Clone)]
+        pub(super) struct Vub {
+            binary: usize,
+            factor: Rat,
+        }
+        pub(super) fn variable_bounds(model: &Model) -> Vec<Option<Vub>> {
+            let mut out: Vec<Option<Vub>> = vec![None; model.n()];
+            let a = model.matrix();
+            for i in 0..model.m() {
+                let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
+                if range.len() != 2 {
+                    continue;
+                }
+                for (sign, bound) in [(1., model.rows().upper[i]), (-1., -model.rows().lower[i])] {
+                    if bound != 0. {
+                        continue;
+                    }
+                    for (k, l) in [
+                        (range.start, range.start + 1),
+                        (range.start + 1, range.start),
+                    ] {
+                        let j = a.pattern.indices[k];
+                        let y = a.pattern.indices[l];
+                        let (c, d) = (sign * a.values[k], sign * a.values[l]);
+                        if !model.kinds()[j].is_integral()
+                            && model.kinds()[y].is_integral()
+                            && model.variables().lower[y] == 0.
+                            && model.variables().upper[y] == 1.
+                            && c > 0.
+                            && d < 0.
+                        {
+                            if let Some(factor) = r(-d).and_then(|v| v.div(&r(c)?)) {
+                                out[j] = Some(Vub { binary: y, factor });
+                            }
+                        }
+                    }
+                }
+            }
+            out
+        }
+        #[allow(clippy::too_many_arguments)]
+        pub(super) fn mir(
+            model: &Model,
+            row: usize,
+            sign: f64,
+            divisor: f64,
+            x: &[f64],
+            vubs: &[Option<Vub>],
+            budget: &Budget<'_>,
+            cap: u64,
+        ) -> Option<Cut> {
+            let a = model.matrix();
+            let bound = if sign > 0. {
+                model.rows().upper[row]
+            } else {
+                -model.rows().lower[row]
+            };
+            let d = r(divisor)?;
+            let mut b = r(bound)?;
+            let mut coeff = vec![Rat::zero(); model.n()];
+            let mut substitutions = Vec::new();
+            for k in a.pattern.indptr[row]..a.pattern.indptr[row + 1] {
+                coeff[a.pattern.indices[k]] = r(sign * a.values[k])?;
+            }
+            // Replace continuous x by d*y-z for a certified nonnegative VUB slack.
+            for (j, vub) in vubs.iter().enumerate() {
+                if let Some(v) = vub {
+                    if !coeff[j].is_zero() {
+                        let c = coeff[j].clone();
+                        coeff[v.binary] = coeff[v.binary].add(&c.mul(&v.factor)?)?;
+                        coeff[j] = Rat::zero();
+                        substitutions.push((
+                            c.neg(),
+                            Term {
+                                coefficients: vec![(v.binary, v.factor.clone()), (j, r(-1.)?)],
+                                constant: Rat::zero(),
+                                integer: false,
+                            },
+                        ));
+                    }
+                }
+            }
+            for (j, c) in coeff.iter().enumerate() {
+                if c.is_zero() {
+                    continue;
+                }
+                let (bound, sgn) = anchor(
+                    model.variables().lower[j],
+                    model.variables().upper[j],
+                    x[j],
+                    model.kinds()[j].is_integral(),
+                )?;
+                b = b.sub(&c.mul(&r(bound)?)?)?;
+                substitutions.push((
+                    c.mul(&r(sgn)?)?,
+                    Term {
+                        coefficients: vec![(j, r(sgn)?)],
+                        constant: r(-sgn * bound)?,
+                        integer: model.kinds()[j].is_integral(),
+                    },
+                ));
+            }
+            b = b.div(&d)?;
+            let f = b.frac()?;
+            let fv = f.upper()?;
+            if !(0.005..=0.995).contains(&fv) {
+                return None;
+            }
+            let om = r(1.)?.sub(&f)?;
+            let mut rhs = b.floor();
+            let mut result = vec![Rat::zero(); model.n()];
+            for (c, t) in substitutions {
+                if budget.stop().is_some() || rational::work() >= cap {
+                    return None;
+                }
+                let c = c.div(&d)?;
+                let rounded = if t.integer {
+                    let base = c.floor();
+                    let fraction = c.frac()?;
+                    if fraction.cmp(&f)? == Ordering::Greater {
+                        base.add(&fraction.sub(&f)?.div(&om)?)?
+                    } else {
+                        base
+                    }
+                } else if positive(&c)? {
+                    Rat::zero()
+                } else {
+                    c.div(&om)?
+                };
+                for (j, v) in t.coefficients {
+                    result[j] = result[j].add(&rounded.mul(&v)?)?;
+                }
+                rhs = rhs.sub(&rounded.mul(&t.constant)?)?;
+            }
+            enclose(model, &result, &rhs, "mir")
+        }
+    }
+
     pub fn model(
         c: Vec<f64>,
         kinds: Vec<VariableKind>,
@@ -504,7 +1081,7 @@ pub(crate) mod tests {
         })
         .unwrap()
     }
-    fn separate_at_optimum(m: &Model, s: &NativeOptions) -> Vec<Cut> {
+    fn optimum(m: &Model, s: &NativeOptions) -> (Lp, Vec<f64>) {
         let cancel = CancellationToken::default();
         let options = Options::default();
         let mut budget = Budget {
@@ -522,7 +1099,17 @@ pub(crate) mod tests {
         .unwrap();
         assert_eq!(lp.solve(&mut budget, true).unwrap(), Status::Optimal);
         let x = lp.point();
-        eprintln!("x={x:?} tableau={:?}", lp.tableau_candidates(m, 4));
+        (lp, x)
+    }
+    fn separate_at_optimum(m: &Model, s: &NativeOptions) -> Vec<Cut> {
+        let cancel = CancellationToken::default();
+        let (mut lp, x) = optimum(m, s);
+        let budget = Budget {
+            start: Instant::now(),
+            settings: s,
+            cancel: &cancel,
+            pivots: 0,
+        };
         separate(m, &mut lp, &x, &budget).0
     }
     fn feasible(m: &Model, x: &[f64]) -> bool {
@@ -611,38 +1198,66 @@ pub(crate) mod tests {
             cancel: &cancel,
             pivots: 0,
         };
-        for noise in [0., 1e-12, -1e-12, 0.125] {
+        let mut acc = Accumulator::new(m.n());
+        let mut found = 0;
+        for noise in [0., 1e-12, -1e-12, 0.125, 1e-30] {
             rational::reset_work();
-            if let Some(c) = gmi(&m, 0, &[0.5, noise], &[1.5, 0.], &budget, 4_000_000) {
+            if let Some(c) = gmi(
+                &m,
+                0,
+                &[0.5, noise],
+                &[1.5, 0.],
+                &budget,
+                4_000_000,
+                &mut acc,
+            ) {
                 valid(&m, &[c], 3);
+                found += 1;
             }
         }
+        assert!(found >= 3);
     }
     #[test]
     fn vub_mir_preserves_continuous_slices_and_generates_real_cuts() {
         let mut total = 0;
-        for capacity in [1.5, 2.5, 3.5, 5.5, 6.5] {
-            let m = model(
-                vec![1., 1., -0.5, -0.5],
-                vec![
-                    VariableKind::Continuous,
-                    VariableKind::Continuous,
-                    VariableKind::Binary,
-                    VariableKind::Binary,
-                ],
-                vec![0.; 4],
-                vec![4., 4., 1., 1.],
-                vec![1., 1., 0., 0., 1., 0., -4., 0., 0., 1., 0., -4.],
-                vec![f64::NEG_INFINITY; 3],
-                vec![capacity, 0., 0.],
-            );
-            let s = NativeOptions {
-                mir_cuts: true,
-                ..Default::default()
-            };
-            let cuts = separate_at_optimum(&m, &s);
-            total += cuts.len();
-            valid(&m, &cuts, 5);
+        // Unit and non-dyadic VUB coefficients (3 x <= 12 y has a/c = 1/3).
+        for coefficient in [1., 3., 0.75] {
+            for capacity in [1.5, 2.5, 3.5, 5.5, 6.5] {
+                let m = model(
+                    vec![1., 1., -0.5, -0.5],
+                    vec![
+                        VariableKind::Continuous,
+                        VariableKind::Continuous,
+                        VariableKind::Binary,
+                        VariableKind::Binary,
+                    ],
+                    vec![0.; 4],
+                    vec![4., 4., 1., 1.],
+                    vec![
+                        1.,
+                        1.,
+                        0.,
+                        0.,
+                        coefficient,
+                        0.,
+                        -4. * coefficient,
+                        0.,
+                        0.,
+                        coefficient,
+                        0.,
+                        -4. * coefficient,
+                    ],
+                    vec![f64::NEG_INFINITY; 3],
+                    vec![capacity, 0., 0.],
+                );
+                let s = NativeOptions {
+                    mir_cuts: true,
+                    ..Default::default()
+                };
+                let cuts = separate_at_optimum(&m, &s);
+                total += cuts.len();
+                valid(&m, &cuts, 5);
+            }
         }
         assert!(total > 0);
     }
@@ -678,6 +1293,229 @@ pub(crate) mod tests {
         }
         assert!(total > 20);
     }
+    /// Mixed models with fractional coefficients, negative and complemented
+    /// bounds, equality and ranged rows, fixed columns and VUB rows.
+    fn random_mixed(seed: u64) -> Model {
+        let mut rng = seed;
+        let mut next = || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng
+        };
+        let n = 5;
+        let kinds: Vec<_> = (0..n)
+            .map(|j| match (next() + j as u64) % 3 {
+                0 => VariableKind::Continuous,
+                1 => VariableKind::Binary,
+                _ => VariableKind::Integer,
+            })
+            .collect();
+        let mut lo = Vec::new();
+        let mut up = Vec::new();
+        for kind in &kinds {
+            let (l, u) = match kind {
+                VariableKind::Binary => (0., if next() % 9 == 0 { 0. } else { 1. }),
+                VariableKind::Integer => {
+                    let l = (next() % 4) as f64 - 2.;
+                    (l, l + (next() % 3) as f64)
+                }
+                VariableKind::Continuous => {
+                    let l = (next() % 5) as f64 * 0.5 - 1.;
+                    (l, l + 0.75 + (next() % 4) as f64 * 0.5)
+                }
+            };
+            lo.push(l);
+            up.push(u);
+        }
+        let mut a = Vec::new();
+        let mut rl = Vec::new();
+        let mut ru = Vec::new();
+        for _ in 0..3 {
+            let mut activity = [0f64; 2];
+            for j in 0..n {
+                let v = match next() % 6 {
+                    0 | 1 => 0.,
+                    2 => (next() % 7) as f64 - 3.,
+                    3 => ((next() % 13) as f64 - 6.) * 0.375,
+                    4 => ((next() % 11) as f64 - 5.) / 3.,
+                    _ => ((next() % 9) as f64 - 4.) * 1.25,
+                };
+                a.push(v);
+                activity[0] += (v * lo[j]).min(v * up[j]);
+                activity[1] += (v * lo[j]).max(v * up[j]);
+            }
+            let mid = activity[0] + (activity[1] - activity[0]) * ((next() % 5) as f64 + 1.) / 7.;
+            match next() % 4 {
+                0 => {
+                    rl.push(f64::NEG_INFINITY);
+                    ru.push(mid);
+                }
+                1 => {
+                    rl.push(mid);
+                    ru.push(f64::INFINITY);
+                }
+                2 => {
+                    rl.push(mid - 0.5);
+                    ru.push(mid + 0.25);
+                }
+                _ => {
+                    rl.push(f64::NEG_INFINITY);
+                    ru.push(mid + 0.1);
+                }
+            }
+        }
+        // A VUB row on the first continuous column, when a binary exists.
+        if let (Some(x), Some(y)) = (
+            kinds.iter().position(|k| *k == VariableKind::Continuous),
+            kinds.iter().position(|k| *k == VariableKind::Binary),
+        ) {
+            if lo[x] >= 0. && up[y] == 1. {
+                let c = [1., 3., 0.5][(next() % 3) as usize];
+                let mut row = vec![0.; n];
+                row[x] = c;
+                row[y] = -c * up[x];
+                a.extend(row);
+                rl.push(f64::NEG_INFINITY);
+                ru.push(0.);
+            }
+        }
+        let c = (0..n).map(|_| (next() % 9) as f64 - 4.).collect();
+        model(c, kinds, lo, up, a, rl, ru)
+    }
+    #[test]
+    fn random_mixed_cuts_preserve_every_feasible_grid_point() {
+        let mut total = [0usize; 2];
+        for seed in 1..400u64 {
+            let m = random_mixed(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+            let lp_model = {
+                let mut d = m.data().clone();
+                d.kinds.fill(VariableKind::Continuous);
+                Model::new(d).unwrap()
+            };
+            let cancel = CancellationToken::default();
+            let s = NativeOptions {
+                gmi_cuts: true,
+                mir_cuts: true,
+                ..Default::default()
+            };
+            let r = NativeSolver::default()
+                .solve(&lp_model, &Options::default(), None, &cancel)
+                .unwrap();
+            if r.status != Status::Optimal {
+                continue;
+            }
+            let cuts = separate_at_optimum(&m, &s);
+            for c in &cuts {
+                total[usize::from(c.family == "mir")] += 1;
+            }
+            valid(&m, &cuts, 5);
+        }
+        assert!(total[0] > 20 && total[1] > 20, "{total:?}");
+    }
+    /// Same base equation and rounding function as the rational 0.27.0 code:
+    /// both cuts must agree up to a positive factor, apart from rounding.
+    fn proportional(a: &Cut, b: &Cut) {
+        let scale = |c: &Cut| c.terms.iter().map(|t| t.1.abs()).fold(0., f64::max);
+        let (sa, sb) = (scale(a), scale(b));
+        let dense = |c: &Cut, s: f64| {
+            let mut v = std::collections::BTreeMap::new();
+            for &(j, x) in &c.terms {
+                if (x / s).abs() > 1e-9 {
+                    v.insert(j, x / s);
+                }
+            }
+            v
+        };
+        let (da, db) = (dense(a, sa), dense(b, sb));
+        assert_eq!(
+            da.keys().collect::<Vec<_>>(),
+            db.keys().collect::<Vec<_>>(),
+            "{a:?} {b:?}"
+        );
+        for (j, x) in &da {
+            assert!((x - db[j]).abs() <= 1e-9, "{a:?} {b:?}");
+        }
+        assert!(
+            (a.rhs / sa - b.rhs / sb).abs() <= 1e-8 * (1. + (a.rhs / sa).abs()),
+            "{a:?} {b:?}"
+        );
+    }
+    #[test]
+    fn dyadic_derivation_matches_the_rational_reference() {
+        let s = NativeOptions::default();
+        let cancel = CancellationToken::default();
+        let budget = Budget {
+            start: Instant::now(),
+            settings: &s,
+            cancel: &cancel,
+            pivots: 0,
+        };
+        let mut compared = [0usize; 2];
+        let mut rng = 7u64;
+        for case in 0..300 {
+            let mut next = || {
+                rng = rng
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                rng >> 33
+            };
+            // Inequality rows and unfixed boxes only: there both derivations
+            // keep exactly the same terms.
+            let kinds = (0..5)
+                .map(|j| {
+                    if (j + case) % 4 == 0 {
+                        VariableKind::Continuous
+                    } else {
+                        VariableKind::Integer
+                    }
+                })
+                .collect();
+            let a = (0..15)
+                .map(|_| ((next() % 17) as f64 - 8.) * 0.75)
+                .collect();
+            let rhs = (0..3).map(|_| (next() % 9) as f64 + 0.3).collect();
+            let m = model(
+                (0..5).map(|_| (next() % 7) as f64 - 2.).collect(),
+                kinds,
+                vec![-1.; 5],
+                vec![2.; 5],
+                a,
+                vec![f64::NEG_INFINITY; 3],
+                rhs,
+            );
+            let (mut lp, x) = optimum(&m, &s);
+            let mut acc = Accumulator::new(m.n());
+            for (pivot, weights) in lp.tableau_candidates(&m, 8) {
+                rational::reset_work();
+                let theirs = reference::gmi(&m, pivot, &weights, &x, &budget, 100_000_000);
+                rational::reset_work();
+                let ours = gmi(&m, pivot, &weights, &x, &budget, 100_000_000, &mut acc);
+                if let Some(theirs) = theirs {
+                    proportional(ours.as_ref().expect("dyadic GMI rejected"), &theirs);
+                    compared[0] += 1;
+                }
+            }
+            let vubs = variable_bounds(&m);
+            let old_vubs = reference::variable_bounds(&m);
+            for row in 0..m.m() {
+                let base = mir_base(&m, row, 1., &x, &vubs, &mut acc);
+                for divisor in [1., 0.75, 1.5, 3.] {
+                    rational::reset_work();
+                    let theirs =
+                        reference::mir(&m, row, 1., divisor, &x, &old_vubs, &budget, 100_000_000);
+                    let ours = base
+                        .as_ref()
+                        .and_then(|b| mir(&m, b, divisor, &budget, 100_000_000, &mut acc));
+                    if let Some(theirs) = theirs {
+                        proportional(ours.as_ref().expect("dyadic MIR rejected"), &theirs);
+                        compared[1] += 1;
+                    }
+                }
+            }
+        }
+        assert!(compared[0] > 100 && compared[1] > 100, "{compared:?}");
+    }
     #[test]
     fn exact_box_compensation_protects_tiny_dropped_terms_and_negative_variables() {
         let m = model(
@@ -689,13 +1527,36 @@ pub(crate) mod tests {
             vec![],
             vec![],
         );
-        let coefficients = vec![
-            r(1.).unwrap().div(&r(3.).unwrap()).unwrap(),
-            r(1e-13).unwrap(),
-        ];
-        let rhs = r(4.).unwrap();
-        let cut = enclose(&m, &coefficients, &rhs, "test").unwrap();
+        let d = |v: f64| Dy::from_f64(v).unwrap();
+        // 1 + 2^-60 is not representable; 1e-13 is dropped against |x| <= 1e12.
+        let coefficients = vec![(0, d(1.).add(&d(2f64.powi(-60))).unwrap()), (1, d(1e-13))];
+        let cut = enclose(&m, coefficients, &d(4.), "test").unwrap();
         assert_eq!(cut.terms.len(), 1);
         assert!(cut.rhs >= 4.1);
+        // With a one-sided box only the admissible neighbour is used.
+        let m = model(
+            vec![0.],
+            vec![VariableKind::Continuous],
+            vec![0.],
+            vec![f64::INFINITY],
+            vec![],
+            vec![],
+            vec![],
+        );
+        let c = d(1.).add(&d(2f64.powi(-60))).unwrap();
+        let cut = enclose(&m, vec![(0, c)], &d(4.), "test").unwrap();
+        assert_eq!(cut.terms, vec![(0, 1.)]);
+        assert_eq!(cut.rhs, 4.);
+        let m = model(
+            vec![0.],
+            vec![VariableKind::Continuous],
+            vec![f64::NEG_INFINITY],
+            vec![f64::INFINITY],
+            vec![],
+            vec![],
+            vec![],
+        );
+        let c = d(1.).add(&d(2f64.powi(-60))).unwrap();
+        assert!(enclose(&m, vec![(0, c)], &d(4.), "test").is_none());
     }
 }
