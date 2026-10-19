@@ -165,6 +165,7 @@ target card](docs/target-card.md). Earlier native iterations are under
 | `scripts/benchmark_families.py` | Isolated-process family benchmark, optionally against a 0.15 baseline |
 | `docs/simplex` | Current kernel and search design, validation and measurements |
 | `docs/native`, `docs/sparse` | Earlier plans, results and raw measurements |
+| [`ai-context.md`](ai-context.md) | Operational context for AI agents: modelling, options, results, parallel layouts, job API |
 
 Project code is MIT. See [dependencies](docs/dependencies.md) and `Cargo.lock`.
 
