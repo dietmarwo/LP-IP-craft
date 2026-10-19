@@ -192,7 +192,7 @@ impl Worker for Adapter {
             "LP with duals: primal <= feasibility_tolerance, stationarity and dual_sign <= dual_tolerance * (1 + max|c|), duality_gap <= dual_tolerance (native defaults)"
         );
         d["evaluation"] = json!({"profile":EVALUATE_PROFILE,"inner_threads":1,
-            "points":"1..1000000 complete points of the model's dimension; one task per point",
+            "points":"1 or more finite points of the model's dimension (inline: the resolved job, points included, must stay below the runner's 4 MiB validation output); one task per point; a point whose values overflow is reported with claim none",
             "result":"claim feasible within the tolerances, else none; objective, violations and objective_bounds.primal for a feasible point"});
         d
     }
@@ -349,30 +349,39 @@ impl Run {
             .transpose()?;
         let mut validations = u64::from(checked.is_some());
         let feasible = checked.as_ref().map(|e| e.feasible_candidate);
+        // Residuals that overflow cannot confirm optimality; they fail the
+        // acceptance instead of the task.
         let residuals = match (&r.candidate, &r.duals) {
-            (Some(x), Some(d)) => Some(check::lp_residuals(&self.model, x, d)?),
+            (Some(x), Some(d)) => {
+                Some(check::lp_residuals(&self.model, x, d).map_err(|e| e.to_string()))
+            }
             _ => None,
         };
-        let kkt = residuals
-            .as_ref()
-            .map(|k| kkt_accepted(&self.model, k, tolerances, self.settings.dual_tolerance));
+        let kkt = residuals.as_ref().map(|k| {
+            k.as_ref().is_ok_and(|k| {
+                kkt_accepted(&self.model, k, tolerances, self.settings.dual_tolerance)
+            })
+        });
+        // The point the outcome reports, with its evaluation.
         let mut x = r.candidate.clone();
-        let mut objective = checked.as_ref().map(|e| e.objective);
-        let mut point_feasible = feasible;
-        let violation = |e: &lp_ip_craft::Evaluation| {
-            format!(
-                "primal violation {} (tolerance {}), integrality violation {} (tolerance {})",
-                e.primal_violation,
-                tolerances.feasibility,
-                e.integrality_violation,
-                tolerances.integrality
-            )
-        };
+        let mut shown = checked.clone();
+        let mut shown_residuals = residuals.as_ref().and_then(|k| k.as_ref().ok().copied());
+        let mut note = None;
+        let recomputed: &[&str] = if checked.is_some() { &checks } else { &[] };
         let (claim, evidence) = match r.status {
+            Status::Optimal if checked.is_none() => {
+                note = Some("optimal status without a candidate: nothing to check");
+                ("none", Evidence::claimed(&[]))
+            }
             Status::Optimal if feasible != Some(true) => {
-                let message = checked
-                    .as_ref()
-                    .map_or("no candidate returned".into(), violation);
+                let e = checked.as_ref().expect("checked candidate");
+                let message = format!(
+                    "primal violation {} (tolerance {}), integrality violation {} (tolerance {})",
+                    e.primal_violation,
+                    tolerances.feasibility,
+                    e.integrality_violation,
+                    tolerances.integrality
+                );
                 (
                     "none",
                     Evidence::rechecked(&checks).refuting(
@@ -383,15 +392,17 @@ impl Run {
                 )
             }
             Status::Optimal if kkt == Some(false) => {
-                let k = residuals.as_ref().expect("KKT judged from residuals");
-                let message = format!(
-                    "primal {}, stationarity {}, dual_sign {}, duality_gap {} fail the acceptance (dual tolerance {})",
-                    k.primal,
-                    k.stationarity,
-                    k.dual_sign,
-                    k.duality_gap,
-                    self.settings.dual_tolerance
-                );
+                let message = match residuals.as_ref().expect("KKT judged from residuals") {
+                    Ok(k) => format!(
+                        "primal {}, stationarity {}, dual_sign {}, duality_gap {} fail the acceptance (dual tolerance {})",
+                        k.primal,
+                        k.stationarity,
+                        k.dual_sign,
+                        k.duality_gap,
+                        self.settings.dual_tolerance
+                    ),
+                    Err(e) => format!("the dual residuals cannot be computed: {e}"),
+                };
                 let mut all = checks.clone();
                 all.push("kkt");
                 (
@@ -410,55 +421,56 @@ impl Run {
                 }
                 ("numerical_optimum", Evidence::rechecked(&all))
             }
+            Status::Infeasible if feasible == Some(true) => (
+                "feasible",
+                Evidence::rechecked(&checks).refuting(
+                    "infeasible",
+                    "false_infeasibility",
+                    "the returned candidate is feasible",
+                ),
+            ),
             Status::Infeasible => {
-                // A feasible returned point or start contradicts the claim.
-                let start = self.payload.starts[task]
-                    .as_ref()
-                    .filter(|_| feasible != Some(true))
-                    .map(|s| check::evaluate(&self.model, s, tolerances).map(|e| (s, e)))
-                    .transpose()?;
-                validations += u64::from(start.is_some());
-                if feasible == Some(true) {
-                    (
-                        "feasible",
-                        Evidence::rechecked(&checks).refuting(
-                            "infeasible",
-                            "false_infeasibility",
-                            "the returned candidate is feasible",
-                        ),
-                    )
-                } else if let Some((s, e)) = start.filter(|(_, e)| e.feasible_candidate) {
-                    x = Some(s.clone());
-                    objective = Some(e.objective);
-                    point_feasible = Some(true);
-                    (
-                        "feasible",
-                        Evidence::rechecked(&checks).refuting(
-                            "infeasible",
-                            "false_infeasibility",
-                            format!("start {task} is feasible"),
-                        ),
-                    )
-                } else {
-                    let recomputed: &[&str] = if checked.is_some() { &checks } else { &[] };
-                    ("infeasible", Evidence::claimed(recomputed))
+                // A feasible start contradicts the claim too. A start that
+                // cannot be evaluated (an overflow) proves nothing.
+                let start = self.payload.starts[task].as_ref().map(|s| {
+                    validations += 1;
+                    (s, check::evaluate(&self.model, s, tolerances).ok())
+                });
+                match start {
+                    Some((s, Some(e))) if e.feasible_candidate => {
+                        // Report the start, with its own evaluation.
+                        x = Some(s.clone());
+                        shown = Some(e);
+                        shown_residuals = None;
+                        (
+                            "feasible",
+                            Evidence::rechecked(&checks).refuting(
+                                "infeasible",
+                                "false_infeasibility",
+                                format!("start {task} is feasible"),
+                            ),
+                        )
+                    }
+                    _ => ("infeasible", Evidence::claimed(recomputed)),
                 }
             }
             Status::Unbounded | Status::InfeasibleOrUnbounded => {
-                let recomputed: &[&str] = if checked.is_some() { &checks } else { &[] };
                 (r.status.as_str(), Evidence::claimed(recomputed))
             }
             _ if feasible == Some(true) => ("feasible", Evidence::rechecked(&checks)),
-            _ => {
-                let recomputed: &[&str] = if checked.is_some() { &checks } else { &[] };
-                ("none", Evidence::claimed(recomputed))
-            }
+            _ => ("none", Evidence::claimed(recomputed)),
         };
+        let point_feasible = shown.as_ref().map(|e| e.feasible_candidate);
+        let objective = shown.as_ref().map(|e| e.objective);
         let primal = objective.filter(|_| point_feasible == Some(true));
         let gap = r
             .gap(self.model.sense())?
             .map(|g| json!({"absolute":scalar(g.absolute),"relative":scalar(g.relative)}));
-        let lp_residuals = residuals.map(|k| json!({"primal":scalar(k.primal),"stationarity":scalar(k.stationarity),"complementarity":scalar(k.complementarity),"dual_sign":scalar(k.dual_sign),"duality_gap":scalar(k.duality_gap)}));
+        let lp_residuals = shown_residuals.map(|k| json!({"primal":scalar(k.primal),"stationarity":scalar(k.stationarity),"complementarity":scalar(k.complementarity),"dual_sign":scalar(k.dual_sign),"duality_gap":scalar(k.duality_gap)}));
+        let mut details = json!({"sense":self.model.sense().as_str(),"is_mip":self.model.is_mip(),"best_bound":r.best_bound.map(scalar),"gap":gap,"primal_violation":shown.as_ref().map(|e|scalar(e.primal_violation)),"integrality_violation":shown.as_ref().map(|e|scalar(e.integrality_violation)),"lp_residuals":lp_residuals,"raw_status":r.backend.raw_status,"warm_start":r.backend.start_status.as_str(),"engine_version":r.backend.version,"effective_options":r.backend.effective_options,"message":r.message,"exact_certificate":false});
+        if let Some(note) = note {
+            details["note"] = json!(note);
+        }
         Ok(TaskResult {
             outcome: Outcome {
                 termination: r.status.as_str().into(),
@@ -466,7 +478,7 @@ impl Run {
                 feasible: point_feasible,
                 objective,
                 x,
-                details: json!({"sense":self.model.sense().as_str(),"is_mip":self.model.is_mip(),"best_bound":r.best_bound.map(scalar),"gap":gap,"primal_violation":checked.as_ref().map(|e|scalar(e.primal_violation)),"integrality_violation":checked.as_ref().map(|e|scalar(e.integrality_violation)),"lp_residuals":lp_residuals,"raw_status":r.backend.raw_status,"warm_start":r.backend.start_status.as_str(),"engine_version":r.backend.version,"effective_options":r.backend.effective_options,"message":r.message,"exact_certificate":false}),
+                details,
                 objective_bounds: objective_bounds(&self.model, primal, r.best_bound),
                 evidence: Some(evidence),
                 ..Outcome::default()
@@ -522,7 +534,27 @@ impl Prepared for Evaluate {
     fn cancel(&self) {} // One evaluation per task; tasks stop between points.
     fn solve(&self, task: usize, _: f64) -> Result<TaskResult> {
         let x = &self.points[task];
-        let e = check::evaluate(&self.model, x, &self.tolerances)?;
+        let e = match check::evaluate(&self.model, x, &self.tolerances) {
+            Ok(e) => e,
+            // A finite point whose objective or a row activity overflows
+            // has no usable value; it is an answer for this point, not a
+            // job failure.
+            Err(error) => {
+                return Ok(TaskResult {
+                    outcome: Outcome {
+                        termination: "evaluated".into(),
+                        claim: "none".into(),
+                        feasible: None,
+                        x: Some(x.clone()),
+                        details: json!({"sense":self.model.sense().as_str(),"is_mip":self.model.is_mip(),
+                            "message":error.to_string()}),
+                        evidence: Some(Evidence::claimed(&[])),
+                        ..Outcome::default()
+                    },
+                    work: [("evaluations".into(), 1)].into(),
+                });
+            }
+        };
         let feasible = e.feasible_candidate;
         Ok(TaskResult {
             outcome: Outcome {
@@ -756,10 +788,44 @@ mod tests {
             .unwrap()
             .outcome;
         assert_eq!(o.claim, "numerical_optimum");
-        // An infeasibility claim with a feasible start is refuted by the start.
+        // Optimal without a candidate: nothing was checked, nothing refuted.
+        let o = lp
+            .judge(0, native(Status::Optimal, None, None))
+            .unwrap()
+            .outcome;
+        assert_eq!(o.claim, "none");
+        let e = o.evidence.as_ref().unwrap();
+        assert!(e.level == "claimed" && e.refuted.is_none());
+        assert!(o.details["note"].is_string());
+        o.check().unwrap();
+        // Residuals that overflow cannot confirm an optimum.
+        let huge = Duals {
+            row_duals: vec![f64::MAX],
+            reduced_costs: vec![-f64::MAX, 0.0],
+        };
+        let o = lp
+            .judge(0, native(Status::Optimal, Some(vec![1.0, 0.0]), Some(huge)))
+            .unwrap()
+            .outcome;
+        assert_eq!(
+            refuted(&o),
+            ("feasible", "numerical_optimum", "false_optimality")
+        );
+        // An infeasibility claim with a feasible returned point is refuted.
+        let o = lp
+            .judge(0, native(Status::Infeasible, Some(vec![0.0, 1.0]), None))
+            .unwrap()
+            .outcome;
+        assert_eq!(
+            refuted(&o),
+            ("feasible", "infeasible", "false_infeasibility")
+        );
+        o.check().unwrap();
+        // An infeasibility claim with a feasible start is refuted by the start;
+        // the details describe the start, not the native candidate.
         let mip = run_for(&model("binary"), json!([[0.0, 1.0], null]));
         let r = mip
-            .judge(0, native(Status::Infeasible, None, None))
+            .judge(0, native(Status::Infeasible, Some(vec![0.0, 0.0]), None))
             .unwrap();
         assert_eq!(
             refuted(&r.outcome),
@@ -767,8 +833,18 @@ mod tests {
         );
         assert_eq!(r.outcome.x.as_deref(), Some(&[0.0, 1.0][..]));
         assert_eq!(r.outcome.objective, Some(8.0));
-        assert_eq!(r.work["validation_evaluations"], 1);
+        assert_eq!(r.outcome.details["primal_violation"], 0.0);
+        assert_eq!(r.work["validation_evaluations"], 2);
         r.outcome.check().unwrap();
+        // Unbounded keeps the solver's claim and reports a returned point.
+        let o = lp
+            .judge(0, native(Status::Unbounded, Some(vec![1.0, 0.0]), None))
+            .unwrap()
+            .outcome;
+        assert_eq!((o.claim.as_str(), o.feasible), ("unbounded", Some(true)));
+        let e = o.evidence.as_ref().unwrap();
+        assert_eq!((e.level.as_str(), e.checks.len()), ("claimed", 3));
+        o.check().unwrap();
         // Without a start, the claim stands as the solver's.
         let o = mip
             .judge(1, native(Status::Infeasible, None, None))
@@ -793,17 +869,25 @@ mod tests {
         let (dir, sha256) = directory(&model("binary"));
         let mut s = job(&sha256, 1);
         s.payload_schema = EVALUATE_PROFILE.into();
-        s.payload = json!({"model_input":"model","points":[[1.0,0.0],[0.0,0.0],[0.5,0.5]],
+        s.payload = json!({"model_input":"model","points":[[1.0,0.0],[0.0,0.0],[0.5,0.5],[1e308,1e308]],
             "feasibility_tolerance":1e-7,"integrality_tolerance":1e-7});
         let p = Adapter.prepare(&mut s, &dir).unwrap();
-        assert_eq!(p.tasks(), 3);
-        let outcomes: Vec<Outcome> = (0..3).map(|t| p.solve(t, 1.0).unwrap().outcome).collect();
+        assert_eq!(p.tasks(), 4);
+        let outcomes: Vec<Outcome> = (0..4).map(|t| p.solve(t, 1.0).unwrap().outcome).collect();
         assert_eq!(
             outcomes
                 .iter()
                 .map(|o| o.claim.as_str())
                 .collect::<Vec<_>>(),
-            ["feasible", "none", "none"]
+            ["feasible", "none", "none", "none"]
+        );
+        // The row activity overflows: no value, an answer for this point only.
+        assert!(outcomes[3].objective.is_none() && outcomes[3].feasible.is_none());
+        assert!(
+            outcomes[3].details["message"]
+                .as_str()
+                .unwrap()
+                .contains("overflow")
         );
         assert_eq!(outcomes[0].objective, Some(7.0));
         assert_eq!(

@@ -421,7 +421,7 @@ read each task's outcome with `optimization-run result JOB_DIRECTORY`
 |---|---|
 | `termination` | The native status, or `unsupported` when native refuses the model; `details.message` says why |
 | `claim` | `numerical_optimum` (native `optimal` that passed the independent checks), `feasible` (checked candidate, no optimality), `infeasible`, `unbounded`, `infeasible_or_unbounded` (the native claims), or `none` |
-| `evidence` | `rechecked` with `checks` `objective`, `bounds`, `constraints`, plus `integrality` (MIP) or `kkt` (LP with duals); `claimed` for the infeasibility and unboundedness claims, which the native solver does not certify for export; `refuted` when a check rejected the native status |
+| `evidence` | `rechecked` with `checks` `objective`, `bounds`, `constraints`, plus `integrality` (MIP) or `kkt` (LP with duals); `claimed` for the infeasibility and unboundedness claims, which the native solver does not certify for export, and for `none` (its `checks` list what was still recomputed); `refuted` when a check rejected the native status |
 | `objective_bounds` | `primal` (objective of the checked feasible point) and `dual` (the proven best bound), in the model's `sense` |
 | `feasible`, `objective`, `x` | From the independent evaluation of the candidate |
 | `details` | `sense`, `is_mip`, `best_bound`, `gap`, `primal_violation`, `integrality_violation`, `lp_residuals` (LP), `raw_status`, `warm_start`, `engine_version`, `effective_options`, `message`, `exact_certificate: false` |
@@ -432,8 +432,11 @@ An infeasible model is a `completed` job with `termination: "infeasible"` and
 reported as such: `evidence.refuted` names it, with verdict
 `infeasible_point` (optimal, but the candidate violates the model; claim
 `none`), `false_optimality` (an LP optimum whose duals fail the KKT
-acceptance; claim `feasible`) or `false_infeasibility` (infeasible, but the
-returned point or the task's start is feasible; claim `feasible`). A
+acceptance or overflow; claim `feasible`) or `false_infeasibility`
+(infeasible, but the returned point or the task's start is feasible; claim
+`feasible`, and `x` and the details then describe that point). An optimal
+status without a candidate has nothing to check: claim `none`, `claimed`, and
+`details.note` says so. A
 refutation indicates a solver defect or a tolerance mismatch; report it. The
 KKT acceptance is native's: primal residual within the feasibility tolerance,
 stationarity and dual signs within `dual_tolerance * (1 + max|c|)`, duality gap
@@ -449,12 +452,15 @@ branch-and-bound tree; use a new request key for a fresh solve.
 
 `lp-ip.evaluate/1` checks points against the model without solving, for
 example candidates an agent built or a solution from another solver. Payload:
-`model_input`, `points` (1 to 1,000,000 finite vectors, one per task, of the
-model's dimension; they may violate bounds) and the two tolerances; use
-`inner_threads` 1. Each outcome has `termination: "evaluated"`, claim
+`model_input`, `points` (finite vectors of the model's dimension, one task
+each; they may violate bounds) and the two tolerances; use `inner_threads` 1.
+Points are inline: the resolved job must stay below the runner's 4 MiB
+validation output. Each outcome has `termination: "evaluated"`, claim
 `feasible` within the tolerances or `none`, the objective, `primal_violation`
 and `integrality_violation` in details, `objective_bounds.primal` for a
-feasible point, and `rechecked` evidence. The work counter is `evaluations`.
+feasible point, and `rechecked` evidence. A point whose objective or row
+activity overflows gets claim `none`, no objective, unknown feasibility,
+`claimed` evidence and the reason in `details.message`. The work counter is `evaluations`.
 See `tutorials/job-api/assignment-evaluate.json`.
 
 ### Extend the job profile

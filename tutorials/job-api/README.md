@@ -58,7 +58,8 @@ If an independent check contradicts the native status, the worker reports
 what survives and names the rejected status in `evidence.refuted`: an optimal
 status with an infeasible candidate (`infeasible_point`), LP duals failing the
 KKT acceptance (`false_optimality`), or an infeasibility claim although the
-returned point or the task's start is feasible (`false_infeasibility`).
+returned point or the task's start is feasible (`false_infeasibility`; `x`
+and the details then describe that point).
 
 ## Evaluate given points
 
@@ -72,8 +73,10 @@ three points against the binary model without solving:
 
 Each point is one task with `termination: "evaluated"`: `[1,0]` and `[0,1]`
 are `feasible` (objectives 7 and 8), `[1,1]` violates the row and is `none`.
-Points may lie outside the bounds; they are then reported infeasible. Use
-`inner_threads` 1.
+Points may lie outside the bounds; they are then reported infeasible. A point
+whose objective or row activity overflows is `none` without an objective,
+with the reason in `details.message`. Points are inline: keep the job well
+below the runner's 4 MiB validation output. Use `inner_threads` 1.
 
 ## Supply your own LP/MIP
 
