@@ -1,0 +1,33 @@
+name: Shared job API
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  native-jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format and lint job layer
+        run: |
+          cargo fmt -p optimization-job-api -p optimization-runner -p lp-ip-job-worker -- --check
+          cargo clippy --locked -p optimization-job-api -p optimization-runner -p lp-ip-job-worker --all-targets -- -D warnings
+      - name: Contract tests and native build
+        run: |
+          cargo test --release --locked -p optimization-job-api -p optimization-runner -p lp-ip-job-worker
+          cargo build --release --locked -p optimization-runner -p lp-ip-job-worker
+      - name: Lifecycle and numerical integration
+        run: python3 scripts/job-api/test_integration.py
+      - name: Runnable tutorial
+        run: python3 tutorials/job-api/run.py --root "$RUNNER_TEMP/job-api-tutorial"
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.88
+      - run: >-
+          cargo check --locked --all-targets
+          -p optimization-job-api -p optimization-runner -p lp-ip-job-worker

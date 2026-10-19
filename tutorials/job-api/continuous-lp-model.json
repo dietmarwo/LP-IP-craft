@@ -1,0 +1,41 @@
+{
+  "schema_version": "lp-ip.model/1",
+  "sense": "minimize",
+  "objective": [
+    2.0,
+    3.0
+  ],
+  "objective_offset": 5.0,
+  "variable_lower": [
+    0.0,
+    0.0
+  ],
+  "variable_upper": [
+    1.0,
+    1.0
+  ],
+  "kinds": [
+    "continuous",
+    "continuous"
+  ],
+  "matrix": {
+    "indptr": [
+      0,
+      2
+    ],
+    "indices": [
+      0,
+      1
+    ],
+    "values": [
+      1.0,
+      1.0
+    ]
+  },
+  "row_lower": [
+    1.0
+  ],
+  "row_upper": [
+    1.0
+  ]
+}

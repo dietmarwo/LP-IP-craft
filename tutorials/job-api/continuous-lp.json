@@ -1,0 +1,40 @@
+{
+  "schema_version": "optimization.job/0.1",
+  "request_key": "tutorial.lp-ip.continuous-lp.v1",
+  "worker": "lp-ip",
+  "payload_schema": "lp-ip.solve/1",
+  "resources": {
+    "cpu_slots": 8,
+    "outer_workers": 8,
+    "inner_threads": 1
+  },
+  "limits": {
+    "wall_time_seconds": 30.0,
+    "grace_seconds": 1.0
+  },
+  "inputs": [
+    {
+      "name": "model",
+      "file": "continuous-lp-model.json",
+      "sha256": "5679c7093f7672b3e4f5185d0558d40c444bbd3e589e738150120f1a7dd2a5b5"
+    }
+  ],
+  "payload": {
+    "model_input": "model",
+    "starts": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "node_limit": 10000,
+    "iteration_limit": 100000,
+    "feasibility_tolerance": 1e-07,
+    "integrality_tolerance": 1e-07,
+    "presolve": true
+  }
+}

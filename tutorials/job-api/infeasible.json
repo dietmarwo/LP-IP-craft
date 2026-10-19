@@ -1,0 +1,40 @@
+{
+  "schema_version": "optimization.job/0.1",
+  "request_key": "tutorial.lp-ip.infeasible.v1",
+  "worker": "lp-ip",
+  "payload_schema": "lp-ip.solve/1",
+  "resources": {
+    "cpu_slots": 8,
+    "outer_workers": 8,
+    "inner_threads": 1
+  },
+  "limits": {
+    "wall_time_seconds": 30.0,
+    "grace_seconds": 1.0
+  },
+  "inputs": [
+    {
+      "name": "model",
+      "file": "infeasible-model.json",
+      "sha256": "5e4e5d4ea8a4dcee8988c2fd5c850afec1166361dee673c6339312ba6895fa31"
+    }
+  ],
+  "payload": {
+    "model_input": "model",
+    "starts": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "node_limit": 10000,
+    "iteration_limit": 100000,
+    "feasibility_tolerance": 1e-07,
+    "integrality_tolerance": 1e-07,
+    "presolve": true
+  }
+}

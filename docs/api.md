@@ -277,3 +277,11 @@ Rust uses the same `Options { threads:8, ..Default::default() }` and `solver.sol
 A width is a maximum. Small/sparse work can use scalar paths; compatible simultaneous owners share a pool, so a mixed product need not be fully busy. For packing neighborhoods use numerical width 1 plus packing_workers8; numerical width 8 selects within-root/kernel work and serializes outer repair/tree/component execution. No Python callback is introduced and the GIL remains released during native work. Independent callers must manage their combined budgets.
 
 Large structural reduced-cost/column-pricing outputs, retained dense Schur rows and independent packing primal-dual root phases can run in parallel. Scalar within-output operation order and ordered merges are preserved. Sparse Markowitz pivot selection, factor/triangular dependencies, dual-bound certification and acceptance checks remain ordered. Worker setup is charged to a direct solve deadline; pre-cancelled/expired calls skip unnecessary resources. Validation remains ahead of cancellation. See [validity](parallel-028/VALIDITY.md) and [reproduction](parallel-028/REPRODUCE.md).
+
+## Shared agent job API
+
+For durable native jobs with an explicit CPU budget, use the
+[shared protocol and runner](job-api.md) and the
+[solver-specific tutorial](../tutorials/job-api/README.md).
+The job profile is a deliberately smaller, versioned surface than the full
+in-process solver API. Unknown profile options are rejected.
