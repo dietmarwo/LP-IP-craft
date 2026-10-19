@@ -10,7 +10,9 @@ use std::{
 #[serde(deny_unknown_fields)]
 pub struct Outcome {
     pub termination: String,
-    /// none, feasible, best_found, numerical_optimum, or first_order.
+    /// none, feasible, best_found, numerical_optimum, first_order,
+    /// non_dominated_set or elite_archive. A non_dominated_set describes a
+    /// set of points in `details` and has no single `x` or `objective`.
     pub claim: String,
     pub feasible: Option<bool>,
     pub objective: Option<f64>,
@@ -31,11 +33,13 @@ pub fn replay(dir: &Path, spec: &JobSpec) -> Result<Vec<Record>> {
     if !path.exists() {
         return Ok(vec![]);
     }
-    let mut records: Vec<Record> = storage::read_checked(&path, 1)?;
+    let mut records: Vec<Record> =
+        storage::read_checked(&path, 1).map_err(|e| format!("{}: {e}", path.display()))?;
     let digest = spec.digest()?;
     let mut ids = BTreeSet::new();
     for r in &records {
         let o = &r.outcome;
+        let set = o.claim == "non_dominated_set";
         if r.task_id >= spec.task_count.ok_or("unresolved task_count")?
             || !ids.insert(r.task_id)
             || r.spec_digest != digest
@@ -44,18 +48,30 @@ pub fn replay(dir: &Path, spec: &JobSpec) -> Result<Vec<Record>> {
             || o.termination.is_empty()
             || !matches!(
                 o.claim.as_str(),
-                "none" | "feasible" | "best_found" | "numerical_optimum" | "first_order"
+                "none"
+                    | "feasible"
+                    | "best_found"
+                    | "numerical_optimum"
+                    | "first_order"
+                    | "non_dominated_set"
+                    | "elite_archive"
             )
             || o.objective.is_some_and(|v| !v.is_finite())
             || o.x
                 .as_ref()
                 .is_some_and(|v| v.is_empty() || v.iter().any(|x| !x.is_finite()))
             || o.objective.is_some() != o.x.is_some()
-            || (o.claim != "none" && (o.feasible != Some(true) || o.x.is_none()))
-            || (o.feasible == Some(true) && o.x.is_none())
+            || (o.claim != "none" && o.feasible != Some(true))
+            // A set claim lives in details; every other claim names one point.
+            || (set && o.x.is_some())
+            || (!set && o.feasible == Some(true) && o.x.is_none())
             || r.work.keys().any(|k| !crate::safe_name(k))
         {
-            return Err("invalid, mismatched or duplicate result record".into());
+            return Err(format!(
+                "{}: invalid, mismatched or duplicate result record",
+                path.display()
+            )
+            .into());
         }
     }
     records.sort_by_key(|r| r.task_id);
@@ -96,6 +112,30 @@ pub fn manifest(
         "artifacts":if dir.join("results.jsonl").exists(){json!({"results":"results.jsonl"})}else{json!({})},
         "runner":{"profile":"optimization.runner/0.1","spec_digest":s.digest()?,"worker_digest":worker_digest,"accounting_complete":complete,"resources":s.resources,"recovery":"journal_only_no_resume"}
     }))
+}
+/// The manifest of an attempt whose journal cannot be replayed (a corrupt or
+/// invalid record before its final line). No record is trusted, so there are
+/// no results and no work totals; `runner.journal_error` says why.
+pub fn unreadable_manifest(
+    spec: &Request,
+    elapsed: f64,
+    worker_digest: &str,
+    error: &str,
+) -> Value {
+    match spec {
+        Request::Legacy(_) => json!({
+            "schema_version":1,"status":"failed","actual_evaluations":null,
+            "elapsed_seconds":elapsed,
+            "runner":{"worker_digest":worker_digest,"accounting_complete":false,"journal_error":error}
+        }),
+        Request::Job(s) => json!({
+            "schema_version":"optimization.result/0.1", "status":"failed",
+            "worker":s.worker,"payload_schema":s.payload_schema,"elapsed_seconds":elapsed,
+            "completed_tasks":null,"requested_tasks":s.task_count,
+            "work":null,"known_work_lower_bound":null,"results":[],"artifacts":{},
+            "runner":{"profile":"optimization.runner/0.1","spec_digest":s.digest().ok(),"worker_digest":worker_digest,"accounting_complete":false,"resources":s.resources,"recovery":"journal_only_no_resume","journal_error":error}
+        }),
+    }
 }
 pub fn progress(dir: &Path, s: &Request) -> Result<Value> {
     match s {
