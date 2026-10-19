@@ -63,7 +63,7 @@ would change the solution.
 |---|---|
 | Are the objective and every constraint linear in the decision variables? | This solver accepts only `objective_offset + cᵀx` and linear row intervals. |
 | How many variables, rows and nonzeros? Which variables are integer or binary? | Size and integrality decide LP versus MIP effort and the parallel layout. |
-| Does every variable have a finite lower and upper bound? | A MIP requires finite bounds on **all** variables, continuous ones included, of magnitude at most 2^53−1 after root inference. |
+| Does every variable have a finite lower and upper bound? | A MIP requires finite bounds on **all** variables, continuous ones included, of magnitude at most 2^53−1 after root inference, which runs only with `presolve` on. |
 | Minimize or maximize? Is there a constant term? | Both senses are native; results keep the original sense and include the offset. |
 | What are the units and coefficient ranges? | Badly scaled rows weaken numerical acceptance; tolerances are absolute in original units. |
 | Which tolerances does the application accept? | Defaults are 1e-7 for feasibility and integrality. Freeze them before tuning. |
@@ -101,8 +101,9 @@ Prefer another tool when:
   expected and permitted: compare with one under the same independent check
   before choosing;
 - a MIP has variables, integer or continuous, that cannot be given finite
-  bounds and whose bounds propagation cannot infer: native returns
-  `Unsupported` (LPs may have infinite bounds);
+  bounds and whose bounds root inference cannot derive (it runs only with
+  `presolve` on): native returns `Unsupported` (LPs may have infinite
+  bounds);
 - the user needs a relative-gap stopping rule: there is no MIP gap stop; use
   node, iteration or time limits and report the gap.
 
@@ -116,8 +117,9 @@ Prefer another tool when:
 | Durable, CPU-budgeted agent experiments | `optimization-run` + `lp-ip-job-worker` | One hashed model artifact per job, a smaller option profile; see below |
 | Check a point or a bound from any solver | `evaluate`, `lp_residuals`, `safe_dual_bound` | Independent of every solver, including commercial ones |
 
-Python's `solve` defaults to `backend="dummy"`, which only evaluates the start
-and returns `stub`. Always pass `backend="native"` to optimize.
+Python's `solve` defaults to `backend="dummy"`, which only evaluates one point
+(the start, or else the origin clamped to the bounds) and returns `stub`.
+Always pass `backend="native"` to optimize.
 
 ## Build the model
 
@@ -206,12 +208,12 @@ that matter most:
 | `time_limit_seconds` | `None` | Cooperative whole-call budget |
 | `node_limit` | 100000 | MIP relaxations; `None` removes it |
 | `iteration_limit` | 1000000 | Simplex iterations across all nodes, phase 1, certification LPs and retries |
-| `presolve` | true | Master switch: with false, every root reduction and node propagation is off |
-| `mip_presolve`, `coefficient_tightening` | true | Default since the change after 0.27; both keep every feasible point. Set both false for the earlier behaviour |
+| `presolve` | true | Master switch: with false, the whole root stage is skipped (reductions, bound inference, cuts and separation, root heuristics) and nodes skip domain propagation; a MIP then needs finite bounds as given |
+| `mip_presolve`, `coefficient_tightening` | true | Default since the change after 0.27; MIP presolve keeps every feasible point, coefficient tightening every integer-feasible point. Set both false for the earlier behaviour |
 | `reduced_cost_fixing`, `incumbent_heuristic`, `rational_certification`, `objective_lattice` | true | Each keeps the acceptance checks; disable only for matched ablations |
 | `decompose`, `component_threads` | true, 16 | Independent components may run on up to 16 workers when `threads=1` |
 | `strong_branching`, `reliability_branching`, `root_cuts`, `root_separation`, `gmi_cuts`, `mir_cuts`, `root_heuristics`, `feasibility_jump`, `dual_presolve` | false | Opt-in; effects vary by model |
-| `packing_root`, `packing_neighborhoods`, `packing_cuts`, `scalable_branching`, `tree_threads` | off (0 or 1) | Experimental packing and parallel-search modes |
+| `packing_root`, `packing_neighborhoods`, `packing_cuts`, `scalable_branching`, `tree_threads` | off (false, 0 or 1) | Experimental packing and parallel-search modes |
 
 Change one option at a time and compare on held-out models under the same
 independent check. The README's 0.20–0.28 sections and
@@ -254,9 +256,12 @@ reports `stub`. The shared `Status` type also names
   (`NotImplementedError` in Python): a MIP with an infinite or huge bound,
   a bound out of range after scaling, or a basis factorization above
   `max_factor_entries`.
-- `backend.effective_options` records every control that ran and the
-  `diagnostics.*` counters; `backend.start_status` says what happened to a
-  start (`rejected` for every LP start).
+- `backend.effective_options` lists the configured value of every control,
+  after native's own overrides (for example `component_threads=1` at width
+  above 1), and the `diagnostics.*` counters. A listed control did not
+  necessarily run: with `presolve=false`, sub-switches such as `mip_presolve`
+  or `root_cuts` are still shown as set. `backend.start_status` says what
+  happened to a start (`rejected` for every LP start).
 
 Python errors: `ValueError` for malformed input, `TypeError` for wrong types or
 unknown options, `NotImplementedError` for unsupported settings or models,
@@ -368,7 +373,7 @@ required, and unknown fields are rejected:
 | `starts` | One entry per task, 1 to 1,000,000: `null`, or for a MIP a complete finite primal vector |
 | `node_limit`, `iteration_limit` | Positive per-task budgets |
 | `feasibility_tolerance`, `integrality_tolerance` | Original-unit tolerances, as in `Options` |
-| `presolve` | Native's master switch; `false` turns off every reduction, and `effective_options` says so |
+| `presolve` | Native's master switch; `false` skips the whole root stage, including bound inference, so a MIP then needs finite bounds as given. The worker clears the sub-switches, so the job's `effective_options` say what ran |
 
 The model artifact is JSON with `schema_version: "lp-ip.model/1"`, `sense`
 (`minimize` or `maximize`), `objective`, `objective_offset`,
@@ -452,7 +457,7 @@ solver-specific logic out of the shared runner.
 
 | Symptom | Likely cause and action |
 |---|---|
-| `NotImplementedError` / `Unsupported` for a MIP | An infinite or huge variable bound; add justified finite bounds |
+| `NotImplementedError` / `Unsupported` for a MIP | An infinite or huge variable bound that root inference could not tighten (or `presolve` is off); add justified finite bounds |
 | Job task `termination: "unsupported"` | The same refusal inside a job; the message is in `details.message` |
 | LP start rejected | Basis import is not implemented; pass no start (`null` in a job) |
 | `time_limit` or `node_limit` with a candidate | Report it as feasible with its gap; raise the budget or try opt-in search options |
@@ -464,7 +469,7 @@ solver-specific logic out of the shared runner.
 
 ## Test commands
 
-The CI set, from the repository root:
+The main CI commands, from the repository root:
 
 ```sh
 cargo fmt --all --check
@@ -480,8 +485,10 @@ python examples/solve_native.py
 python examples/safe_bound.py
 ```
 
-CI also runs family benchmark smoke runs, the dependency audit and the SciPy
-oracle validations (`examples/validate_*.py`, with `scipy` installed). Pass
+CI also checks the numerical crates with Rust 1.85 (excluding the job crates)
+and the job crates with Rust 1.88, and runs family benchmark smoke runs, the
+dependency audit and the SciPy oracle validations (`examples/validate_*.py`,
+with `scipy` installed). Pass
 `--fcmaes`, `--sqp` (and `--lp-ip`) executables to `test_integration.py` to
 test a mixed node.
 
