@@ -1,0 +1,40 @@
+{
+  "schema_version": "optimization.job/0.1",
+  "request_key": "tutorial.lp-ip.assignment-mip.v1",
+  "worker": "lp-ip",
+  "payload_schema": "lp-ip.solve/1",
+  "resources": {
+    "cpu_slots": 8,
+    "outer_workers": 8,
+    "inner_threads": 1
+  },
+  "limits": {
+    "wall_time_seconds": 30.0,
+    "grace_seconds": 1.0
+  },
+  "inputs": [
+    {
+      "name": "model",
+      "file": "assignment-mip-model.json",
+      "sha256": "d3684093f6694c08593577fa707cafc037b19e5c327149def6d1f69c5f9ed2eb"
+    }
+  ],
+  "payload": {
+    "model_input": "model",
+    "starts": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "node_limit": 10000,
+    "iteration_limit": 100000,
+    "feasibility_tolerance": 1e-07,
+    "integrality_tolerance": 1e-07,
+    "presolve": true
+  }
+}

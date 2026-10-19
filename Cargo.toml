@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/core", "crates/native", "crates/python"]
+members = ["crates/optimization-job-api", "crates/optimization-runner", "crates/lp-ip-job-worker", "crates/core", "crates/native", "crates/python"]
 default-members = ["crates/core", "crates/native"]
 resolver = "3"
 [workspace.package]
