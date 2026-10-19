@@ -1,8 +1,10 @@
 # AI context for solving LP and MIP problems with LP-IP-craft
 
-Last reviewed 2026-10-19 against `main` at `a2709be` (workspace 0.28.0,
-including the shared agent job API 0.1, #11), plus the 0.1.1 synchronization
-of the shared job crates. In another checkout, check
+Last reviewed 2026-10-19 against `main` at `95b5826` (workspace 0.28.0,
+including the shared agent job API 0.1, #11, and the 0.1.1 synchronization of
+the shared job crates, #14), plus the result contract 0.2 of the shared job
+crates (claims with evidence, `lp-ip.evaluate/1`, error codes, JSON Schemas).
+In another checkout, check
 `Cargo.toml`, `python/lp_ip_craft/__init__.py`, the worker's discovery output
 and the linked guides before using a command or claiming a capability.
 
@@ -29,12 +31,12 @@ dependency tree.
 | `lp-ip-craft-native` | `crates/native` | `lp_ip_craft_native`: `NativeSolver`, `NativeOptions`, batches |
 | `lp-ip-craft-python` / `lp-ip-craft` | `crates/python`, `python/lp_ip_craft` | `import lp_ip_craft`: optional PyO3 package |
 | `optimization-job-api`, `optimization-runner` | `crates/` | Shared job protocol and the `optimization-run` runner |
-| `lp-ip-job-worker` | `crates/lp-ip-job-worker` | Job worker for profile `lp-ip.solve/1` |
+| `lp-ip-job-worker` | `crates/lp-ip-job-worker` | Job worker for profiles `lp-ip.solve/1` and `lp-ip.evaluate/1` |
 
 Nothing is published. The workspace sets `publish = false`, and neither
 crates.io nor PyPI has an `lp-ip-craft` package at this review. Use a checkout
 of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.28.0;
-the shared job crates are 0.1.1. Profile names such as `lp-ip.solve/1` are protocol
+the shared job crates are 0.2.0. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
 
 Toolchains:
@@ -355,10 +357,15 @@ after the 0.1.0 delivery, and carries the review fixes of all three:
 - The result contract also knows the fcmaes `non_dominated_set` and
   `elite_archive` claims; LP results never use them.
 
-The job envelope, worker protocol and result schema identifiers are unchanged,
-so the three runner builds and workers interoperate; `describe` reports the
-shared version as `build.job_api_version`. Run a node root through one runner
-build.
+Version 0.2.0 adds the result contract `optimization.result/0.2` and worker
+protocol `optimization.worker/0.2`: the claims `infeasible`, `unbounded`,
+`infeasible_or_unbounded`, `locally_infeasible` and `certified_optimum`;
+`evidence` with checks, refutations and a certificate slot;
+`objective_bounds`; coded runner errors; and JSON Schemas in
+`docs/job-api/schemas/`. The job envelope stays `optimization.job/0.1`. A 0.2
+runner still accepts 0.1 workers, and a 0.1 runner rejects 0.2 workers at
+registration. `describe` reports the shared version as
+`build.job_api_version`. Run a node root through one runner build.
 
 ### Job specification
 
@@ -408,25 +415,47 @@ reserves `cpu_slots` for the whole attempt.
 
 Inspect the job `state` first: `completed` only means every task returned. Then
 read each task's outcome with `optimization-run result JOB_DIRECTORY`
-(schema `optimization.result/0.1`, ordered by task):
+(schema `optimization.result/0.2`, ordered by task):
 
 | Outcome field | LP/MIP meaning |
 |---|---|
 | `termination` | The native status, or `unsupported` when native refuses the model; `details.message` says why |
-| `claim` | `numerical_optimum` (native `optimal` plus the independent check), `feasible` (checked candidate, no optimality), or `none` |
+| `claim` | `numerical_optimum` (native `optimal` that passed the independent checks), `feasible` (checked candidate, no optimality), `infeasible`, `unbounded`, `infeasible_or_unbounded` (the native claims), or `none` |
+| `evidence` | `rechecked` with `checks` `objective`, `bounds`, `constraints`, plus `integrality` (MIP) or `kkt` (LP with duals); `claimed` for the infeasibility and unboundedness claims, which the native solver does not certify for export; `refuted` when a check rejected the native status |
+| `objective_bounds` | `primal` (objective of the checked feasible point) and `dual` (the proven best bound), in the model's `sense` |
 | `feasible`, `objective`, `x` | From the independent evaluation of the candidate |
 | `details` | `sense`, `is_mip`, `best_bound`, `gap`, `primal_violation`, `integrality_violation`, `lp_residuals` (LP), `raw_status`, `warm_start`, `engine_version`, `effective_options`, `message`, `exact_certificate: false` |
 
 Non-finite numbers in details are the strings `"+infinity"` and `"-infinity"`.
 An infeasible model is a `completed` job with `termination: "infeasible"` and
-`claim: "none"`. A native `optimal` that fails the independent check fails the
-job instead of being reported. Work counters are `nodes`,
+`claim: "infeasible"`. A native status that fails its independent check is not
+reported as such: `evidence.refuted` names it, with verdict
+`infeasible_point` (optimal, but the candidate violates the model; claim
+`none`), `false_optimality` (an LP optimum whose duals fail the KKT
+acceptance; claim `feasible`) or `false_infeasibility` (infeasible, but the
+returned point or the task's start is feasible; claim `feasible`). A
+refutation indicates a solver defect or a tolerance mismatch; report it. The
+KKT acceptance is native's: primal residual within the feasibility tolerance,
+stationarity and dual signs within `dual_tolerance * (1 + max|c|)`, duality gap
+within `dual_tolerance`. Work counters are `nodes`,
 `simplex_iterations` and `validation_evaluations`; never add them to another
 profile's counters. If a worker is killed, `work` is null,
 `runner.accounting_complete` is false and only committed tasks count.
 Graceful cancellation sets the native token; `jobs cancel --now` terminates
 the process group after at most one more second. Repair never resumes a
 branch-and-bound tree; use a new request key for a fresh solve.
+
+### Evaluate given points
+
+`lp-ip.evaluate/1` checks points against the model without solving, for
+example candidates an agent built or a solution from another solver. Payload:
+`model_input`, `points` (1 to 1,000,000 finite vectors, one per task, of the
+model's dimension; they may violate bounds) and the two tolerances; use
+`inner_threads` 1. Each outcome has `termination: "evaluated"`, claim
+`feasible` within the tolerances or `none`, the objective, `primal_violation`
+and `integrality_violation` in details, `objective_bounds.primal` for a
+feasible point, and `rechecked` evidence. The work counter is `evaluations`.
+See `tutorials/job-api/assignment-evaluate.json`.
 
 ### Extend the job profile
 
@@ -506,5 +535,5 @@ test a mixed node.
   [docs/job-api/REVIEW.md](docs/job-api/REVIEW.md): shared job API and this worker
 - [docs/target-card.md](docs/target-card.md): the open application contract
 - `crates/core/src/check.rs`, `crates/core/src/bound.rs`: independent checks
-- `crates/lp-ip-job-worker/src/main.rs`: the `lp-ip.solve/1` adapter
+- `crates/lp-ip-job-worker/src/main.rs`: the `lp-ip.solve/1` and `lp-ip.evaluate/1` adapter
 - `python/lp_ip_craft/__init__.py`: Python API and defaults
