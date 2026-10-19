@@ -1,7 +1,8 @@
 # AI context for solving LP and MIP problems with LP-IP-craft
 
-Last reviewed 2026-10-19 against `main` at `aa9eafd` (workspace 0.28.0,
-including the shared agent job API 0.1, #11). In another checkout, check
+Last reviewed 2026-10-19 against `main` at `a2709be` (workspace 0.28.0,
+including the shared agent job API 0.1, #11), plus the 0.1.1 synchronization
+of the shared job crates. In another checkout, check
 `Cargo.toml`, `python/lp_ip_craft/__init__.py`, the worker's discovery output
 and the linked guides before using a command or claiming a capability.
 
@@ -33,7 +34,7 @@ dependency tree.
 Nothing is published. The workspace sets `publish = false`, and neither
 crates.io nor PyPI has an `lp-ip-craft` package at this review. Use a checkout
 of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.28.0;
-the job crates are 0.1.0. Profile names such as `lp-ip.solve/1` are protocol
+the shared job crates are 0.1.1. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
 
 Toolchains:
@@ -333,31 +334,31 @@ an infeasible variant, eight tasks each. Commands for a single job, with
 
 ### Shared copies
 
-The shared crates and `docs/job-api.md` were delivered as identical copies in
-fcmaes-rust, LP-IP-craft and SQP-craft. They now differ. fcmaes-rust
-(`bf68a16`) and SQP-craft (`2578c11`) each fixed, in different ways, the repair
-of a job whose launcher died while the job was still queued; SQP-craft also
-changed other runner details. This repository has the delivered runner, so
-here `jobs repair` refuses such a job ("attempt processes still alive or
-liveness unknown; reservation retained"), the job stays `waiting`, and its
-request key stays taken: `run` with that key returns the same unfinished job.
-Use a new request key, or run `jobs repair` once with an
-`optimization-run` built from fcmaes-rust or SQP-craft `main` on the same node
-root; both seal the job as `interrupted` (checked 2026-10-19). Otherwise run a
-node root through one runner build; mixing builds concurrently is untested.
+The shared crates, `docs/job-api.md`, the integration harness and the runner
+regression tests (`scripts/job-api/test_review.py` with `fake_worker.py`) are
+byte-identical in fcmaes-rust, LP-IP-craft and SQP-craft.
+`docs/job-api/SHARED-SOURCES.sha256` records them, and CI checks the manifest
+in every repository. Version 0.1.1 synchronized the copies, which had drifted
+after the 0.1.0 delivery, and carries the review fixes of all three:
 
-SQP-craft's [job API review](https://github.com/dietmarwo/SQP-craft/blob/main/docs/job-api/REVIEW.md)
-lists further defects of the delivered shared code, which this copy still
-has. The ones an operator meets: `validate` and `run` stage the worker under
-`TMPDIR`, so a `noexec` `/tmp` makes them fail with "Permission denied"
-(point `TMPDIR` at an executable directory); an invalid record in a worker's `results.jsonl` leaves the job
-`running` and makes `jobs list` fail for the whole node; and after a reboot,
-finished jobs are also reported `interrupted_after_reboot`.
+- `jobs repair` seals a job whose launcher died while it was queued as
+  `interrupted`, with zero work and complete accounting; detached attempts that
+  their unit may still start stay unknown.
+- Validation stages the worker in a `.staging-*` directory under the node root,
+  so a `noexec` `TMPDIR` works; the node root itself must allow execution.
+- A worker that writes an invalid journal record ends its job `failed` with
+  `runner.journal_error` instead of leaving it `running`; `jobs list` reports
+  the error for that job only.
+- Appends end a torn journal tail first, a signal during validation stops the
+  validator, finished jobs are not flagged after a reboot, `./model.json` is a
+  valid input path, and detached jobs run in `optimization-job-ID.service`.
+- The result contract also knows the fcmaes `non_dominated_set` and
+  `elite_archive` claims; LP results never use them.
 
-The worker protocol is unchanged across the copies. The LP worker ran the
-tutorial jobs under the fcmaes-rust runner, on one node that also served the
-`fcmaes` and `sqp` workers. `sha256sum -c docs/job-api/SHARED-SOURCES.sha256`
-checks this repository's copies, not the siblings'.
+The job envelope, worker protocol and result schema identifiers are unchanged,
+so the three runner builds and workers interoperate; `describe` reports the
+shared version as `build.job_api_version`. Run a node root through one runner
+build.
 
 ### Job specification
 
@@ -465,7 +466,7 @@ solver-specific logic out of the shared runner.
 | `Unsupported` naming `max_factor_entries` | The guard (4,000,000 entries) on one factorization; heavy LU fill is a known limit. It is not a whole-process memory cap |
 | A parallel component solve stops earlier than serial | Reserved component budgets; set `component_threads=1` |
 | `TypeError` naming an option | An unknown or removed `NativeOptions` field |
-| A queued job never finishes after its launcher died | See [Shared copies](#shared-copies) |
+| A queued job never finishes after its launcher died | `jobs repair JOB_ID` seals it `interrupted` with zero work; see [Shared copies](#shared-copies) |
 
 ## Test commands
 
@@ -479,6 +480,8 @@ cargo run -p lp-ip-craft-native --release --example benchmark --locked -- 1
 cargo test --release --locked -p optimization-job-api -p optimization-runner -p lp-ip-job-worker
 cargo build --release --locked -p optimization-runner -p lp-ip-job-worker
 python3 scripts/job-api/test_integration.py
+python3 scripts/job-api/test_review.py
+sha256sum -c docs/job-api/SHARED-SOURCES.sha256
 python3 tutorials/job-api/run.py --root /tmp/job-api-tutorial
 python -m pip install ".[test]" && python -m pytest -q
 python examples/solve_native.py

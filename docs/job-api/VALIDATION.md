@@ -106,3 +106,26 @@ After the corrections in [REVIEW.md](REVIEW.md), on Linux x86_64 with Rust
 
 The delivery's raw logs under `validation/job-api/` were lost with the
 truncated archive, and the review's own logs are not committed.
+
+## Synchronization as 0.1.1 (19 October 2026)
+
+The shared files were replaced by the 0.1.1 set that fcmaes-rust, LP-IP-craft
+and SQP-craft now share byte for byte (20 files, `SHARED-SOURCES.sha256`).
+Until then this repository had the delivered runner. 0.1.1 brings in
+SQP-craft's review fixes and fcmaes-rust's zero-work repair of a queued job
+whose launcher died ([job API guide](../job-api.md#results-and-durable-recovery)),
+the fcmaes set and archive claims, and the shared runner regression tests
+`scripts/job-api/test_review.py`. CI now runs them and checks the manifest. The
+LP worker, the numerical crates and `lp-ip.solve/1` are unchanged.
+
+On Linux x86_64 with Rust 1.97:
+
+| Gate | Observed result |
+| --- | --- |
+| `cargo fmt --check`, Clippy `-D warnings` for the job crates | Passed |
+| Job crates, release | 27 passed: 20 shared (5 legacy spec, 7 contracts, 8 durability), 7 LP adapter |
+| `scripts/job-api/test_integration.py` with the LP worker | 9 passed; the fcmaes and SQP cases skipped |
+| `scripts/job-api/test_review.py` with the LP worker | 7 passed |
+| `tutorials/job-api/run.py` | 3 examples × 8 tasks passed |
+| `sha256sum -c docs/job-api/SHARED-SOURCES.sha256` | 20 files OK |
+| Mixed node: `test_integration.py` with all three workers, under each repository's runner build | 12 passed, none skipped, three times |
