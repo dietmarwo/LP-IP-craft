@@ -102,7 +102,7 @@ After the corrections in [REVIEW.md](REVIEW.md), on Linux x86_64 with Rust
 | `tutorials/job-api/run.py` | 3 examples × 8 tasks; objective 7 and the infeasible termination checked |
 | Unsupported MIP through the runner | Job `completed`, both tasks `unsupported`, zero work |
 | Numerical crates and `cargo tree -p lp-ip-craft-native` | Unchanged against main |
-| MSRV: 1.85 for the numerical crates, 1.88 for the job crates | Checked by CI; the toolchains could not be installed on the review host |
+| MSRV: 1.85 for the numerical crates, 1.88 for the job crates | Passed in CI (GitHub Actions); the toolchains could not be installed on the review host |
 
 The delivery's raw logs under `validation/job-api/` were lost with the
 truncated archive, and the review's own logs are not committed.

@@ -14,7 +14,7 @@ delivered; the validation of the merged code is appended to VALIDATION.md.
   `SHARED-SOURCES.sha256`. The 39 raw validation logs (`validation/job-api/`)
   and one data file of `docs/parallel-028` were lost. The raw logs stay out
   of the repository, as for earlier deliveries; the review's own runs are
-  below.
+  recorded in [VALIDATION.md](VALIDATION.md#review-and-merge-main-166bda7).
 - **New base.** The delivery was built on `af9a9a4`, the unreviewed 0.28
   branch. The patch was applied to `main` (`166bda7`, the reviewed 0.28).
   Only README.md and docs/api.md conflicted, both in prose. The numerical
