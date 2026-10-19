@@ -8,6 +8,12 @@ __pycache__/
 *.egg-info/
 
 /history/*.bundle
+
+# Default node directories of the job runner (`optimization-run`, `fcmaes-run`).
+/.optimization-jobs/
+/.fcmaes-jobs/
+# Raw job API validation logs ship in the delivery archive.
+/validation/
 /MANIFEST.sha256
 /SOURCE-REVISION
 

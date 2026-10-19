@@ -247,4 +247,5 @@ python3 scripts/job-api/test_integration.py \
 
 The harness auto-detects the local worker and skips unavailable solver-specific
 cases. The mixed acceptance run supplied all three. Raw logs and the tested
-source identities are in `validation/job-api/`.
+source identities are in `validation/job-api/` of each delivery archive; they
+are not committed to the repositories.

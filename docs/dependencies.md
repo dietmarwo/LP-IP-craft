@@ -8,8 +8,11 @@ Existing independent batches/components/residuals/frontiers use scoped standard-
 
 ## Shared agent job API
 
-For durable native jobs with an explicit CPU budget, use the
-[shared protocol and runner](job-api.md) and the
-[solver-specific tutorial](../tutorials/job-api/README.md).
-The job profile is a deliberately smaller, versioned surface than the full
-in-process solver API. Unknown profile options are rejected.
+The job API crates (`optimization-job-api`, `optimization-runner`,
+`lp-ip-job-worker`) are workspace members but not default members, and the
+numerical crates do not depend on them. They add, all pure Rust and resolved
+through Cargo.lock: serde and serde_json (with `float_roundtrip`), sha2, libc,
+fs2, clap, and tempfile, plus their transitive crates. `cargo tree -p
+lp-ip-craft-native` is unchanged and still has no HiGHS, BLAS or LAPACK
+dependency. The job layer needs Rust 1.88 and Linux; the numerical crates keep
+Rust 1.85. See the [job API guide](job-api.md).

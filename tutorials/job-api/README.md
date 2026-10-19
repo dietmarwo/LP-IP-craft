@@ -14,7 +14,8 @@ python3 tutorials/job-api/run.py --root /tmp/lp-ip-job-tutorial
 ```
 
 The script creates an eight-slot node and runs all three examples, with eight
-independent tasks per job. It checks objective 7 for the feasible models and
+independent tasks per job. It looks for the binaries in `target/release`, or in
+`$CARGO_TARGET_DIR/release` when that is set; `--bin-dir` overrides both. It checks objective 7 for the feasible models and
 checks the infeasible termination for the third. The final JSON includes job IDs
 and directories; `tutorial-report.json` is saved under the node.
 
@@ -75,12 +76,22 @@ second filename. The artifact is staged and rechecked at execution, then the
 model is shared by the worker's tasks.
 
 `starts` defines the tasks. Use `[null]` for one solve, or multiple null entries
-for independent repeats. A MIP entry can be a complete finite primal vector;
+for independent repeats. Starts are inline in the job file and are echoed back
+by worker validation, whose output is capped at 4 MiB, so all starts together
+must stay well below that size. A MIP entry can be a complete finite primal vector;
 it is considered as a candidate, without rounding or silently repairing it.
 Continuous LP warm starts are currently unsupported and rejected. Node and
-iteration limits are positive per-task budgets. `presolve` maps to the native
-LP presolve option; the established MIP presolve defaults remain in effect.
-Other native tuning options are outside this first profile and are rejected.
+iteration limits are positive per-task budgets. `presolve` is native's master
+presolve switch. With `true`, the native defaults apply, including MIP presolve
+and coefficient tightening. With `false`, every reduction is off: LP and
+singleton presolve, MIP presolve, coefficient tightening, and root and node
+bound propagation; the reported `effective_options` say so. Other native tuning
+options are outside this first profile and are rejected.
+
+Native solves a MIP only when every variable bound is finite after root
+propagation. A model outside that domain, such as a MIP with a free continuous
+column, does not fail the job: each task completes with `termination:
+"unsupported"`, `claim: "none"` and the native message in `details.message`.
 
 ## Choose the parallel layout
 

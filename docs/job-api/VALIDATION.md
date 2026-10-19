@@ -80,9 +80,29 @@ cargo test --release --locked -p sqp-craft -p sqp-craft-solver \
   -p sqp-craft-activeset -p sqp-craft-clarabel -p sqp-craft-parallel -p sqp-job-worker
 ```
 
-`validation/job-api/` contains raw logs, tutorial results, test environment and
-binary hashes in the recorded attempt provenance. Those paths refer to the
+`validation/job-api/` in the delivery archive (not committed) contains raw
+logs, tutorial results, test environment and binary hashes in the recorded
+attempt provenance. Those paths refer to the
 validation host and are evidence, not portable execution configuration.
 `docs/job-api/SHARED-SOURCES.sha256` verifies identical shared implementation
 files across the three archives. `MANIFEST.sha256` covers every delivered file
 except itself and can be checked with `sha256sum -c MANIFEST.sha256` after unzip.
+
+## Review and merge (main 166bda7)
+
+After the corrections in [REVIEW.md](REVIEW.md), on Linux x86_64 with Rust
+1.97.0:
+
+| Gate | Observed result |
+| --- | --- |
+| `cargo fmt --check`, Clippy `--workspace --all-targets -D warnings` | Passed |
+| Workspace tests, debug | 226 passed, including the job crates |
+| Job crates, release (`-p optimization-job-api -p optimization-runner -p lp-ip-job-worker`) | 25 passed: 18 shared, 7 new LP adapter tests |
+| `scripts/job-api/test_integration.py` with the LP worker | 8 passed; the fcmaes and SQP cases skipped |
+| `tutorials/job-api/run.py` | 3 examples × 8 tasks; objective 7 and the infeasible termination checked |
+| Unsupported MIP through the runner | Job `completed`, both tasks `unsupported`, zero work |
+| Numerical crates and `cargo tree -p lp-ip-craft-native` | Unchanged against main |
+| MSRV: 1.85 for the numerical crates, 1.88 for the job crates | Checked by CI; the toolchains could not be installed on the review host |
+
+The delivery's raw logs under `validation/job-api/` were lost with the
+truncated archive, and the review's own logs are not committed.

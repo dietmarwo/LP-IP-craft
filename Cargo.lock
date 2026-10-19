@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "lp-ip-job-worker"
-version = "0.1.0"
+version = "0.28.0"
 dependencies = [
  "lp-ip-craft",
  "lp-ip-craft-native",

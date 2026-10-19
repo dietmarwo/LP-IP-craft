@@ -1,13 +1,16 @@
 name: Shared job API
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   native-jobs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
       - name: Format and lint job layer
         run: |
           cargo fmt -p optimization-job-api -p optimization-runner -p lp-ip-job-worker -- --check
@@ -20,3 +23,11 @@ jobs:
         run: python3 scripts/job-api/test_integration.py
       - name: Runnable tutorial
         run: python3 tutorials/job-api/run.py --root "$RUNNER_TEMP/job-api-tutorial"
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.88
+      - run: >-
+          cargo check --locked --all-targets
+          -p optimization-job-api -p optimization-runner -p lp-ip-job-worker

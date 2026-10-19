@@ -1,7 +1,8 @@
 > **Shared agent job API 0.1:** this source tree includes the common Rust job
 > protocol/runner and a native solver worker. See the [API guide](docs/job-api.md),
 > [runnable tutorial](tutorials/job-api/README.md) and
-> [validation report](docs/job-api/VALIDATION.md). Existing solver APIs remain available.
+> [validation report](docs/job-api/VALIDATION.md); the [review](docs/job-api/REVIEW.md)
+> records the corrections made before the merge. Existing solver APIs remain available.
 
 > Native 0.28: explicit 1–8 numerical workers, reusable local Rayon resources, parallel dense-LU/pricing and packing-root phases, improved ordered batch/component/tree/residual orchestration, bounded mixed batches and a fail-closed scaling/oracle harness. See [30 iteration plans](docs/parallel-028/PLAN.md), [execution and numerical contract](docs/parallel-028/VALIDITY.md) and [reproduction](docs/parallel-028/REPRODUCE.md). Default numerical width stays 1; current MIP presolve/coefficient-tightening defaults stay on. See [measured gains and regressions](docs/parallel-028/RESULTS.md) and [the review's corrections](docs/parallel-028/REVIEW.md); raw evidence is included with the delivery archive.
 

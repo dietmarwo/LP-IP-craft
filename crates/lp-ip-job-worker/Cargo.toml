@@ -1,6 +1,7 @@
 [package]
 name = "lp-ip-job-worker"
-version = "0.1.0"
+# The workspace version: the worker reports it as the linked engine version.
+version.workspace = true
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
