@@ -102,8 +102,15 @@ prepares an offline build), so no second checkout is needed:
 cargo build --release --locked -p optimization-runner -p lp-ip-job-worker
 ```
 
-To use the Rust crates from another project before a crates.io release:
-`lp-ip-craft-native = { git = "https://github.com/dietmarwo/LP-IP-craft" }`.
+To use the Rust crates from another project before a crates.io release,
+depend on both: `lp-ip-craft` has the model, options and checks,
+`lp-ip-craft-native` the solver.
+
+```toml
+[dependencies]
+lp-ip-craft = { git = "https://github.com/dietmarwo/LP-IP-craft" }
+lp-ip-craft-native = { git = "https://github.com/dietmarwo/LP-IP-craft" }
+```
 
 ## Build and use
 
