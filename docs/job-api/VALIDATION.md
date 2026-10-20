@@ -209,3 +209,33 @@ Nothing in this repository's code changed. On Linux x86_64 with Rust 1.97:
 | Shared review tests (`JOB_API_REQUIRE_SCHEMA=1`) | 15 passed |
 | `test_mcp.py` with this repository's binaries | 25 passed, including the real-worker test (`lp-ip.solve/1`, claims and evidence) |
 | `tutorials/job-api/run.py` | 4 examples; jobs and results validated against the schemas of the checkout |
+
+## Review fixes (20 October 2026)
+
+The review of 20 October 2026 found that a refuted optimum could still carry
+the solver's contradictory bound and a gap computed from the solver's own
+objective (LP-01, reproduced with an injected result; not seen in a normal
+solve). The worker now publishes bounds and the gap for the point the outcome
+shows: the gap is recomputed from that point's objective, a bound beyond it
+(by more than the shared `BOUND_TOLERANCE`) is kept only as
+`details.reported_best_bound` with a `bound_note`, an overflowing gap is left
+out instead of failing the task, and a MIP optimum whose candidate does not
+evaluate to the solver's own objective is refuted (`objective_mismatch`). The
+regression test covers minimization, maximization, the offset, a stale
+evaluation, a contradictory bound, warm-start substitution and an overflowing
+gap.
+
+This repository moved to optimization-jobs revision
+[`eb1c9de`](https://github.com/dietmarwo/optimization-jobs/commit/eb1c9de66e677097a7ea22d9a4b2f6357c18751d),
+whose `Outcome::check` now rejects contradictory bounds itself, and which
+fixes the cancellation race, bounds the MCP server's requests and tests the
+shared SDK inside this worker before a repin. On Linux x86_64 with Rust 1.97:
+
+| Check | Observed result |
+| --- | --- |
+| `cargo fmt --check`, Clippy `-D warnings` for the worker | Passed |
+| Workspace tests (`cargo test --workspace --locked`) | 211 passed |
+| Shared harness from Cargo's checkout | 14 run: 10 passed, 4 skipped (fcmaes and SQP cases) |
+| Shared review tests (`JOB_API_REQUIRE_SCHEMA=1`) | 17 passed |
+| `test_mcp.py` with this repository's binaries | 28 passed, including the real-worker test |
+| `tutorials/job-api/run.py` | 4 examples; jobs and results validated against the schemas of the checkout |
