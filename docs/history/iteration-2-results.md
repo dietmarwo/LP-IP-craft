@@ -1,7 +1,7 @@
 # Iteration 2 results — conservative dual bounds
 
 Version 0.3.0, 16 October 2026. [Plan](iteration-2-plan.md) ·
-[API](api.md) · [Validity argument](safe-dual-bounds.md).
+[API](../api.md) · [Validity argument](../safe-dual-bounds.md).
 
 ## Baseline and review
 
@@ -77,7 +77,7 @@ The delivery built and passed its 70 Rust tests, doctest and 88 Python tests.
 The review checked validity and usefulness separately.
 
 **Validity: no defect found.** I read the derivation and the kernel line by
-line against [safe-dual-bounds.md](safe-dual-bounds.md): the neighbour
+line against [safe-dual-bounds.md](../safe-dual-bounds.md): the neighbour
 enclosures, the exact identities, the corner minimization, the checks for
 one-sided boxes and the probes. I then ran an independent rational oracle
 on 210,000 random models in both senses. The models mix infinite, one-sided,

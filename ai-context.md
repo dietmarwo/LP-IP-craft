@@ -334,6 +334,15 @@ an infeasible variant, eight tasks each. Commands for a single job, with
 `validate`, `run`, `submit`, `jobs get|events|wait|cancel|repair` and
 `result`, are in the guide.
 
+Agents can drive the same jobs through `optimization-mcp`, the MCP server
+that the runner's build also makes: thirteen tools (describe, validate,
+submit, wait, result summaries, cancel, kill, repair) over `optimization-run`
+and, with the MCP Tasks extension, a task per submitted job that completes
+with its result. Connect it with
+`claude mcp add lp-ip-jobs -- "$PWD/target/release/optimization-mcp" --root /abs/node`
+([Agents and MCP](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md#agents-and-mcp)). The server registers
+no workers and never changes the node.
+
 ### Shared crates
 
 The shared crates, the shared guide, the JSON Schemas, the integration
@@ -341,7 +350,8 @@ harness and the runner regression tests (`scripts/job-api/test_review.py`
 with `fake_worker.py`) live in
 [optimization-jobs](https://github.com/dietmarwo/optimization-jobs). This
 repository depends on them at the git revision its root `Cargo.toml` pins;
-`cargo build -p optimization-runner` still builds `optimization-run` here,
+`cargo build -p optimization-runner` still builds `optimization-run` and
+`optimization-mcp` here,
 and `scripts/job-api/shared_root.py` prints the path of Cargo's checkout, from
 which CI runs the harness. Until October 2026 the three repositories carried
 byte-identical copies. Version 0.1.1 synchronized them, after they had
@@ -506,7 +516,7 @@ solver-specific logic out of the shared runner.
 | `Unsupported` naming `max_factor_entries` | The guard (4,000,000 entries) on one factorization; heavy LU fill is a known limit. It is not a whole-process memory cap |
 | A parallel component solve stops earlier than serial | Reserved component budgets; set `component_threads=1` |
 | `TypeError` naming an option | An unknown or removed `NativeOptions` field |
-| A queued job never finishes after its launcher died | `jobs repair JOB_ID` seals it `interrupted` with zero work; see [Shared copies](#shared-copies) |
+| A queued job never finishes after its launcher died | `jobs repair JOB_ID` seals it `interrupted` with zero work; see [Shared crates](#shared-crates) |
 
 ## Test commands
 
@@ -523,6 +533,7 @@ SHARED=$(python3 scripts/job-api/shared_root.py)
 export JOB_API_TARGET="$PWD/target/release" JOB_API_TUTORIALS="$PWD/tutorials/job-api"
 python3 "$SHARED/scripts/job-api/test_integration.py"
 python3 "$SHARED/scripts/job-api/test_review.py"
+python3 "$SHARED/scripts/job-api/test_mcp.py"
 python3 tutorials/job-api/run.py --root /tmp/job-api-tutorial
 python -m pip install ".[test]" && python -m pytest -q
 python examples/solve_native.py

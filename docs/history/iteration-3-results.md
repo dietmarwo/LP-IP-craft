@@ -2,7 +2,7 @@
 
 Version 0.4.0 · 16 October 2026, America/Lima.
 Base: reviewed public `main` at `a7a04074747a99048810204efe0421b4093c9fb4`.
-[Plan](iteration-3-plan.md) · [API](api.md) · [Validation](iteration-3-validation.md).
+[Plan](iteration-3-plan.md) · [API](../api.md) · [Validation](iteration-3-validation.md).
 
 ## Review and implementation
 

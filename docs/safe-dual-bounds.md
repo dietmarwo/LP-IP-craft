@@ -212,7 +212,7 @@ safe side with no tolerance. Test families include:
 These are deterministic regression checks, not a substitute for the validity
 argument or external review. The existing 61 Rust tests plus one doctest and
 69 Python tests are retained unchanged. Results and reproduced commands are
-recorded in [iteration-2-results.md](iteration-2-results.md).
+recorded in [iteration-2-results.md](history/iteration-2-results.md).
 `examples/bound_availability.py` also checks every finite bound it computes
 against the exact Lagrangian of its multipliers.
 
