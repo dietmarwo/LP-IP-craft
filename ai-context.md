@@ -1,10 +1,14 @@
 # AI context for solving LP and MIP problems with LP-IP-craft
 
-Last reviewed 2026-10-19 against `main` at `95b5826` (workspace 0.28.0,
-including the shared agent job API 0.1, #11, and the 0.1.1 synchronization of
-the shared job crates, #14), plus the result contract 0.2 of the shared job
-crates (claims with evidence, `lp-ip.evaluate/1`, error codes, JSON Schemas).
-In another checkout, check
+Last reviewed 2026-10-20 against `main` at `f9ba356` (workspace 0.28.0). This
+state includes the result contract 0.2 (claims with evidence,
+`lp-ip.evaluate/1`, error codes, JSON Schemas; #15, docs and harness synced in
+#16), the shared job crates 0.2.0 of
+[optimization-jobs](https://github.com/dietmarwo/optimization-jobs) at
+revision `eb1c9de` instead of in-repo copies (#17), the `optimization-mcp`
+server (#18), and bounds and gaps published only for the point an outcome
+shows (#19). The numerical crates and the Python package did not change in
+these pull requests. In another checkout, check
 `Cargo.toml`, `python/lp_ip_craft/__init__.py`, the worker's discovery output
 and the linked guides before using a command or claiming a capability.
 
@@ -30,7 +34,7 @@ dependency tree.
 | `lp-ip-craft` | `crates/core` | `lp_ip_craft`: immutable CSR model, options, results, independent checks, conservative bounds, dummy backend; no dependencies |
 | `lp-ip-craft-native` | `crates/native` | `lp_ip_craft_native`: `NativeSolver`, `NativeOptions`, batches |
 | `lp-ip-craft-python` / `lp-ip-craft` | `crates/python`, `python/lp_ip_craft` | `import lp_ip_craft`: optional PyO3 package |
-| `optimization-job-api`, `optimization-runner` | git dependency on [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) | Shared job protocol and the `optimization-run` runner |
+| `optimization-job-api`, `optimization-runner` | git dependency on [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) | Shared job protocol, the `optimization-run` runner and the `optimization-mcp` server |
 | `lp-ip-job-worker` | `crates/lp-ip-job-worker` | Job worker for profiles `lp-ip.solve/1` and `lp-ip.evaluate/1` |
 
 Nothing is published. The workspace sets `publish = false`, and neither
@@ -42,8 +46,9 @@ identifiers, independent of either.
 Toolchains:
 
 - The numerical crates need Rust 1.85 or newer; CI checks them with 1.85. The
-  job crates need Rust 1.88, and CI checks them with 1.88. Plain `cargo build`
-  builds only `crates/core` and `crates/native` (the default members).
+  job worker and the shared job crates need Rust 1.88; CI checks the worker
+  with 1.88. Plain `cargo build` builds only `crates/core` and
+  `crates/native` (the default members).
 - The Python package needs CPython 3.10 or newer and builds from source with
   Rust: `python -m pip install ".[test]"`. CI tests 3.10 and 3.14 on Linux,
   macOS and Windows.
@@ -94,9 +99,17 @@ Prefer another tool when:
 - the objective or constraints are nonlinear: for smooth constrained problems
   with derivatives and at most 256 variables, see
   [SQP-craft](https://github.com/dietmarwo/SQP-craft); for black-box,
-  nonsmooth or multimodal objectives, see
-  [fcmaes-rust](https://github.com/dietmarwo/fcmaes-rust);
+  nonsmooth, multimodal or multi-objective problems, quality-diversity
+  archives or expensive simulations, see
+  [fcmaes-rust](https://github.com/dietmarwo/fcmaes-rust). Both run on the
+  same job node ([Other solvers on the same node](#other-solvers-on-the-same-node));
 - the objective is quadratic: there is no QP or MIQP support;
+- peak speed on hard instances decides: in the pinned HiGHS 1.15 comparisons
+  of earlier releases, HiGHS stayed faster on public LPs such as 25fv47 and
+  on some wide LPs, and proved more of the public MIPs
+  ([0.21](docs/robustness-wide-cert/RESULTS.md#remaining-deficiencies),
+  [0.27](docs/ripsolve-027/RESULTS.md#timings-and-limits)); it varies by
+  model, so measure on the user's models;
 - the application needs exact rational optimality or infeasibility
   certificates: statuses are numerical, and the bounded rational witness
   covers only incumbent feasibility;
@@ -141,7 +154,8 @@ allowed. `n` is the objective length and `m` the row-bound length. A zero-row
 model uses `indptr = [0]`. Equal finite row bounds express an equality;
 infinite sides express one-sided or free rows and columns. Binary bounds must
 lie in `[0, 1]`. The model is validated once and is immutable; Python models
-are picklable.
+are picklable. The packages have no MPS or LP-file reader: build the CSR
+arrays from the user's data.
 
 Python:
 
@@ -316,7 +330,10 @@ IEEE binary64 arithmetic with gradual underflow; fast-math is unsupported. See
 
 ## Shared agent job API
 
-Start with [the shared guide](docs/job-api.md) and
+The envelope, result contract, runner and MCP server live in
+[optimization-jobs](https://github.com/dietmarwo/optimization-jobs). Start
+with its [guide](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md),
+then [docs/job-api.md](docs/job-api.md) (this worker) and
 [the LP/MIP tutorial](tutorials/job-api/README.md). The job layer gives an
 agent durable, validated, CPU-admitted solves with journals, cancellation and
 result manifests. Its profile is deliberately smaller than the in-process API.
@@ -328,20 +345,51 @@ python3 tutorials/job-api/run.py --root /tmp/lp-ip-job-tutorial
   problems describe lp-ip
 ```
 
-The tutorial creates an eight-slot node, registers the worker as `lp-ip`, and
+The tutorial creates an eight-slot node, registers the worker as `lp-ip`,
 runs a binary MIP, the same model as an LP (both objective 7 at `[1, 0]`) and
-an infeasible variant, eight tasks each. Commands for a single job, with
+an infeasible variant, eight tasks each, and evaluates three given points
+with `lp-ip.evaluate/1`. `--bin-dir` selects the binaries (default
+`target/release`). Commands for a single job, with
 `validate`, `run`, `submit`, `jobs get|events|wait|cancel|repair` and
 `result`, are in the guide.
 
 Agents can drive the same jobs through `optimization-mcp`, the MCP server
-that the runner's build also makes: thirteen tools (describe, validate,
-submit, wait, result summaries, cancel, kill, repair) over `optimization-run`
-and, with the MCP Tasks extension, a task per submitted job that completes
-with its result. Connect it with
-`claude mcp add lp-ip-jobs -- "$PWD/target/release/optimization-mcp" --root /abs/node`
-([Agents and MCP](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md#agents-and-mcp)). The server registers
-no workers and never changes the node.
+that the runner's build also makes. Its thirteen tools describe the node and
+its workers; validate, submit, wait for, cancel, kill and repair jobs; and
+read results, events and artifacts. With the MCP Tasks extension, a submitted
+job is a task that completes with its result. Initialize the node and
+register the worker with `optimization-run` first: the server cannot
+register workers or change the node. Then connect a client, for example
+Claude Code:
+
+```sh
+claude mcp add lp-ip-jobs -- "$PWD/target/release/optimization-mcp" --root /abs/node
+```
+
+With the default `--launch process`, jobs outlive the server but not a
+reboot. The tool table, launch modes and limits are in
+[Agents and MCP](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md#agents-and-mcp).
+
+### Other solvers on the same node
+
+One runner and one MCP server can serve the workers of all three repositories
+against one CPU budget. Send problems that are not LP/MIP to them:
+
+| Problem | Repository, worker | Profile |
+|---|---|---|
+| Smooth constrained NLP with derivatives, at most 256 variables | [SQP-craft](https://github.com/dietmarwo/SQP-craft), `sqp-job-worker` | `sqp.solve/1` |
+| Black-box, nonsmooth or multimodal scalar objective | [fcmaes-rust](https://github.com/dietmarwo/fcmaes-rust), `fcmaes-job-worker` | `fcmaes.retry/1` |
+| Several objectives (Pareto front) | fcmaes-rust | `fcmaes.mode/1` |
+| Quality-diversity archive | fcmaes-rust | `fcmaes.map-elites/1` |
+| Expensive deterministic scalar simulation, 1–32 continuous variables, at most 256 evaluations | fcmaes-rust (experimental) | `fcmaes.surrogate/1` |
+
+Both workers also check given points (`sqp.evaluate/1`, `fcmaes.evaluate/1`).
+Unlike `lp-ip.solve/1`, which takes a model artifact, their profiles solve
+models registered in Rust inside a worker (SQP-craft's registered models and
+extension seam, fcmaes application workers); a job never carries code. Build
+each worker in its own repository, register it with `workers add`, and read
+that repository's `ai-context.md` first. Never add work counters across
+profiles.
 
 ### Shared crates
 
@@ -448,7 +496,7 @@ reported as such: `evidence.refuted` names it, with verdict
 `infeasible_point` (optimal, but the candidate violates the model; claim
 `none`), `false_optimality` (an LP optimum whose duals fail the KKT
 acceptance or overflow; claim `feasible`), `objective_mismatch` (an optimum
-without KKT confirmation, a MIP's say, whose candidate does not evaluate to
+without KKT confirmation, such as a MIP's, whose candidate does not evaluate to
 native's own objective; claim `feasible`) or `false_infeasibility`
 (infeasible, but the returned point or the task's start is feasible; claim
 `feasible`, and `x` and the details then describe that point). An optimal
@@ -473,7 +521,7 @@ branch-and-bound tree; use a new request key for a fresh solve.
 `lp-ip.evaluate/1` checks points against the model without solving, for
 example candidates an agent built or a solution from another solver. Payload:
 `model_input`, `points` (finite vectors of the model's dimension, one task
-each; they may violate bounds) and the two tolerances; use `inner_threads` 1.
+each; they may violate bounds) and the two tolerances; `inner_threads` must be 1.
 Points are inline: the resolved job must stay below the runner's 4 MiB
 validation output. Each outcome has `termination: "evaluated"`, claim
 `feasible` within the tolerances or `none`, the objective, `primal_violation`
@@ -559,9 +607,13 @@ test a mixed node; optimization-jobs' CI does that with all three workers.
 - [docs/safe-dual-bounds.md](docs/safe-dual-bounds.md): conservative bounds
 - [docs/simplex/README.md](docs/simplex/README.md): kernel and search design and validation
 - [docs/parallel-028](docs/parallel-028/VALIDITY.md): execution contract for 1–8 workers
-- [docs/job-api.md](docs/job-api.md) (where the shared guide lives),
-  [tutorials/job-api](tutorials/job-api/README.md),
+- [docs/job-api.md](docs/job-api.md) (this worker, with links into the shared
+  guide), [tutorials/job-api](tutorials/job-api/README.md),
+  [docs/job-api/VALIDATION.md](docs/job-api/VALIDATION.md),
   [docs/job-api/REVIEW.md](docs/job-api/REVIEW.md): shared job API and this worker
+- [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) and its
+  [guide](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md):
+  envelope, result contract, schemas, runner and MCP server
 - [docs/target-card.md](docs/target-card.md): the open application contract
 - `crates/core/src/check.rs`, `crates/core/src/bound.rs`: independent checks
 - `crates/lp-ip-job-worker/src/main.rs`: the `lp-ip.solve/1` and `lp-ip.evaluate/1` adapter
