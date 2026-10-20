@@ -72,6 +72,39 @@ MIPs still require finite bounds on **all** variables, including continuous
 variables, of magnitude at most 2^53-1 after justified root inference; unresolved
 infinities remain unsupported. Numerical kernels accept a maximum of 1–8 workers through `Options.threads`; small work stays scalar. Independent components, residual neighborhoods and binary frontiers keep their existing worker controls. Explicit numerical width > 1 serializes these outer mechanisms. Ordered batches also support outer × inner ≤ 8; the existing 16-worker serial-inner API remains compatible. The two real SpOC4 matching tables are now application benchmarks; their current quality/bound progress and remaining root bottleneck are documented in [the 0.26 results](docs/spoc4-026/RESULTS.md). GTOC application readiness remains unverified.
 
+## Install from source
+
+Nothing has been published to PyPI or crates.io yet ([RELEASING.md](RELEASING.md)
+describes the release workflows); build from source. Requirements:
+
+- git and Rust 1.85 or newer (`rustup` from https://rustup.rs) for the
+  numerical crates; Rust 1.88 or newer for the job worker and the runner.
+- For the Python package: CPython 3.10 or newer and `pip`; `pip` installs the
+  build backend `maturin` itself.
+- No C/C++ compiler, CMake, BLAS or HiGHS: the solver is pure Rust (Rayon is
+  its only dependency), and the core crate has no dependencies.
+
+```sh
+git clone https://github.com/dietmarwo/LP-IP-craft
+cd LP-IP-craft
+cargo test -p lp-ip-craft -p lp-ip-craft-native --locked    # Rust crates
+python -m venv .venv && . .venv/bin/activate                 # Windows: .venv\Scripts\activate
+python -m pip install .                                      # Python package lp_ip_craft
+```
+
+Our own dependency: the job worker `lp-ip-job-worker` depends on the shared
+job API of [optimization-jobs](https://github.com/dietmarwo/optimization-jobs)
+through git at the revision pinned in `Cargo.toml`. Cargo fetches it on the
+first build (network access to GitHub needed; `cargo fetch --locked`
+prepares an offline build), so no second checkout is needed:
+
+```sh
+cargo build --release --locked -p optimization-runner -p lp-ip-job-worker
+```
+
+To use the Rust crates from another project before a crates.io release:
+`lp-ip-craft-native = { git = "https://github.com/dietmarwo/LP-IP-craft" }`.
+
 ## Build and use
 
 Rust 1.85 or later. Plain `cargo build` builds only the two Rust numerical

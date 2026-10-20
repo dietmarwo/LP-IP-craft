@@ -6,7 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/lp-ip-craft"
+homepage = "https://github.com/dietmarwo/LP-IP-craft"
+keywords = ["linear-programming", "mip", "optimization", "solver", "validation"]
+categories = ["mathematics", "science", "algorithms"]
+publish = ["crates-io"]
 
 # Deliberately no dependencies: the core contract must stay usable without Python
 # or any third-party numerical library.

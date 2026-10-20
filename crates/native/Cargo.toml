@@ -5,12 +5,20 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-publish.workspace = true
+repository.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/lp-ip-craft-native"
+homepage = "https://github.com/dietmarwo/LP-IP-craft"
+keywords = ["linear-programming", "mip", "simplex", "branch-and-bound", "solver"]
+categories = ["mathematics", "science", "algorithms"]
+publish = ["crates-io"]
+# Refers to files outside the crate; kept out of the published package.
+exclude = ["tests/search_limits.rs"]
 [features]
 parallel-bench = []
 kernel-profile = []
 basis-replay = ["kernel-profile"]
 
 [dependencies]
-lp-ip-craft = { path = "../core" }
+lp-ip-craft = { path = "../core", version = "0.28.0" }
 rayon = "=1.12.0"
