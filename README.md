@@ -2,8 +2,8 @@
 > protocol/runner and a native solver worker. See the [API guide](docs/job-api.md),
 > [runnable tutorial](tutorials/job-api/README.md) and
 > [validation report](docs/job-api/VALIDATION.md); the [review](docs/job-api/REVIEW.md)
-> records the corrections made before the merge. The shared crates (0.2.0) are
-> identical in fcmaes-rust, LP-IP-craft and SQP-craft; 0.2 adds result claims with
+> records the corrections made before the merge. The shared crates (0.2.0) come
+> from [optimization-jobs](https://github.com/dietmarwo/optimization-jobs), at the revision `Cargo.toml` pins; 0.2 adds result claims with
 > evidence (`infeasible`, `unbounded`, refutations, objective bounds), point
 > evaluation (`lp-ip.evaluate/1`), coded errors and JSON Schemas. Existing solver APIs remain available.
 

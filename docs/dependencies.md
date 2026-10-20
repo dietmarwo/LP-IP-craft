@@ -8,11 +8,13 @@ Existing independent batches/components/residuals/frontiers use scoped standard-
 
 ## Shared agent job API
 
-The job API crates (`optimization-job-api`, `optimization-runner`,
-`lp-ip-job-worker`) are workspace members but not default members, and the
-numerical crates do not depend on them. They add, all pure Rust and resolved
-through Cargo.lock: serde and serde_json (with `float_roundtrip`), sha2, libc,
-fs2, clap, and tempfile, plus their transitive crates. `cargo tree -p
+The job worker `lp-ip-job-worker` is a workspace member but not a default
+member, and the numerical crates do not depend on it. It uses the shared job
+API crates `optimization-job-api` and `optimization-runner`, a git dependency
+on [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) at the
+revision `Cargo.toml` pins. They add, all pure Rust and resolved through
+Cargo.lock: serde and serde_json (with `float_roundtrip`), sha2, libc, fs2,
+clap, and tempfile, plus their transitive crates. `cargo tree -p
 lp-ip-craft-native` is unchanged and still has no HiGHS, BLAS or LAPACK
 dependency. The job layer needs Rust 1.88 and Linux; the numerical crates keep
 Rust 1.85. See the [job API guide](job-api.md).
