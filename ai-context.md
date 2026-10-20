@@ -7,7 +7,9 @@ state includes the result contract 0.2 (claims with evidence,
 [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) at
 revision `eb1c9de` instead of in-repo copies (#17), the `optimization-mcp`
 server (#18), and bounds and gaps published only for the point an outcome
-shows (#19). The numerical crates and the Python package did not change in
+shows (#19); #20 moves the pin to `6a42472`, which adds worker-declared
+artifacts and paged artifact reads (`get_artifact` with `offset` and `limit`
+also pages through the `results` journal of a running job). The numerical crates and the Python package did not change in
 these pull requests. In another checkout, check
 `Cargo.toml`, `python/lp_ip_craft/__init__.py`, the worker's discovery output
 and the linked guides before using a command or claiming a capability.
