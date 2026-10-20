@@ -7,18 +7,25 @@ state includes the result contract 0.2 (claims with evidence,
 [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) at
 revision `eb1c9de` instead of in-repo copies (#17), the `optimization-mcp`
 server (#18), and bounds and gaps published only for the point an outcome
-shows (#19); #20 moves the pin to `6a42472`, which adds worker-declared
-artifacts and paged artifact reads (`get_artifact` with `offset` and `limit`
-also pages through the `results` journal of a running job). The numerical crates and the Python package did not change in
-these pull requests. In another checkout, check
-`Cargo.toml`, `python/lp_ip_craft/__init__.py`, the worker's discovery output
-and the linked guides before using a command or claiming a capability.
+shows (#19); #20 moved the pin to `6a42472` and the release preparation to
+`423cd87`, which add worker-declared artifacts and paged artifact reads
+(`get_artifact` with `offset` and `limit` also pages through the `results`
+journal of a running job). The numerical crates and the Python package did not
+change in these pull requests. In another checkout, check `Cargo.toml`,
+`python/lp_ip_craft/__init__.py`, the worker's discovery output and the linked
+guides before using a command or claiming a capability.
 
 This file is operational context for an AI that must model and solve a user's
 linear program (LP) or mixed-integer linear program (MIP) with this
 repository, or decide that another tool fits better. It is not a performance
 claim. Every solve status is a numerical finding under declared tolerances,
 not an exact certificate; report results that way.
+
+If the solver is not chosen yet, start with the
+[entry point](https://github.com/dietmarwo/optimization-jobs/blob/main/ai-context.md)
+in optimization-jobs. It routes between fast-cma-es, fcmaes-rust,
+LP-IP-craft and SQP-craft and covers installation, the job API and the MCP
+server.
 
 ## What the repository is
 
@@ -39,8 +46,10 @@ dependency tree.
 | `optimization-job-api`, `optimization-runner` | git dependency on [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) | Shared job protocol, the `optimization-run` runner and the `optimization-mcp` server |
 | `lp-ip-job-worker` | `crates/lp-ip-job-worker` | Job worker for profiles `lp-ip.solve/1` and `lp-ip.evaluate/1` |
 
-Nothing is published. The workspace sets `publish = false`, and neither
-crates.io nor PyPI has an `lp-ip-craft` package at this review. Use a checkout
+Nothing is published yet: neither crates.io nor PyPI has an `lp-ip-craft`
+package at this review. The two library crates and the Python package are
+prepared for both registries ([RELEASING.md](RELEASING.md)); the worker
+stays source-only. Use a checkout
 of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.28.0;
 the shared job crates are 0.2.0. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.

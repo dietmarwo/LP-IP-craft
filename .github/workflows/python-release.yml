@@ -1,0 +1,135 @@
+# Release workflow for PyPI, modeled on fcmaes-rust's python-release.yml.
+# The extension is built for the stable ABI (abi3, CPython 3.10+), so every
+# platform needs one wheel; the wheels are smoke-tested on the oldest and the
+# newest Python the CI tests. A tag vX.Y.Z publishes through PyPI Trusted
+# Publishing (see RELEASING.md); a manual run builds and tests only.
+name: Build and publish lp-ip-craft for Python
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Require consistent versions (and the tag to match them)
+        shell: bash
+        run: |
+          version="$(python scripts/package_version.py)"
+          echo "version $version"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            test "$GITHUB_REF_NAME" = "v$version"
+          fi
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, runner: ubuntu-22.04, target: x86_64 }
+          - { name: windows-x64, runner: windows-latest, target: x64 }
+          - { name: macos-x86_64, runner: macos-15-intel, target: x86_64 }
+          - { name: macos-aarch64, runner: macos-latest, target: aarch64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build the abi3 wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --locked --out dist
+          manylinux: auto
+      - uses: actions/upload-artifact@v6
+        with:
+          name: wheels-${{ matrix.name }}
+          path: dist
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { name: linux-x86_64, runner: ubuntu-22.04 }
+          - { name: windows-x64, runner: windows-latest }
+          - { name: macos-x86_64, runner: macos-15-intel }
+          - { name: macos-aarch64, runner: macos-latest }
+        python-version: ["3.10", "3.14"]
+    runs-on: ${{ matrix.platform.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/download-artifact@v7
+        with:
+          name: wheels-${{ matrix.platform.name }}
+          path: dist
+      - name: Install and smoke-test the wheel
+        shell: bash
+        run: |
+          python -m pip install --no-index --no-deps --find-links dist lp-ip-craft
+          EXPECTED_VERSION="$(python scripts/package_version.py)" \
+            python scripts/smoke_python_package.py
+
+  sdist:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build source distribution
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - name: Install and smoke-test the source distribution
+        shell: bash
+        run: |
+          python -m pip install dist/*.tar.gz
+          EXPECTED_VERSION="$(python scripts/package_version.py)" \
+            python scripts/smoke_python_package.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: wheels-sdist
+          path: dist
+
+  release:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [test, sdist]
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v7
+      - name: Generate artifact attestations
+        uses: actions/attest@v4
+        with:
+          subject-path: "wheels-*/*"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+      - name: Publish with PyPI Trusted Publishing
+        run: uv publish --trusted-publishing always "wheels-*/*"
