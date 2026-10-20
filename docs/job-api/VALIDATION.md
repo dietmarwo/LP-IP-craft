@@ -239,3 +239,22 @@ shared SDK inside this worker before a repin. On Linux x86_64 with Rust 1.97:
 | Shared review tests (`JOB_API_REQUIRE_SCHEMA=1`) | 17 passed |
 | `test_mcp.py` with this repository's binaries | 28 passed, including the real-worker test |
 | `tutorials/job-api/run.py` | 4 examples; jobs and results validated against the schemas of the checkout |
+
+## Declared artifacts (20 October 2026)
+
+This repository moved to optimization-jobs revision
+[`6a42472`](https://github.com/dietmarwo/optimization-jobs/commit/6a42472d1904bdcc81f81a29023c8b51ca025ee6),
+which adds worker-declared artifacts, reads while a job runs and paged reads
+(`jobs artifact --offset/--limit`, MCP `get_artifact` with `offset` and
+`limit`; here they page through the `results` journal), and a
+`fcmaes.surrogate/1` case in the shared harness. This worker declares no
+artifacts of its own; its profiles are unchanged. On Linux x86_64 with Rust
+1.97:
+
+| Check | Observed result |
+| --- | --- |
+| Workspace tests (`cargo test --workspace --locked`) | 211 passed |
+| Shared harness from Cargo's checkout | 15 run: 10 passed, 5 skipped (fcmaes, surrogate and SQP cases) |
+| Shared review tests (`JOB_API_REQUIRE_SCHEMA=1`) | 20 passed, including the artifact tests with the fixture worker |
+| `test_mcp.py` with this repository's binaries | 29 passed |
+| `tutorials/job-api/run.py` | Completed |
