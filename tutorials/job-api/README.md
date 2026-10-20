@@ -60,9 +60,13 @@ bound rounding can differ from the objective by a few floating-point ulps.
 If an independent check contradicts the native status, the worker reports
 what survives and names the rejected status in `evidence.refuted`: an optimal
 status with an infeasible candidate (`infeasible_point`), LP duals failing the
-KKT acceptance (`false_optimality`), or an infeasibility claim although the
-returned point or the task's start is feasible (`false_infeasibility`; `x`
-and the details then describe that point).
+KKT acceptance (`false_optimality`), a MIP optimum whose candidate does not
+evaluate to the solver's own objective (`objective_mismatch`), or an
+infeasibility claim although the returned point or the task's start is
+feasible (`false_infeasibility`; `x` and the details then describe that
+point). Bounds and the gap always describe the point the outcome shows; a
+best bound that contradicts it is not published as `objective_bounds.dual`
+but kept as `details.reported_best_bound`.
 
 ## Through an agent (MCP)
 

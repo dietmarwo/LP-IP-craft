@@ -437,9 +437,9 @@ read each task's outcome with `optimization-run result JOB_DIRECTORY`
 | `termination` | The native status, or `unsupported` when native refuses the model; `details.message` says why |
 | `claim` | `numerical_optimum` (native `optimal` that passed the independent checks), `feasible` (checked candidate, no optimality), `infeasible`, `unbounded`, `infeasible_or_unbounded` (the native claims), or `none` |
 | `evidence` | `rechecked` with `checks` `objective`, `bounds`, `constraints`, plus `integrality` (MIP) or `kkt` (LP with duals); `claimed` for the infeasibility and unboundedness claims, which the native solver does not certify for export, and for `none` (its `checks` list what was still recomputed); `refuted` when a check rejected the native status |
-| `objective_bounds` | `primal` (objective of the checked feasible point) and `dual` (the proven best bound), in the model's `sense` |
+| `objective_bounds` | `primal` (objective of the checked feasible point the outcome shows) and `dual` (the proven best bound), in the model's `sense`; a bound beyond `primal` contradicts the point and is left out |
 | `feasible`, `objective`, `x` | From the independent evaluation of the candidate |
-| `details` | `sense`, `is_mip`, `best_bound`, `gap`, `primal_violation`, `integrality_violation`, `lp_residuals` (LP), `raw_status`, `warm_start`, `engine_version`, `effective_options`, `message`, `exact_certificate: false` |
+| `details` | `sense`, `is_mip`, `best_bound` (the published `dual`), `gap` (of the shown point against it), `primal_violation`, `integrality_violation`, `lp_residuals` (LP), `raw_status`, `warm_start`, `engine_version`, `effective_options`, `message`, `exact_certificate: false`; `reported_best_bound` and `bound_note` for a contradictory bound, `reported_objective` when native's objective of its candidate differs from the recomputed one |
 
 Non-finite numbers in details are the strings `"+infinity"` and `"-infinity"`.
 An infeasible model is a `completed` job with `termination: "infeasible"` and
@@ -447,11 +447,16 @@ An infeasible model is a `completed` job with `termination: "infeasible"` and
 reported as such: `evidence.refuted` names it, with verdict
 `infeasible_point` (optimal, but the candidate violates the model; claim
 `none`), `false_optimality` (an LP optimum whose duals fail the KKT
-acceptance or overflow; claim `feasible`) or `false_infeasibility`
+acceptance or overflow; claim `feasible`), `objective_mismatch` (an optimum
+without KKT confirmation, a MIP's say, whose candidate does not evaluate to
+native's own objective; claim `feasible`) or `false_infeasibility`
 (infeasible, but the returned point or the task's start is feasible; claim
 `feasible`, and `x` and the details then describe that point). An optimal
 status without a candidate has nothing to check: claim `none`, `claimed`, and
-`details.note` says so. A
+`details.note` says so. Bounds and gaps always describe the point the
+outcome shows: the gap is recomputed from its objective, and a native bound
+that contradicts it (beyond it by more than the shared `BOUND_TOLERANCE`,
+relative 1e-6) is not published. A
 refutation indicates a solver defect or a tolerance mismatch; report it. The
 KKT acceptance is native's: primal residual within the feasibility tolerance,
 stationarity and dual signs within `dual_tolerance * (1 + max|c|)`, duality gap

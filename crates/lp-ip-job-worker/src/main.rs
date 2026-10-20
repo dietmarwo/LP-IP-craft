@@ -1,13 +1,13 @@
 //! LP/MIP artifact adapter for the common optimization job protocol.
 #![forbid(unsafe_code)]
 use lp_ip_craft::{
-    Bounds, CancellationToken, CsrMatrix, Error, LpIpSolver, Model, ModelData, Options, Sense,
+    Bounds, CancellationToken, CsrMatrix, Error, Gap, LpIpSolver, Model, ModelData, Options, Sense,
     SolveResult, Status, Tolerances, VariableKind, WarmStart, check,
 };
 use lp_ip_craft_native::{NativeOptions, NativeSolver};
 use optimization_job_api::{
     JobSpec, Result,
-    result::{Evidence, ObjectiveBounds, Outcome},
+    result::{Evidence, ObjectiveBounds, Outcome, objectives_agree},
     worker::{self, Prepared, TaskResult, Worker},
 };
 use serde::{Deserialize, Serialize};
@@ -368,6 +368,14 @@ impl Run {
         let mut shown_residuals = residuals.as_ref().and_then(|k| k.as_ref().ok().copied());
         let mut note = None;
         let recomputed: &[&str] = if checked.is_some() { &checks } else { &[] };
+        // The solver's own objective for its candidate, when the
+        // recomputation disagrees with it.
+        let mismatch = match (&r.evaluation, &checked) {
+            (Some(own), Some(e)) if !objectives_agree(own.objective, e.objective) => {
+                Some(own.objective)
+            }
+            _ => None,
+        };
         let (claim, evidence) = match r.status {
             Status::Optimal if checked.is_none() => {
                 note = Some("optimal status without a candidate: nothing to check");
@@ -411,6 +419,22 @@ impl Run {
                         "numerical_optimum",
                         "false_optimality",
                         message,
+                    ),
+                )
+            }
+            // Without KKT residuals that confirm the point, an optimum whose
+            // own objective its point does not evaluate to is not believed.
+            Status::Optimal if kkt.is_none() && mismatch.is_some() => {
+                let reported = mismatch.expect("guarded");
+                (
+                    "feasible",
+                    Evidence::rechecked(&checks).refuting(
+                        "numerical_optimum",
+                        "objective_mismatch",
+                        format!(
+                            "the solver reports objective {reported}, its point evaluates to {}",
+                            checked.as_ref().expect("checked candidate").objective
+                        ),
                     ),
                 )
             }
@@ -463,13 +487,46 @@ impl Run {
         let point_feasible = shown.as_ref().map(|e| e.feasible_candidate);
         let objective = shown.as_ref().map(|e| e.objective);
         let primal = objective.filter(|_| point_feasible == Some(true));
-        let gap = r
-            .gap(self.model.sense())?
-            .map(|g| json!({"absolute":scalar(g.absolute),"relative":scalar(g.relative)}));
+        // The solver's bound is published only in order with the point the
+        // outcome shows: a bound beyond a feasible point's objective
+        // contradicts it, so it stays in details as reported_best_bound.
+        let reported_bound = r.best_bound.filter(|b| b.is_finite());
+        let (dual, rejected_bound) = match (primal, reported_bound) {
+            (Some(p), Some(b))
+                if !ObjectiveBounds {
+                    sense: self.model.sense().as_str().into(),
+                    primal: Some(p),
+                    dual: Some(b),
+                }
+                .ordered() =>
+            {
+                (None, Some(b))
+            }
+            (_, b) => (b, None),
+        };
+        // The gap of the shown point against that bound, never of the
+        // solver's own evaluation; an overflow leaves it out.
+        let gap = match (primal, dual) {
+            (Some(p), Some(b)) => Gap::try_new(self.model.sense(), p, b)
+                .ok()
+                .map(|g| json!({"absolute":scalar(g.absolute),"relative":scalar(g.relative)})),
+            _ => None,
+        };
         let lp_residuals = shown_residuals.map(|k| json!({"primal":scalar(k.primal),"stationarity":scalar(k.stationarity),"complementarity":scalar(k.complementarity),"dual_sign":scalar(k.dual_sign),"duality_gap":scalar(k.duality_gap)}));
-        let mut details = json!({"sense":self.model.sense().as_str(),"is_mip":self.model.is_mip(),"best_bound":r.best_bound.map(scalar),"gap":gap,"primal_violation":shown.as_ref().map(|e|scalar(e.primal_violation)),"integrality_violation":shown.as_ref().map(|e|scalar(e.integrality_violation)),"lp_residuals":lp_residuals,"raw_status":r.backend.raw_status,"warm_start":r.backend.start_status.as_str(),"engine_version":r.backend.version,"effective_options":r.backend.effective_options,"message":r.message,"exact_certificate":false});
+        let mut details = json!({"sense":self.model.sense().as_str(),"is_mip":self.model.is_mip(),"best_bound":dual.map(scalar),"gap":gap,"primal_violation":shown.as_ref().map(|e|scalar(e.primal_violation)),"integrality_violation":shown.as_ref().map(|e|scalar(e.integrality_violation)),"lp_residuals":lp_residuals,"raw_status":r.backend.raw_status,"warm_start":r.backend.start_status.as_str(),"engine_version":r.backend.version,"effective_options":r.backend.effective_options,"message":r.message,"exact_certificate":false});
         if let Some(note) = note {
             details["note"] = json!(note);
+        }
+        if let Some(b) = rejected_bound {
+            details["reported_best_bound"] = scalar(b);
+            details["bound_note"] = json!(format!(
+                "the solver's bound {b} contradicts the objective {} of the returned feasible point; it is not reported as objective_bounds.dual",
+                primal.expect("a rejected bound has a primal")
+            ));
+        }
+        // Only when the outcome shows the solver's own candidate.
+        if let Some(reported) = mismatch.filter(|_| x == r.candidate) {
+            details["reported_objective"] = scalar(reported);
         }
         Ok(TaskResult {
             outcome: Outcome {
@@ -479,7 +536,7 @@ impl Run {
                 objective,
                 x,
                 details,
-                objective_bounds: objective_bounds(&self.model, primal, r.best_bound),
+                objective_bounds: objective_bounds(&self.model, primal, dual),
                 evidence: Some(evidence),
                 ..Outcome::default()
             },
@@ -862,6 +919,210 @@ mod tests {
             ("node_limit", "feasible")
         );
         assert_eq!(o.evidence.as_ref().unwrap().level, "rechecked");
+    }
+
+    /// `native` with the solver's own evaluation of the candidate, its
+    /// objective replaced by `own`, and a bound.
+    fn reported(
+        run: &Run,
+        status: Status,
+        x: Vec<f64>,
+        own: f64,
+        bound: Option<f64>,
+        duals: Option<Duals>,
+    ) -> SolveResult {
+        let mut evaluation = check::evaluate(&run.model, &x, &run.options.tolerances).unwrap();
+        evaluation.objective = own;
+        SolveResult {
+            evaluation: Some(evaluation),
+            best_bound: bound,
+            ..native(status, Some(x), duals)
+        }
+    }
+
+    #[test]
+    fn bounds_and_gaps_describe_the_point_the_outcome_shows() {
+        // Review LP-01: optimal status, a stale own objective (8) and bound
+        // (8) for the point [1, 0], whose objective is 7, and duals that fail
+        // the KKT check. The claim was refuted, but the dual bound 8 and a
+        // zero gap were still published.
+        let lp = run_for(&model("continuous"), json!([null]));
+        let zero = Duals {
+            row_duals: vec![0.0],
+            reduced_costs: vec![0.0, 0.0],
+        };
+        let o = lp
+            .judge(
+                0,
+                reported(
+                    &lp,
+                    Status::Optimal,
+                    vec![1.0, 0.0],
+                    8.0,
+                    Some(8.0),
+                    Some(zero),
+                ),
+            )
+            .unwrap()
+            .outcome;
+        o.check().unwrap();
+        assert_eq!(
+            refuted(&o),
+            ("feasible", "numerical_optimum", "false_optimality")
+        );
+        assert_eq!(o.objective, Some(7.0));
+        let b = o.objective_bounds.as_ref().unwrap();
+        assert_eq!((b.primal, b.dual), (Some(7.0), None));
+        assert!(o.details["best_bound"].is_null() && o.details["gap"].is_null());
+        assert_eq!(o.details["reported_best_bound"], 8.0);
+        assert!(
+            o.details["bound_note"]
+                .as_str()
+                .unwrap()
+                .contains("contradicts")
+        );
+        assert_eq!(o.details["reported_objective"], 8.0);
+        // A consistent optimum keeps its bound and a zero gap.
+        let right = Duals {
+            row_duals: vec![2.0],
+            reduced_costs: vec![0.0, 1.0],
+        };
+        let o = lp
+            .judge(
+                0,
+                reported(
+                    &lp,
+                    Status::Optimal,
+                    vec![1.0, 0.0],
+                    7.0,
+                    Some(7.0),
+                    Some(right),
+                ),
+            )
+            .unwrap()
+            .outcome;
+        o.check().unwrap();
+        assert_eq!(o.claim, "numerical_optimum");
+        let b = o.objective_bounds.as_ref().unwrap();
+        assert_eq!((b.primal, b.dual), (Some(7.0), Some(7.0)));
+        assert_eq!(o.details["gap"], json!({"absolute":0.0,"relative":0.0}));
+        assert!(o.details.get("reported_best_bound").is_none());
+        assert!(o.details.get("reported_objective").is_none());
+        // A MIP optimum (no duals) whose own objective its point does not
+        // evaluate to is refuted; its bound, in order with the point, stays.
+        let mip = run_for(&model("binary"), json!([[0.0, 1.0], null]));
+        let o = mip
+            .judge(
+                1,
+                reported(&mip, Status::Optimal, vec![1.0, 0.0], 8.0, Some(7.0), None),
+            )
+            .unwrap()
+            .outcome;
+        o.check().unwrap();
+        assert_eq!(
+            refuted(&o),
+            ("feasible", "numerical_optimum", "objective_mismatch")
+        );
+        assert_eq!(o.details["reported_objective"], 8.0);
+        assert_eq!(o.objective_bounds.as_ref().unwrap().dual, Some(7.0));
+        // A valid bound below an incumbent gives its gap.
+        let o = mip
+            .judge(
+                1,
+                reported(
+                    &mip,
+                    Status::NodeLimit,
+                    vec![0.0, 1.0],
+                    8.0,
+                    Some(7.5),
+                    None,
+                ),
+            )
+            .unwrap()
+            .outcome;
+        o.check().unwrap();
+        assert_eq!(o.details["gap"], json!({"absolute":0.5,"relative":0.0625}));
+        // A feasible start that refutes infeasibility is shown with its own
+        // objective (8); a bound beyond it (9) is not published.
+        let o = mip
+            .judge(
+                0,
+                reported(
+                    &mip,
+                    Status::Infeasible,
+                    vec![0.0, 0.0],
+                    5.0,
+                    Some(9.0),
+                    None,
+                ),
+            )
+            .unwrap()
+            .outcome;
+        o.check().unwrap();
+        assert_eq!(
+            refuted(&o),
+            ("feasible", "infeasible", "false_infeasibility")
+        );
+        assert_eq!(
+            (o.objective, o.details["reported_best_bound"].as_f64()),
+            (Some(8.0), Some(9.0))
+        );
+        assert_eq!(o.objective_bounds.as_ref().unwrap().dual, None);
+        // The solver's objective of its own candidate is not attached to the
+        // start the outcome shows.
+        assert!(o.details.get("reported_objective").is_none());
+        // Maximization reverses the order: an upper bound below the point's
+        // objective is a contradiction, one above it is a valid bound.
+        let mut maximize = model("binary");
+        maximize["sense"] = json!("maximize");
+        let max = run_for(&maximize, json!([null]));
+        for (bound, kept) in [(6.5, false), (8.0, true)] {
+            let o = max
+                .judge(
+                    0,
+                    reported(
+                        &max,
+                        Status::NodeLimit,
+                        vec![1.0, 0.0],
+                        7.0,
+                        Some(bound),
+                        None,
+                    ),
+                )
+                .unwrap()
+                .outcome;
+            o.check().unwrap();
+            assert_eq!(
+                o.objective_bounds.as_ref().unwrap().dual.is_some(),
+                kept,
+                "{bound}"
+            );
+            assert_eq!(o.details["gap"].is_object(), kept, "{bound}");
+        }
+        // A gap that overflows is left out instead of failing the task.
+        let mut huge = model("continuous");
+        huge["objective"] = json!([1e308, 1e308]);
+        huge["objective_offset"] = json!(0.0);
+        let big = run_for(&huge, json!([null]));
+        let r = big
+            .judge(
+                0,
+                reported(
+                    &big,
+                    Status::NodeLimit,
+                    vec![1.0, 0.0],
+                    1e308,
+                    Some(-1e308),
+                    None,
+                ),
+            )
+            .unwrap();
+        r.outcome.check().unwrap();
+        assert_eq!(
+            r.outcome.objective_bounds.as_ref().unwrap().dual,
+            Some(-1e308)
+        );
+        assert!(r.outcome.details["gap"].is_null());
     }
 
     #[test]
