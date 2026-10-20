@@ -63,6 +63,9 @@ metadata.
   the job layer, no C/C++ toolchain, CMake or BLAS), the Python build, the
   job worker with its git dependency on optimization-jobs, and the crates
   as git dependencies.
+- `ai-context.md` points to the AI entry point of optimization-jobs, which
+  chooses between the four solver repositories, and says what the release
+  workflows will publish.
 
 ### Changed
 

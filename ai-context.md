@@ -21,6 +21,12 @@ repository, or decide that another tool fits better. It is not a performance
 claim. Every solve status is a numerical finding under declared tolerances,
 not an exact certificate; report results that way.
 
+If the solver is not chosen yet, start with the
+[entry point](https://github.com/dietmarwo/optimization-jobs/blob/main/ai-context.md)
+in optimization-jobs. It routes between fast-cma-es, fcmaes-rust,
+LP-IP-craft and SQP-craft and covers installation, the job API and the MCP
+server.
+
 ## What the repository is
 
 LP-IP-craft is a native Rust LP/MIP solver. One kernel, a bounded-variable dual
@@ -40,8 +46,10 @@ dependency tree.
 | `optimization-job-api`, `optimization-runner` | git dependency on [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) | Shared job protocol, the `optimization-run` runner and the `optimization-mcp` server |
 | `lp-ip-job-worker` | `crates/lp-ip-job-worker` | Job worker for profiles `lp-ip.solve/1` and `lp-ip.evaluate/1` |
 
-Nothing is published. The workspace sets `publish = false`, and neither
-crates.io nor PyPI has an `lp-ip-craft` package at this review. Use a checkout
+Nothing is published yet: neither crates.io nor PyPI has an `lp-ip-craft`
+package at this review. The two library crates and the Python package are
+prepared for both registries ([RELEASING.md](RELEASING.md)); the worker
+stays source-only. Use a checkout
 of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.28.0;
 the shared job crates are 0.2.0. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
