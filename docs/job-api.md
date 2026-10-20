@@ -29,7 +29,23 @@ pinned in the root `Cargo.toml`, and contributes `lp-ip-job-worker`.
 Profiles `lp-ip.solve/1` (sparse LP/MIP artifacts, candidate starts, node and pivot budgets, numerical checks) and `lp-ip.evaluate/1` (given points); see the [tutorial](../tutorials/job-api/README.md) and
 the [validation report](job-api/VALIDATION.md); the [review](job-api/REVIEW.md) records the corrections made before the 0.1 merge.
 `cargo build --release --locked -p optimization-runner -p lp-ip-job-worker` builds the
-runner and the worker; Cargo fetches the shared crates.
+runner, the MCP server and the worker; Cargo fetches the shared crates.
+
+## Agents: the MCP server
+
+The same build makes `optimization-mcp`, an MCP server over one node
+([Agents and MCP](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md#agents-and-mcp)). On a node with this
+worker registered (as `lp-ip`), connect an MCP client, for example Claude Code:
+
+```sh
+claude mcp add lp-ip-jobs -- "$PWD/target/release/optimization-mcp" --root /abs/node
+```
+
+Its tools describe the node and the worker, validate and submit jobs, wait for
+them, read their claims and evidence, and cancel or repair them; with the MCP
+Tasks extension, a submitted job is a task that completes with its result.
+The [tutorial](../tutorials/job-api/README.md#through-an-agent-mcp) connects
+it to the tutorial's node.
 
 ## Running the shared tests here
 
@@ -42,6 +58,7 @@ SHARED=$(python3 scripts/job-api/shared_root.py)
 export JOB_API_TARGET="$PWD/target/release" JOB_API_TUTORIALS="$PWD/tutorials/job-api"
 python3 "$SHARED/scripts/job-api/test_integration.py"
 python3 "$SHARED/scripts/job-api/test_review.py"
+python3 "$SHARED/scripts/job-api/test_mcp.py"
 ```
 
 A change to the shared crates lands in optimization-jobs first. Then change

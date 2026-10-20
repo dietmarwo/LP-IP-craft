@@ -60,7 +60,10 @@ compatibility surface, including the original live-worker repair diagnostic.
 
 ## Reproduce
 
-Use the commands in `docs/job-api.md` and the repository's
+This section reproduces the 0.1.0 delivery archives. For the current tree,
+whose shared crates and harness come from optimization-jobs, use
+[Running the shared tests here](../job-api.md#running-the-shared-tests-here).
+For the archives, use the commands in `docs/job-api.md` and the repository's
 `tutorials/job-api/README.md`. Each ZIP builds independently. To reproduce the
 mixed test, build each repository's worker and pass all three absolute paths to
 `scripts/job-api/test_integration.py`. The exact native test selections are:
@@ -189,3 +192,20 @@ runner as a dependency, so `cargo build -p optimization-runner` still builds
 
 Earlier sections mention `scripts/job-api/` and the checksum manifest as they
 were at the time.
+
+## The MCP server (19 October 2026)
+
+This repository moved to optimization-jobs revision `0ee495f`, which adds
+`optimization-mcp`, the MCP server over one node
+([guide](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md#agents-and-mcp),
+[plan](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api/PLAN.md#9-mcp-server-october-2026)). `cargo build -p optimization-runner -p lp-ip-job-worker` builds it here.
+Nothing in this repository's code changed. On Linux x86_64 with Rust 1.97:
+
+| Check | Observed result |
+| --- | --- |
+| `cargo fmt --check`, Clippy `-D warnings` | Passed |
+| Workspace tests (`cargo test --workspace --locked`) | 210 passed |
+| Shared harness from Cargo's checkout | 14 run: 10 passed, 4 skipped (fcmaes and SQP cases) |
+| Shared review tests (`JOB_API_REQUIRE_SCHEMA=1`) | 15 passed |
+| `test_mcp.py` with this repository's binaries | 25 passed, including the real-worker test (`lp-ip.solve/1`, claims and evidence) |
+| `tutorials/job-api/run.py` | 4 examples; jobs and results validated against the schemas of the checkout |

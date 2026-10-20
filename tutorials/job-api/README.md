@@ -64,6 +64,23 @@ KKT acceptance (`false_optimality`), or an infeasibility claim although the
 returned point or the task's start is feasible (`false_infeasibility`; `x`
 and the details then describe that point).
 
+## Through an agent (MCP)
+
+The runner's build also makes `optimization-mcp`, an MCP server over the same
+node. With the node of the previous section, connect an MCP client, for
+example Claude Code:
+
+```sh
+claude mcp add lp-ip-jobs -- "$PWD/target/release/optimization-mcp" --root /tmp/lp-ip-manual
+```
+
+The agent sees the worker with `describe_worker` (worker `lp-ip`), can pass
+any job of this directory to `submit_job` as `spec_path` (its input files are
+read next to it), follows it with `wait_job` and reads each task's claim,
+evidence and objective bounds with `get_result`; `cancel_job` stops it gracefully. With
+the MCP Tasks extension, `submit_job` returns a task that completes with the
+job's result. See [Agents and MCP](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md#agents-and-mcp).
+
 ## Evaluate given points
 
 `assignment-evaluate.json` uses `payload_schema: "lp-ip.evaluate/1"` to check

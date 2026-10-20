@@ -144,7 +144,7 @@ supplied by this first batch API.
 - **84 frozen basis replay observations**, worst backward error **2.17e-12**. Factorization and solve timing are separate in the raw data.
 - Standard, extended, old holdout, genuinely fresh seeds, true aspect-ratio, large, public and root-capability comparisons retain failures and regressions. Binary/model/corpus fingerprints are recorded.
 
-See [data/audit.json](data/audit.json) and the raw files in [data](data).
+The raw files it refers to (`data/audit.json` and the rest of `data/`) are not part of this repository.
 `summarize_standard.py` deterministically reconstructs standard summaries from
 the retained raw records. The early Devex-labelled trial did not set Devex;
 that file is explicitly retained as `rejected-harness-*`. Corrected policy runs

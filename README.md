@@ -1,11 +1,12 @@
-> **Shared agent job API 0.1:** this source tree includes the common Rust job
-> protocol/runner and a native solver worker. See the [API guide](docs/job-api.md),
-> [runnable tutorial](tutorials/job-api/README.md) and
-> [validation report](docs/job-api/VALIDATION.md); the [review](docs/job-api/REVIEW.md)
-> records the corrections made before the merge. The shared crates (0.2.0) come
-> from [optimization-jobs](https://github.com/dietmarwo/optimization-jobs), at the revision `Cargo.toml` pins; 0.2 adds result claims with
-> evidence (`infeasible`, `unbounded`, refutations, objective bounds), point
-> evaluation (`lp-ip.evaluate/1`), coded errors and JSON Schemas. Existing solver APIs remain available.
+> **Shared agent job API:** this repository builds `lp-ip-job-worker`, a native
+> solver worker for the job API of
+> [optimization-jobs](https://github.com/dietmarwo/optimization-jobs), at the
+> revision that `Cargo.toml` pins. The same build makes the runner `optimization-run`
+> and `optimization-mcp`, an MCP server through which agents submit, follow
+> and cancel solves. See the [API guide](docs/job-api.md), the
+> [runnable tutorial](tutorials/job-api/README.md), the
+> [validation report](docs/job-api/VALIDATION.md) and the
+> [review](docs/job-api/REVIEW.md). Existing solver APIs remain available.
 
 > Native 0.28: explicit 1–8 numerical workers, reusable local Rayon resources, parallel dense-LU/pricing and packing-root phases, improved ordered batch/component/tree/residual orchestration, bounded mixed batches and a fail-closed scaling/oracle harness. See [30 iteration plans](docs/parallel-028/PLAN.md), [execution and numerical contract](docs/parallel-028/VALIDITY.md) and [reproduction](docs/parallel-028/REPRODUCE.md). Default numerical width stays 1; current MIP presolve/coefficient-tightening defaults stay on. See [measured gains and regressions](docs/parallel-028/RESULTS.md) and [the review's corrections](docs/parallel-028/REVIEW.md); raw evidence is included with the delivery archive.
 

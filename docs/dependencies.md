@@ -13,8 +13,10 @@ member, and the numerical crates do not depend on it. It uses the shared job
 API crates `optimization-job-api` and `optimization-runner`, a git dependency
 on [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) at the
 revision `Cargo.toml` pins. They add, all pure Rust and resolved through
-Cargo.lock: serde and serde_json (with `float_roundtrip`), sha2, libc, fs2,
-clap, and tempfile, plus their transitive crates. `cargo tree -p
+Cargo.lock: serde and serde_json (with `float_roundtrip` and `raw_value`),
+sha2, libc, fs2, clap, and tempfile, plus their transitive crates. The same
+package builds `optimization-mcp`, the MCP server for agents, without further
+dependencies. `cargo tree -p
 lp-ip-craft-native` is unchanged and still has no HiGHS, BLAS or LAPACK
 dependency. The job layer needs Rust 1.88 and Linux; the numerical crates keep
 Rust 1.85. See the [job API guide](job-api.md).
