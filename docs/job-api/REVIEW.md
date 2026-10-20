@@ -3,7 +3,7 @@
 18 October 2026. The delivery (`LP-IP-craft-job-api-0.1.0.zip`, change
 record `PATCH-job-api.diff`) was reviewed, tested and corrected before it was
 merged into `main`. This page records what the review found and changed. The
-delivered [PLAN.md](PLAN.md) and [VALIDATION.md](VALIDATION.md) stay as
+delivered [PLAN.md](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api/PLAN.md) (now in optimization-jobs) and [VALIDATION.md](VALIDATION.md) stay as
 delivered; the validation of the merged code is appended to VALIDATION.md.
 
 ## Import
@@ -90,7 +90,7 @@ delivered; the validation of the merged code is appended to VALIDATION.md.
 The shared crates and the integration script are unchanged. One sentence of
 the shared guide `docs/job-api.md` changed. Apply the same edit in
 fcmaes-rust and SQP-craft to keep the copies identical. The new SHA-256 is in
-[SHARED-SOURCES.sha256](SHARED-SOURCES.sha256).
+`SHARED-SOURCES.sha256`, which the move to optimization-jobs retired.
 
 ```text
 - source identities are in `validation/job-api/`.

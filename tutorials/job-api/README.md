@@ -20,8 +20,10 @@ independent tasks per solve job. It looks for the binaries in `target/release`, 
 checks objective 7, the evidence and the objective bounds for the feasible
 models, the infeasibility claim for the third, and the three evaluated points.
 If the `jsonschema` package is installed, it also validates every job and
-result against the published [job](../../docs/job-api/schemas/optimization.job-0.1.schema.json) and
-[result](../../docs/job-api/schemas/optimization.result-0.2.schema.json) schemas. The final
+result against the published
+[job](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api/schemas/optimization.job-0.1.schema.json) and
+[result](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api/schemas/optimization.result-0.2.schema.json)
+schemas, from Cargo's checkout of optimization-jobs at the pinned revision. The final
 JSON includes job IDs and directories; `tutorial-report.json` is saved under
 the node.
 
@@ -142,7 +144,7 @@ node, pivot or time limit; inspect both termination and feasibility. Forced
 process termination retains completed tasks but cannot reconstruct the active
 branch-and-bound tree or its uncommitted work.
 
-See the [shared API guide](../../docs/job-api.md) for mixed-worker nodes,
-commands and recovery. Run `python3 scripts/job-api/test_integration.py` to test
-this adapter. The native solver API remains documented in
+See the [shared API guide](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md) for mixed-worker nodes, commands and
+recovery, and [shared job API](../../docs/job-api.md) for running the shared
+acceptance harness against this adapter. The native solver API remains documented in
 [docs/api.md](../../docs/api.md).

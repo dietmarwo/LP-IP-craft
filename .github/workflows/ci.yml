@@ -31,11 +31,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.85
-      # The numerical crates keep Rust 1.85; the job API crates need 1.88 and
-      # are checked by job-api.yml.
+      # The numerical crates keep Rust 1.85; the job worker and the shared job
+      # API crates need 1.88 and are checked by job-api.yml.
       - run: >-
           cargo check --workspace --all-targets --locked
-          --exclude optimization-job-api --exclude optimization-runner
           --exclude lp-ip-job-worker
   python:
     runs-on: ${{ matrix.os }}

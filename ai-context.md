@@ -30,7 +30,7 @@ dependency tree.
 | `lp-ip-craft` | `crates/core` | `lp_ip_craft`: immutable CSR model, options, results, independent checks, conservative bounds, dummy backend; no dependencies |
 | `lp-ip-craft-native` | `crates/native` | `lp_ip_craft_native`: `NativeSolver`, `NativeOptions`, batches |
 | `lp-ip-craft-python` / `lp-ip-craft` | `crates/python`, `python/lp_ip_craft` | `import lp_ip_craft`: optional PyO3 package |
-| `optimization-job-api`, `optimization-runner` | `crates/` | Shared job protocol and the `optimization-run` runner |
+| `optimization-job-api`, `optimization-runner` | git dependency on [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) | Shared job protocol and the `optimization-run` runner |
 | `lp-ip-job-worker` | `crates/lp-ip-job-worker` | Job worker for profiles `lp-ip.solve/1` and `lp-ip.evaluate/1` |
 
 Nothing is published. The workspace sets `publish = false`, and neither
@@ -334,14 +334,19 @@ an infeasible variant, eight tasks each. Commands for a single job, with
 `validate`, `run`, `submit`, `jobs get|events|wait|cancel|repair` and
 `result`, are in the guide.
 
-### Shared copies
+### Shared crates
 
-The shared crates, `docs/job-api.md`, the integration harness and the runner
-regression tests (`scripts/job-api/test_review.py` with `fake_worker.py`) are
-byte-identical in fcmaes-rust, LP-IP-craft and SQP-craft.
-`docs/job-api/SHARED-SOURCES.sha256` records them, and CI checks the manifest
-in every repository. Version 0.1.1 synchronized the copies, which had drifted
-after the 0.1.0 delivery, and carries the review fixes of all three:
+The shared crates, the shared guide, the JSON Schemas, the integration
+harness and the runner regression tests (`scripts/job-api/test_review.py`
+with `fake_worker.py`) live in
+[optimization-jobs](https://github.com/dietmarwo/optimization-jobs). This
+repository depends on them at the git revision its root `Cargo.toml` pins;
+`cargo build -p optimization-runner` still builds `optimization-run` here,
+and `scripts/job-api/shared_root.py` prints the path of Cargo's checkout, from
+which CI runs the harness. Until October 2026 the three repositories carried
+byte-identical copies. Version 0.1.1 synchronized them, after they had
+drifted following the 0.1.0 delivery, and carries the review fixes of all
+three:
 
 - `jobs repair` seals a job whose launcher died while it was queued as
   `interrupted`, with zero work and complete accounting; detached attempts that
@@ -361,8 +366,8 @@ Version 0.2.0 adds the result contract `optimization.result/0.2` and worker
 protocol `optimization.worker/0.2`: the claims `infeasible`, `unbounded`,
 `infeasible_or_unbounded`, `locally_infeasible` and `certified_optimum`;
 `evidence` with checks, refutations and a certificate slot;
-`objective_bounds`; coded runner errors; and JSON Schemas in
-`docs/job-api/schemas/`. The job envelope stays `optimization.job/0.1`. A 0.2
+`objective_bounds`; coded runner errors; and JSON Schemas
+(`docs/job-api/schemas/` in optimization-jobs). The job envelope stays `optimization.job/0.1`. A 0.2
 runner still accepts 0.1 workers, and a 0.1 runner rejects 0.2 workers at
 registration. `describe` reports the shared version as
 `build.job_api_version`. Run a node root through one runner build.
@@ -512,23 +517,24 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 cargo run -p lp-ip-craft-native --release --example benchmark --locked -- 1
-cargo test --release --locked -p optimization-job-api -p optimization-runner -p lp-ip-job-worker
+cargo test --release --locked -p lp-ip-job-worker
 cargo build --release --locked -p optimization-runner -p lp-ip-job-worker
-python3 scripts/job-api/test_integration.py
-python3 scripts/job-api/test_review.py
-sha256sum -c docs/job-api/SHARED-SOURCES.sha256
+SHARED=$(python3 scripts/job-api/shared_root.py)
+export JOB_API_TARGET="$PWD/target/release" JOB_API_TUTORIALS="$PWD/tutorials/job-api"
+python3 "$SHARED/scripts/job-api/test_integration.py"
+python3 "$SHARED/scripts/job-api/test_review.py"
 python3 tutorials/job-api/run.py --root /tmp/job-api-tutorial
 python -m pip install ".[test]" && python -m pytest -q
 python examples/solve_native.py
 python examples/safe_bound.py
 ```
 
-CI also checks the numerical crates with Rust 1.85 (excluding the job crates)
-and the job crates with Rust 1.88, and runs family benchmark smoke runs, the
+CI also checks the numerical crates with Rust 1.85 (excluding the job worker)
+and the job worker with Rust 1.88, and runs family benchmark smoke runs, the
 dependency audit and the SciPy oracle validations (`examples/validate_*.py`,
 with `scipy` installed). Pass
 `--fcmaes`, `--sqp` (and `--lp-ip`) executables to `test_integration.py` to
-test a mixed node.
+test a mixed node; optimization-jobs' CI does that with all three workers.
 
 ## Repository references
 
@@ -537,7 +543,8 @@ test a mixed node.
 - [docs/safe-dual-bounds.md](docs/safe-dual-bounds.md): conservative bounds
 - [docs/simplex/README.md](docs/simplex/README.md): kernel and search design and validation
 - [docs/parallel-028](docs/parallel-028/VALIDITY.md): execution contract for 1–8 workers
-- [docs/job-api.md](docs/job-api.md), [tutorials/job-api](tutorials/job-api/README.md),
+- [docs/job-api.md](docs/job-api.md) (where the shared guide lives),
+  [tutorials/job-api](tutorials/job-api/README.md),
   [docs/job-api/REVIEW.md](docs/job-api/REVIEW.md): shared job API and this worker
 - [docs/target-card.md](docs/target-card.md): the open application contract
 - `crates/core/src/check.rs`, `crates/core/src/bound.rs`: independent checks

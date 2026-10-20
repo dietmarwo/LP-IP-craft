@@ -7,7 +7,10 @@ rust-version = "1.88"
 license = "MIT"
 publish = false
 [dependencies]
-optimization-job-api = { path = "../optimization-job-api" }
+optimization-job-api.workspace = true
+# Not used by the worker: it puts the runner in the build graph, so that
+# cargo build -p optimization-runner builds optimization-run in this repository.
+optimization-runner.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 lp-ip-craft = { path = "../core" }

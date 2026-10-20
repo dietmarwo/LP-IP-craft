@@ -68,7 +68,7 @@ mixed test, build each repository's worker and pass all three absolute paths to
 ```sh
 # fcmaes-rust
 cargo test --release --locked -p optimization-job-api -p optimization-runner \
-  -p fcmaes-job-api -p fcmaes-job-worker -p fcmaes-native-worker
+  -p fcmaes-job-worker -p fcmaes-native-worker
 cargo test --locked -p fcmaes-runner -p fcmaes-native-worker
 python3 scripts/runner/test_integration.py
 
@@ -113,7 +113,7 @@ The shared files were replaced by the 0.1.1 set that fcmaes-rust, LP-IP-craft
 and SQP-craft now share byte for byte (20 files, `SHARED-SOURCES.sha256`).
 Until then this repository had the delivered runner. 0.1.1 brings in
 SQP-craft's review fixes and fcmaes-rust's zero-work repair of a queued job
-whose launcher died ([job API guide](../job-api.md#results-and-durable-recovery)),
+whose launcher died ([job API guide](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md#results-and-durable-recovery)),
 the fcmaes set and archive claims, and the shared runner regression tests
 `scripts/job-api/test_review.py`. CI now runs them and checks the manifest. The
 LP worker, the numerical crates and `lp-ip.solve/1` are unchanged.
@@ -143,7 +143,7 @@ and sets `JOB_API_REQUIRE_SCHEMA=1`, so the schema checks cannot be skipped
 there.
 
 An independent review before the merge reported 13 defects; all were fixed
-and are covered by tests (see the [plan](PLAN.md#6-result-contract-02-october-2026)).
+and are covered by tests (see the [plan](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api/PLAN.md#6-result-contract-02-october-2026)).
 After the fixes, 1.2 million generated outcomes found no disagreement between
 the JSON Schema and `Outcome::check`, and every case of `outcome_cases.json`
 behaves the same as a journal record through the runner.
@@ -165,3 +165,27 @@ fails its check (`infeasible_point`, `false_optimality`,
 | Mixed node with all three workers, under each repository's runner build | 13 passed, none skipped, three times |
 | `sha256sum -c docs/job-api/SHARED-SOURCES.sha256` | 23 files OK |
 | Numerical crates | Unchanged |
+
+## The shared crates move to optimization-jobs (19 October 2026)
+
+`optimization-job-api`, `optimization-runner`, the shared guide, plan,
+schemas and scripts moved to
+[optimization-jobs](https://github.com/dietmarwo/optimization-jobs)
+([plan](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api/PLAN.md#8-one-shared-repository-october-2026)).
+This repository depends on the crates at a pinned git revision; the copies and
+their checksum manifest are gone, and `docs/job-api.md` points to the shared
+guide. The 26 tests of the shared crates now run there. The worker keeps the
+runner as a dependency, so `cargo build -p optimization-runner` still builds
+`optimization-run` here. On the git dependency:
+
+| Gate | Observed result |
+| --- | --- |
+| `cargo fmt --check`, Clippy `-D warnings` for the worker | Passed |
+| Workspace tests (`cargo test --workspace --locked`) | 210 passed (236 before, less the 26 shared tests) |
+| Shared harness from Cargo's checkout, with the LP worker | 14 run: 10 passed, 4 skipped (fcmaes and SQP cases) |
+| Shared review tests (`JOB_API_REQUIRE_SCHEMA=1`) | 15 passed |
+| `tutorials/job-api/run.py` | 4 examples; jobs and results validated against the schemas of the checkout |
+| Numerical crates | Unchanged |
+
+Earlier sections mention `scripts/job-api/` and the checksum manifest as they
+were at the time.

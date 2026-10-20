@@ -3,7 +3,7 @@
 
     cargo build --release --locked -p optimization-runner -p lp-ip-job-worker
 """
-import argparse, json, math, os, subprocess, tempfile
+import argparse, json, math, os, subprocess, sys, tempfile
 from pathlib import Path
 try:
     import jsonschema
@@ -13,7 +13,10 @@ except ImportError:
 REPO = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 EXAMPLES = ['assignment-mip', 'continuous-lp', 'infeasible', 'assignment-evaluate']
-SCHEMAS = REPO / 'docs' / 'job-api' / 'schemas'
+sys.path.insert(0, str(REPO / 'scripts' / 'job-api'))
+from shared_root import shared_root
+# The schemas live in optimization-jobs, at the revision Cargo.toml pins.
+SCHEMAS = shared_root() / 'docs' / 'job-api' / 'schemas'
 if jsonschema is None and os.environ.get('JOB_API_REQUIRE_SCHEMA') == '1':
     raise SystemExit('the jsonschema package is required (JOB_API_REQUIRE_SCHEMA=1)')
 
