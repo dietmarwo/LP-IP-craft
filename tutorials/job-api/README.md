@@ -78,7 +78,10 @@ example Claude Code:
 claude mcp add lp-ip-jobs -- "$PWD/target/release/optimization-mcp" --root /tmp/lp-ip-manual
 ```
 
-The agent sees the worker with `describe_worker` (worker `lp-ip`), can pass
+The agent sees the worker with `describe_worker` (worker `lp-ip`), which also
+lists JSON Schemas of both payloads (`payload_schemas`) and of the model
+artifact (`input_schemas`) and runnable examples (`examples`) to build a
+first job from. It can pass
 any job of this directory to `submit_job` as `spec_path` (its input files are
 read next to it), follows it with `wait_job` and reads each task's claim,
 evidence and objective bounds with `get_result`; `cancel_job` stops it gracefully. With
@@ -104,7 +107,13 @@ below the runner's 4 MiB validation output. Use `inner_threads` 1.
 
 ## Supply your own LP/MIP
 
-Copy `assignment-mip-model.json` and edit the `lp-ip.model/1` artifact:
+Convert an MPS file (it prints the SHA-256 of the written model):
+
+```sh
+python3 scripts/mps_to_model.py model.mps -o my-model.json --names names.json
+```
+
+or copy `assignment-mip-model.json` and edit the `lp-ip.model/1` artifact:
 
 | Field | Meaning |
 | --- | --- |

@@ -11,7 +11,11 @@ shows (#19); #20 moved the pin to `6a42472` and the release preparation to
 `423cd87`, which add worker-declared artifacts and paged artifact reads
 (`get_artifact` with `offset` and `limit` also pages through the `results`
 journal of a running job). The numerical crates and the Python package did not
-change in these pull requests. In another checkout, check `Cargo.toml`,
+change in these pull requests. Since then (CHANGELOG `[Unreleased]`), the
+worker's `describe` lists JSON Schemas and runnable examples
+([discovery](#discovery-schemas-and-examples)), and `scripts/mps_to_model.py`
+converts MPS files ([Import an MPS model](#import-an-mps-model)). In another
+checkout, check `Cargo.toml`,
 `python/lp_ip_craft/__init__.py`, the worker's discovery output and the linked
 guides before using a command or claiming a capability.
 
@@ -165,8 +169,11 @@ allowed. `n` is the objective length and `m` the row-bound length. A zero-row
 model uses `indptr = [0]`. Equal finite row bounds express an equality;
 infinite sides express one-sided or free rows and columns. Binary bounds must
 lie in `[0, 1]`. The model is validated once and is immutable; Python models
-are picklable. The packages have no MPS or LP-file reader: build the CSR
-arrays from the user's data.
+are picklable. The packages read no model files. For an MPS file,
+`scripts/mps_to_model.py` writes the JSON model artifact of the job API
+([Import an MPS model](#import-an-mps-model)), which also gives the Python
+arrays. There is no LP-format reader; otherwise build the CSR arrays from the
+user's data.
 
 Python:
 
@@ -250,6 +257,29 @@ regressions. The "Deliberate limits" paragraph of docs/api.md predates several
 of these options (cuts, strong branching, MIP presolve, tree workers); its
 remaining limits, such as no basis import or export and no MIP relative-gap
 stop, still hold.
+
+### In process or as a job
+
+The `lp-ip.solve/1` profile exposes a few of these controls, forces some and
+leaves the rest at the native defaults:
+
+| Control | In process (`Options`, `NativeOptions`) | `lp-ip.solve/1` job |
+|---|---|---|
+| Tolerances (feasibility, integrality) | `Options`, 1e-7 each by default | Required payload fields |
+| `threads` | `Options`, 1–8 | `resources.inner_threads`, 1–8 |
+| `node_limit`, `iteration_limit` | 100000 and 1000000; `None` removes a limit | Required, positive, per task; no unlimited value |
+| `time_limit_seconds` | `None` | Forced: the job's remaining wall time |
+| `presolve` | Master switch; its sub-switches stay settable | Payload field; `false` also clears `singleton_presolve`, `root_propagation`, `mip_presolve` and `coefficient_tightening` |
+| `component_threads`, `packing_workers`, `tree_threads` | 1–16 (defaults 16, 1, 1) | Forced to 1 |
+| Every other field: cuts, branching, heuristics, packing modes, `decompose`, `dual_tolerance`, factorization | Settable | Native default; unknown payload fields are rejected |
+| Starts | One complete point per solve; LP starts rejected | `starts`, one task each; non-null only for a MIP |
+| Many models | `solve_batch`, 1–16 workers, no starts | One model per job ([recipe](#many-independent-models-on-many-cores)) |
+| Cancellation | `Cancellation` (Python), `CancellationToken` (Rust) | `jobs cancel` sets the native token |
+| LP duals and reduced costs | `duals` of the result | Not exported: `details.lp_residuals` and the `kkt` check only |
+
+Only in process: every option outside the profile, unlimited budgets, LP
+duals, batches, and `evaluate`, `lp_residuals` and `safe_dual_bound` on
+points and duals from any source (`lp-ip.evaluate/1` covers `evaluate`).
 
 ## Interpret results
 
@@ -339,6 +369,34 @@ IEEE binary64 arithmetic with gradual underflow; fast-math is unsupported. See
   is released. A width is a maximum, not a speedup promise; measure on the
   real models ([docs/parallel-028](docs/parallel-028/RESULTS.md)).
 
+### Many independent models on many cores
+
+- One process: `solve_batch(models, workers=W)` (Rust
+  `NativeSolver::solve_batch`) takes 1–16 workers; with `Options(threads=1)`
+  that is W cores, and with `threads > 1`, `W * threads <= 8`. The batch
+  forces component, packing and tree workers to 1, so W is its whole budget.
+  The cap is 16 per batch: for more cores in process, run several batches at
+  once (from threads or processes) and keep the sum of their workers within
+  the cores.
+- Jobs: a job holds one model, so many models are many jobs on one node. On a
+  64-slot node (`node init --capacity 64`), submit 64 one-slot jobs
+  (`1 / 1 / 1`) for many small or medium models, or 8 eight-slot jobs
+  (`8 / 1 / 8`) for large LPs, or mix them. The runner never reserves more
+  than the capacity; a job waits (`waiting`) until its slots are free. Each
+  job reserves its `cpu_slots` for the whole attempt, so give a job more
+  slots only when its own tasks use them.
+- A caller that owns the concurrency (its own threads, processes or
+  scheduler around plain `solve` calls) sets `component_threads=1`:
+  `component_threads` defaults to 16 at `threads=1`, so each solve of a model
+  that splits into large independent components (average size at least
+  `component_parallel_min_entries`, 2048) may start up to 16 workers. Batches
+  and the job worker set it to 1 themselves.
+- Repeating identical `null` starts is not a scaling strategy: those tasks
+  solve the same model the same way and, under node and iteration limits,
+  return the same result. They suit timing and resource checks only. Use
+  distinct complete MIP starts as tasks of one job, and different models as
+  different jobs or batch entries.
+
 ## Shared agent job API
 
 The envelope, result contract, runner and MCP server live in
@@ -380,6 +438,9 @@ claude mcp add lp-ip-jobs -- "$PWD/target/release/optimization-mcp" --root /abs/
 With the default `--launch process`, jobs outlive the server but not a
 reboot. The tool table, launch modes and limits are in
 [Agents and MCP](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/job-api.md#agents-and-mcp).
+`describe_worker` also returns the payload and model schemas and runnable
+examples ([discovery](#discovery-schemas-and-examples)), enough to build a
+first job without a checkout.
 
 ### Other solvers on the same node
 
@@ -461,8 +522,12 @@ The model artifact is JSON with `schema_version: "lp-ip.model/1"`, `sense`
 (`minimize` or `maximize`), `objective`, `objective_offset`,
 `variable_lower`, `variable_upper`, `kinds`, `matrix` (`indptr`, `indices`,
 `values`) and `row_lower`, `row_upper`. In bounds, `null` means infinite on
-that side; JSON has no NaN or Infinity. Copy
-`tutorials/job-api/assignment-mip-model.json`, then recompute its hash:
+that side; JSON has no NaN or Infinity. Its JSON Schema is
+`input_schemas["lp-ip.model/1"]` of `describe`, whose `$comment` lists the
+rules across fields (lengths, the CSR layout by rows, bounds, the MIP
+domain). Convert an MPS file ([Import an MPS model](#import-an-mps-model)),
+or copy `tutorials/job-api/assignment-mip-model.json`, then recompute its
+hash:
 
 ```sh
 python3 -c 'import hashlib,pathlib; print(hashlib.sha256(pathlib.Path("my-model.json").read_bytes()).hexdigest())'
@@ -474,16 +539,88 @@ capped at 4 MiB, so keep all starts together well below that size. Other
 native options are not part of the profile. The worker uses the native
 defaults, the payload's limits and tolerances, the remaining wall time as the
 time limit, and forces `component_threads`, `packing_workers` and
-`tree_threads` to 1, so `inner_threads` (1–8) maps only to `Options::threads`.
+`tree_threads` to 1, so `inner_threads` (1–8) maps only to `Options::threads`
+([In process or as a job](#in-process-or-as-a-job)).
 
 Each job holds one model; its tasks differ only by start. Null starts repeat
 the same solve, which is useful for timing or the resource checks of the
 tutorial but not as independent evidence. For many different
 models, submit one job per model, each with its own slots, or use
-`solve_batch` in process. Use `8 / 1 / 8` (`cpu_slots / outer_workers /
-inner_threads`) for one large model and `8 / 8 / 1` for eight MIP starts. The
+`solve_batch` in process ([recipe](#many-independent-models-on-many-cores)).
+Use `8 / 1 / 8` (`cpu_slots / outer_workers / inner_threads`) for one large
+model and `8 / 8 / 1` for eight MIP starts. The
 runner requires `outer_workers * inner_threads <= cpu_slots <= 1024` and
 reserves `cpu_slots` for the whole attempt.
+
+#### Import an MPS model
+
+```sh
+python3 scripts/mps_to_model.py model.mps -o model.json --names names.json
+```
+
+The script (Python standard library only; `.mps.gz` works too) reads fixed
+and free MPS (`--format auto`, the default, tries free, then fixed) and
+writes `lp-ip.model/1` with rows and columns in MPS order. It prints the
+file's `sha256` for the job's `inputs`. `--names` writes the row and column
+names in model order, to map `x` and the rows back. Its docstring documents
+the conventions:
+
+- The first `N` row is the objective; further `N` rows are dropped. An RHS
+  `b` on the objective row is the constant: `objective_offset = -b`.
+  `OBJSENSE` with `MAX` or `MAXIMIZE`, on the next line or the header line,
+  sets `sense`; coefficients keep their signs.
+- RANGES follow the MPS standard (on an `E` row, the sign of `R` picks the
+  side). Default bounds are `[0, +inf)`, for integer marker columns too.
+  `BV` makes a `binary` column, `MI` keeps the upper bound, and `UP` or `UI`
+  with a negative value on a column without a given lower bound also sets
+  the lower bound to -infinity, with a warning (the convention documented
+  for CPLEX).
+- Values of magnitude 1e30 or more (`--infinity`) in bounds, RHS and RANGES
+  are infinite.
+- Errors name the line: `SC` bounds, quadratic and other unsupported
+  sections, an infinity on the wrong side, duplicates, unknown names, a
+  second RHS, RANGES or BOUNDS set, a missing `ENDATA`.
+
+The column-wise COLUMNS entries are transposed into the CSR by rows of
+`lp-ip.model/1`. A converted MIP still needs finite bounds after root
+inference: an integer marker column without bounds stays `[0, +inf)` and is
+`unsupported` unless presolve derives a bound from the rows. For an
+in-process solve, map `null` to an infinity:
+
+```python
+import json
+from lp_ip_craft import Model
+d, inf = json.load(open("model.json")), float("inf")
+side = lambda v, s: [s if b is None else b for b in v]
+m = Model(objective=d["objective"], objective_offset=d["objective_offset"], sense=d["sense"],
+          lower=side(d["variable_lower"], -inf), upper=side(d["variable_upper"], inf),
+          kinds=d["kinds"], row_lower=side(d["row_lower"], -inf),
+          row_upper=side(d["row_upper"], inf), **d["matrix"])
+```
+
+### Discovery: schemas and examples
+
+The worker's `describe` (`problems describe lp-ip`, MCP `describe_worker`)
+lists JSON Schemas (draft 2020-12) of each payload (`payload_schemas`) and of
+the model artifact (`input_schemas`, key `lp-ip.model/1`), and runnable
+examples (`examples`): a continuous LP, a MIP with a complete start and an
+`lp-ip.evaluate/1` job, each on `1 / 1 / 1` resources with its model inline.
+Rules a schema cannot express (vector lengths, the CSR layout, MIP-only
+starts, the `inner_threads` limits) are in `$comment`. The same files are in
+`crates/lp-ip-job-worker/discovery/`; tests check that every example and
+tutorial payload and model validates against them and that every example
+passes the worker's validation.
+
+To turn an example into a job, add `schema_version: "optimization.job/0.1"`,
+a new `request_key`, `worker` (the registered ID) and `payload_schema` (the
+example's `profile`). Write each input's `content` to its `file` with any JSON
+serializer, put the SHA-256 of the written bytes in `sha256`, and keep only
+`name`, `file` and `sha256` in the `inputs` entry: the envelope rejects other
+fields. An MCP-only client that cannot write files next to the job uses
+`put_input`, a tool that optimization-jobs adds to `optimization-mcp` after
+the revision pinned here (`423cd87`; check the server's tool list): it uploads
+the model JSON and returns its `sha256` and an `input_dir`, with which the job
+is then validated and submitted.
 
 ### Job results
 
@@ -546,7 +683,8 @@ See `tutorials/job-api/assignment-evaluate.json`.
 
 The adapter is `crates/lp-ip-job-worker/src/main.rs`. Expose another native
 option only with a new, strictly typed payload field, validate it in
-`prepare`, record it in `effective_options`, add tests, and bump the profile
+`prepare`, record it in `effective_options`, add it to the payload schema in
+`crates/lp-ip-job-worker/discovery/`, add tests, and bump the profile
 version if the mathematical meaning of inputs or results changes. Keep
 solver-specific logic out of the shared runner.
 
@@ -598,18 +736,21 @@ export JOB_API_TARGET="$PWD/target/release" JOB_API_TUTORIALS="$PWD/tutorials/jo
 python3 "$SHARED/scripts/job-api/test_integration.py"
 python3 "$SHARED/scripts/job-api/test_review.py"
 python3 "$SHARED/scripts/job-api/test_mcp.py"
+LP_IP_JOB_WORKER="$PWD/target/release/lp-ip-job-worker" python3 -m pytest -q tests/test_job_discovery.py
 python3 tutorials/job-api/run.py --root /tmp/job-api-tutorial
 python -m pip install ".[test]" && python -m pytest -q
 python examples/solve_native.py
 python examples/safe_bound.py
 ```
 
-CI also checks the numerical crates with Rust 1.85 (excluding the job worker)
-and the job worker with Rust 1.88, and runs family benchmark smoke runs, the
-dependency audit and the SciPy oracle validations (`examples/validate_*.py`,
-with `scipy` installed). Pass
-`--fcmaes`, `--sqp` (and `--lp-ip`) executables to `test_integration.py` to
-test a mixed node; optimization-jobs' CI does that with all three workers.
+The test extra includes `jsonschema`, so `pytest` also checks the discovery
+schemas and examples (against the binary only when `LP_IP_JOB_WORKER` is set)
+and the MPS converter. CI also checks the numerical crates with Rust 1.85
+(excluding the job worker) and the job worker with Rust 1.88, and runs family
+benchmark smoke runs, the dependency audit and the SciPy oracle validations
+(`examples/validate_*.py`, with `scipy` installed). Pass `--fcmaes`, `--sqp`
+(and `--lp-ip`) executables to `test_integration.py` to test a mixed node;
+optimization-jobs' CI does that with all three workers.
 
 ## Repository references
 
@@ -628,4 +769,9 @@ test a mixed node; optimization-jobs' CI does that with all three workers.
 - [docs/target-card.md](docs/target-card.md): the open application contract
 - `crates/core/src/check.rs`, `crates/core/src/bound.rs`: independent checks
 - `crates/lp-ip-job-worker/src/main.rs`: the `lp-ip.solve/1` and `lp-ip.evaluate/1` adapter
+- `crates/lp-ip-job-worker/discovery/`: the payload and model JSON Schemas and
+  the examples that `describe` embeds
+- `scripts/mps_to_model.py`: MPS to `lp-ip.model/1`, with its conventions in
+  the docstring
+- [AGENTS.md](AGENTS.md): short orientation and contributor commands
 - `python/lp_ip_craft/__init__.py`: Python API and defaults

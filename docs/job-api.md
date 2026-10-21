@@ -30,6 +30,10 @@ Profiles `lp-ip.solve/1` (sparse LP/MIP artifacts, candidate starts, node and pi
 the [validation report](job-api/VALIDATION.md); the [review](job-api/REVIEW.md) records the corrections made before the 0.1 merge.
 `cargo build --release --locked -p optimization-runner -p lp-ip-job-worker` builds the
 runner, the MCP server and the worker; Cargo fetches the shared crates.
+The worker's `describe` lists JSON Schemas of both payloads and of the model
+artifact, and runnable examples (`payload_schemas`, `input_schemas`,
+`examples`, from [`crates/lp-ip-job-worker/discovery`](../crates/lp-ip-job-worker/discovery));
+[`scripts/mps_to_model.py`](../scripts/mps_to_model.py) converts MPS files to the model artifact.
 
 ## Agents: the MCP server
 
