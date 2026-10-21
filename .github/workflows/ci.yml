@@ -52,6 +52,9 @@ jobs:
       - run: python -m pip install ".[test]"
       - run: python -c "import lp_ip_craft as m; assert m.BACKENDS == ('dummy', 'native')"
       - run: python -m pytest -q
+        env:
+          # The schema tests must not skip for a missing jsonschema.
+          JOB_API_REQUIRE_SCHEMA: "1"
       - run: python examples/solve_native.py
       - run: python examples/safe_bound.py
 

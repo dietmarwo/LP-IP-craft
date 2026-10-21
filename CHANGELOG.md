@@ -12,10 +12,11 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
-Everything merged after the commit that set 0.28.0 (#11-#20), and the
-release preparation. The code of the numerical crates, the Python package
-and its tests is unchanged since 0.28.0; the crates gained publishing
-metadata.
+Everything merged after the commit that set 0.28.0 (#11-#20), the
+release preparation and the fixes of the agent-discovery review. The code of
+the numerical crates and the Python package is unchanged since 0.28.0; the
+crates gained publishing metadata, and the Python tests gained the discovery
+and MPS converter tests.
 
 ### Added
 
@@ -66,6 +67,37 @@ metadata.
 - `ai-context.md` points to the AI entry point of optimization-jobs, which
   chooses between the four solver repositories, and says what the release
   workflows will publish.
+- Job discovery (review finding F01): the worker's `describe` adds
+  `payload_schemas` (JSON Schema draft 2020-12 of the `lp-ip.solve/1` and
+  `lp-ip.evaluate/1` payloads, strict as the worker), `input_schemas` (the
+  `lp-ip.model/1` artifact, with the rules across fields in `$comment`) and
+  `examples` (a continuous LP, a MIP with a complete start and an evaluate
+  job, each on 1/1/1 resources with its model inline), so a client without a
+  checkout can build and validate one job per profile. The files are in
+  `crates/lp-ip-job-worker/discovery/`. Rust tests turn every example into a
+  job with hashed input files and check its outcome; `tests/test_job_discovery.py`
+  validates every example and tutorial payload and model with `jsonschema`
+  and, in the job API CI, that `describe` embeds the files.
+- `scripts/mps_to_model.py` (review finding F13): converts fixed and free
+  MPS files (also gzipped) to `lp-ip.model/1`, with OBJSENSE, RANGES, integer
+  markers and the bound types UP, LO, FX, FR, MI, PL, BV, LI and UI; the
+  objective constant is `-RHS` of the objective row, and a negative `UP`
+  without a given lower bound frees the lower side (CPLEX's convention). It
+  writes the CSR by rows in MPS order, prints the file's SHA-256 and
+  optionally the row and column names; unsupported input (SC bounds,
+  quadratic sections, an infinity on the wrong side, duplicates) fails with
+  the line number. Tested on fixtures in `tests/fixtures/` against
+  hand-computed optima.
+- `AGENTS.md`: what the repository is, what to read first, build and test
+  commands and conventions. The README links it and `ai-context.md`.
+- `ai-context.md`: a table of what `lp-ip.solve/1` exposes, forces and leaves
+  at native defaults compared with the in-process options; a recipe for many
+  independent models on many cores (the batch cap of 16, one model per job,
+  `component_threads=1` for callers that own the concurrency, why identical
+  null starts do not scale); the discovery keys and MCP `put_input`; the MPS
+  converter.
+- The test extra `.[test]` adds `jsonschema>=4.18`; the job API CI installs
+  `pytest` and runs the discovery test against the built worker.
 
 ### Changed
 

@@ -1,3 +1,6 @@
+> **AI agents:** read [ai-context.md](ai-context.md) first (modelling, options, results, the job API);
+> [AGENTS.md](AGENTS.md) is the short orientation with build and test commands.
+
 > **Shared agent job API:** this repository builds `lp-ip-job-worker`, a native
 > solver worker for the job API of
 > [optimization-jobs](https://github.com/dietmarwo/optimization-jobs), at the
@@ -156,6 +159,23 @@ assert r.status == "optimal"
 assert abs(r.evaluation.objective - 9.) < 1e-7
 ```
 
+### MPS models
+
+The packages read no model files, but `scripts/mps_to_model.py` (Python
+standard library only) converts a fixed or free MPS file, optionally
+gzipped, into the `lp-ip.model/1` JSON artifact of the job API:
+
+```sh
+python3 scripts/mps_to_model.py model.mps -o model.json --names names.json
+```
+
+It prints the SHA-256 that a job's `inputs` entry needs, and `--names` keeps
+the MPS row and column names in model order. The conventions (objective
+constant `-RHS`, RANGES, negative `UP` bounds, infinity at 1e30) are in its
+docstring and in [ai-context.md](ai-context.md#import-an-mps-model), which
+also shows how to build a Python `Model` from the JSON. Quadratic sections and
+`SC` bounds are rejected with the line number.
+
 The default `backend="dummy"` remains for contract compatibility: it evaluates
 a point and reports `stub`. Select `native` to optimize. `NativeOptions`
 lists only controls the engine honours; 0.16 removed the kernel-selection
@@ -210,7 +230,10 @@ target card](docs/target-card.md). Earlier native iterations are under
 | `scripts/benchmark_families.py` | Isolated-process family benchmark, optionally against a 0.15 baseline |
 | `docs/simplex` | Current kernel and search design, validation and measurements |
 | `docs/native`, `docs/sparse` | Earlier plans, results and raw measurements |
+| `crates/lp-ip-job-worker` | Job worker; `discovery/` holds the payload and model JSON Schemas and examples of its `describe` |
+| `scripts/mps_to_model.py` | MPS (fixed or free) to the `lp-ip.model/1` JSON model |
 | [`ai-context.md`](ai-context.md) | Operational context for AI agents: modelling, options, results, parallel layouts, job API |
+| [`AGENTS.md`](AGENTS.md) | Short orientation for agents and contributors: what to read, build and test commands |
 
 Project code is MIT. See [dependencies](docs/dependencies.md) and `Cargo.lock`.
 
