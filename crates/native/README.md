@@ -1,5 +1,8 @@
 # lp-ip-craft-native
 
+[Optimization ecosystem](https://dietmarwo.github.io/optimization-jobs/) ·
+[Shared solver-selection and agent guide](https://github.com/dietmarwo/optimization-jobs/blob/main/ai-context.md)
+
 The native Rust LP/MIP engine for the
 [`lp-ip-craft`](https://crates.io/crates/lp-ip-craft) contracts: a
 bounded-variable dual revised simplex on a sparse LU basis factorization,

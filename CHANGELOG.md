@@ -101,6 +101,11 @@ and MPS converter tests.
 
 ### Changed
 
+- Discovery: the README opens with the title and a short description, then
+  links the shared solver-selection guide and the ecosystem overview; both
+  crate READMEs link them too. `pyproject.toml` adds keywords and project
+  URLs (documentation, issues, changelog, ecosystem, agent guide).
+  `RELEASING.md` covers discovery after a release.
 - Breaking: the worker speaks worker protocol `optimization.worker/0.2` and
   publishes results as `optimization.result/0.2` (shared job crates 0.2.0,
   #15). A 0.2 runner still accepts 0.1 workers; a 0.1 runner rejects 0.2
