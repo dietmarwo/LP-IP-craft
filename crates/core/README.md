@@ -1,5 +1,8 @@
 # lp-ip-craft
 
+[Optimization ecosystem](https://dietmarwo.github.io/optimization-jobs/) ·
+[Shared solver-selection and agent guide](https://github.com/dietmarwo/optimization-jobs/blob/main/ai-context.md)
+
 Validated LP and MIP models, the solver contracts (`LpIpSolver`, `Options`,
 `SolveResult`, `CancellationToken`) and independent numerical checks of
 returned points: bounds, row activities, integrality, objective and, for LP

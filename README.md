@@ -1,3 +1,15 @@
+# LP-IP-craft — native Rust LP/MIP solver
+
+Native Rust linear and mixed-integer linear optimization, with Python bindings
+and a worker for durable shell or MCP jobs. Solve statuses are numerical
+findings under tolerances; use the linked guide to check model limits.
+
+**Choosing an optimization tool?** Start with the
+[shared solver-selection and agent guide](https://github.com/dietmarwo/optimization-jobs/blob/main/ai-context.md) or the
+[optimization ecosystem overview](https://dietmarwo.github.io/optimization-jobs/).
+The guide compares this solver with Python/Rust black-box optimization
+and the other structured solver, then explains library, shell and MCP use.
+
 > **AI agents:** read [ai-context.md](ai-context.md) first (modelling, options, results, the job API);
 > [AGENTS.md](AGENTS.md) is the short orientation with build and test commands.
 
@@ -35,8 +47,6 @@
 > Native 0.18: measured kernel profiling, Forrest–Tomlin basis updates with checked fallback, and indexed sparse pricing. See [the plan and implementation](docs/basis-updates/PLAN.md) and [benchmarks and validation](docs/basis-updates/RESULTS.md). Choose `basis_update="auto"` (default), `"eta"`, or `"forrest_tomlin"` in Python; Rust uses `BasisUpdate`. The production solver remains pure Rust without HiGHS.
 
 > Native 0.17 performance update: ten measured iterations add integral row strengthening, short-row integer propagation, a direct box-LP path, reachability-based sparse triangular solves, sparse eta work and adaptive refactorization. See [the iteration plans](docs/performance-ten/ITERATIONS.md) and [the complete results](docs/performance-ten/RESULTS.md). The core and native solver remain dependency-free Rust.
-
-# LP-IP-craft — native Rust LP/MIP solver
 
 Version **0.28.0** extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
