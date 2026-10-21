@@ -32,3 +32,18 @@ def validator(schema):
         jsonschema = pytest.importorskip("jsonschema")
     return jsonschema.Draft202012Validator(schema)
 
+
+def model_from_json(model):
+    """An ``lp_ip_craft.Model`` from an ``lp-ip.model/1`` value (null bounds are infinite)."""
+    import lp_ip_craft
+
+    inf = float("inf")
+
+    def side(values, infinite):
+        return [infinite if v is None else v for v in values]
+
+    return lp_ip_craft.Model(
+        objective=model["objective"], objective_offset=model["objective_offset"], sense=model["sense"],
+        lower=side(model["variable_lower"], -inf), upper=side(model["variable_upper"], inf),
+        kinds=model["kinds"], row_lower=side(model["row_lower"], -inf), row_upper=side(model["row_upper"], inf),
+        indptr=model["matrix"]["indptr"], indices=model["matrix"]["indices"], values=model["matrix"]["values"])
