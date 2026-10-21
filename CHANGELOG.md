@@ -123,6 +123,13 @@ and MPS converter tests.
   `limit`), which also page through the `results` journal of a running job.
   Then `423cd87`: `artifact::page` streams the file and parses only the
   page's records. This worker's profiles are unchanged by the pin moves.
+- optimization-jobs pin `069d87c` (its review of agent discovery):
+  `optimization-mcp` gains `put_input` (stages an input file, such as a model
+  or a CSV, and returns its `sha256` and `input_dir`) and `get_guide` (the
+  cross-repository AI entry point); `node doctor` reports the host's usable
+  CPUs and memory; `workers add` accepts up to 1 MiB of `describe` output;
+  and the shared harness, which CI runs from Cargo's checkout, checks the
+  worker's payload schemas and runs its examples, also over MCP.
 - Shared job API docs and harness synchronized with fcmaes-rust (#16).
 
 ### Fixed

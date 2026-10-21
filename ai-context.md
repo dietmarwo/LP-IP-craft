@@ -10,7 +10,8 @@ server (#18), and bounds and gaps published only for the point an outcome
 shows (#19); #20 moved the pin to `6a42472` and the release preparation to
 `423cd87`, which add worker-declared artifacts and paged artifact reads
 (`get_artifact` with `offset` and `limit` also pages through the `results`
-journal of a running job). The numerical crates and the Python package did not
+journal of a running job); the pin is now `069d87c`, which adds the MCP tools
+`put_input` and `get_guide` and a host report in `node doctor`. The numerical crates and the Python package did not
 change in these pull requests. Since then (CHANGELOG `[Unreleased]`), the
 worker's `describe` lists JSON Schemas and runnable examples
 ([discovery](#discovery-schemas-and-examples)), and `scripts/mps_to_model.py`
@@ -616,11 +617,9 @@ a new `request_key`, `worker` (the registered ID) and `payload_schema` (the
 example's `profile`). Write each input's `content` to its `file` with any JSON
 serializer, put the SHA-256 of the written bytes in `sha256`, and keep only
 `name`, `file` and `sha256` in the `inputs` entry: the envelope rejects other
-fields. An MCP-only client that cannot write files next to the job uses
-`put_input`, a tool that optimization-jobs adds to `optimization-mcp` after
-the revision pinned here (`423cd87`; check the server's tool list): it uploads
-the model JSON and returns its `sha256` and an `input_dir`, with which the job
-is then validated and submitted.
+fields. An MCP-only client that cannot write files next to the job uses the MCP
+tool `put_input`: it uploads the model JSON and returns its `file`, `sha256`
+and an `input_dir`, with which the job is then validated and submitted.
 
 ### Job results
 
