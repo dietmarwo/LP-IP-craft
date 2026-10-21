@@ -23,6 +23,18 @@ const EVALUATE_PROFILE: &str = "lp-ip.evaluate/1";
 const MODEL_SCHEMA: &str = "lp-ip.model/1";
 /// Largest numerical width of the native kernels (`Options::threads`).
 const INNER_THREADS_MAX: usize = 8;
+/// Discovery data of `describe` (JSON Schema draft 2020-12 and runnable
+/// examples), kept as files so that the Python tests and agents can read
+/// them without the binary.
+const SOLVE_PAYLOAD_SCHEMA: &str = include_str!("../discovery/lp-ip.solve-1.schema.json");
+const EVALUATE_PAYLOAD_SCHEMA: &str = include_str!("../discovery/lp-ip.evaluate-1.schema.json");
+const MODEL_INPUT_SCHEMA: &str = include_str!("../discovery/lp-ip.model-1.schema.json");
+const EXAMPLES: &str = include_str!("../discovery/examples.json");
+
+/// An embedded discovery file; the tests check that each one parses.
+fn embedded(text: &str) -> Value {
+    serde_json::from_str(text).expect("embedded discovery JSON is valid")
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -194,6 +206,14 @@ impl Worker for Adapter {
         d["evaluation"] = json!({"profile":EVALUATE_PROFILE,"inner_threads":1,
             "points":"1 or more finite points of the model's dimension (inline: the resolved job, points included, must stay below the runner's 4 MiB validation output); one task per point; a point whose values overflow is reported with claim none",
             "result":"claim feasible within the tolerances, else none; objective, violations and objective_bounds.primal for a feasible point"});
+        // Enough for a client without a checkout to build and validate one
+        // job per profile.
+        d["payload_schemas"] = json!({
+            PROFILE: embedded(SOLVE_PAYLOAD_SCHEMA),
+            EVALUATE_PROFILE: embedded(EVALUATE_PAYLOAD_SCHEMA),
+        });
+        d["input_schemas"] = json!({MODEL_SCHEMA: embedded(MODEL_INPUT_SCHEMA)});
+        d["examples"] = embedded(EXAMPLES);
         d
     }
     fn prepare(&self, s: &mut JobSpec, base: &Path) -> Result<Box<dyn Prepared>> {
@@ -646,8 +666,8 @@ mod tests {
     use optimization_job_api::storage::digest;
     use std::{fs, path::PathBuf, sync::atomic::AtomicUsize};
 
-    /// A fresh directory holding `model` as `model.json`.
-    fn directory(model: &Value) -> (PathBuf, String) {
+    /// A fresh, empty directory.
+    fn fresh_directory() -> PathBuf {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
             "lp-ip-job-worker-test-{}-{}",
@@ -655,6 +675,11 @@ mod tests {
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+    /// A fresh directory holding `model` as `model.json`.
+    fn directory(model: &Value) -> (PathBuf, String) {
+        let dir = fresh_directory();
         let bytes = serde_json::to_vec(model).unwrap();
         fs::write(dir.join("model.json"), &bytes).unwrap();
         (dir, digest(&bytes))
@@ -1132,6 +1157,10 @@ mod tests {
         s.payload_schema = EVALUATE_PROFILE.into();
         s.payload = json!({"model_input":"model","points":[[1.0,0.0],[0.0,0.0],[0.5,0.5],[1e308,1e308]],
             "feasibility_tolerance":1e-7,"integrality_tolerance":1e-7});
+        assert_top_level_conforms(
+            &Adapter.describe()["payload_schemas"][EVALUATE_PROFILE],
+            &s.payload,
+        );
         let p = Adapter.prepare(&mut s, &dir).unwrap();
         assert_eq!(p.tasks(), 4);
         let outcomes: Vec<Outcome> = (0..4).map(|t| p.solve(t, 1.0).unwrap().outcome).collect();
@@ -1283,5 +1312,136 @@ mod tests {
         assert_eq!(scalar(f64::INFINITY), "+infinity");
         assert_eq!(scalar(f64::NEG_INFINITY), "-infinity");
         assert_eq!(scalar(2.5), 2.5);
+    }
+
+    /// The top-level `required` and `additionalProperties: false` rules of
+    /// `schema`. The Python tests check the complete schemas with jsonschema.
+    fn assert_top_level_conforms(schema: &Value, value: &Value) {
+        assert_eq!(schema["additionalProperties"], false);
+        for key in schema["required"].as_array().unwrap() {
+            let key = key.as_str().unwrap();
+            assert!(value.get(key).is_some(), "missing {key} in {value}");
+        }
+        let properties = schema["properties"].as_object().unwrap();
+        for key in value.as_object().unwrap().keys() {
+            assert!(properties.contains_key(key), "unknown {key} in {value}");
+        }
+    }
+    /// The job a client builds from a `describe` example: the envelope
+    /// fields, and each input written to `dir` with the SHA-256 of the bytes
+    /// written.
+    fn job_from_example(example: &Value, dir: &Path, request_key: &str) -> JobSpec {
+        let inputs: Vec<Value> = example["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|input| {
+                let bytes = serde_json::to_vec_pretty(&input["content"]).unwrap();
+                let file = input["file"].as_str().unwrap();
+                fs::write(dir.join(file), &bytes).unwrap();
+                json!({"name":input["name"],"file":file,"sha256":digest(&bytes)})
+            })
+            .collect();
+        serde_json::from_value(
+            json!({"schema_version":"optimization.job/0.1","request_key":request_key,
+            "worker":"lp-ip","payload_schema":example["profile"],"payload":example["payload"],
+            "resources":example["resources"],"limits":example["limits"],"inputs":inputs}),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn every_profile_has_a_payload_schema_and_an_example() {
+        let d = Adapter.describe();
+        let draft = "https://json-schema.org/draft/2020-12/schema";
+        let profiles = d["profiles"].as_array().unwrap();
+        let examples = d["examples"].as_array().unwrap();
+        assert_eq!(
+            d["payload_schemas"].as_object().unwrap().len(),
+            profiles.len()
+        );
+        for profile in profiles {
+            let p = profile.as_str().unwrap();
+            let schema = &d["payload_schemas"][p];
+            assert_eq!(schema["$schema"], draft, "{p}");
+            assert_eq!(schema["$id"], format!("urn:optimization-jobs:payload:{p}"));
+            assert!(
+                examples.iter().any(|e| e["profile"] == *profile),
+                "{p} has no example"
+            );
+        }
+        let inputs = d["input_schemas"].as_object().unwrap();
+        assert!(inputs.contains_key(MODEL_SCHEMA));
+        for (format, schema) in inputs {
+            assert_eq!(schema["$schema"], draft, "{format}");
+            assert_eq!(
+                schema["$id"],
+                format!("urn:optimization-jobs:input:{format}")
+            );
+        }
+        for e in examples {
+            assert!(profiles.contains(&e["profile"]), "{e}");
+            assert!(!e["description"].as_str().unwrap().is_empty());
+            assert_eq!(
+                e["resources"],
+                json!({"cpu_slots":1,"outer_workers":1,"inner_threads":1})
+            );
+            assert_top_level_conforms(
+                &d["payload_schemas"][e["profile"].as_str().unwrap()],
+                &e["payload"],
+            );
+            for input in e["inputs"].as_array().unwrap() {
+                let format = input["format"].as_str().unwrap();
+                assert!(inputs.contains_key(format), "unknown format {format}");
+                assert_top_level_conforms(&inputs[format], &input["content"]);
+            }
+        }
+        // The payloads and models these tests build follow the same schemas.
+        assert_top_level_conforms(&d["payload_schemas"][PROFILE], &job("0", 1).payload);
+        assert_top_level_conforms(&inputs[MODEL_SCHEMA], &model("binary"));
+        // Compact: the convention asks for well under 256 KiB.
+        assert!(serde_json::to_vec(&d).unwrap().len() < 64 * 1024);
+    }
+
+    #[test]
+    fn every_describe_example_is_a_valid_job_with_the_described_outcome() {
+        let examples = Adapter.describe()["examples"].as_array().unwrap().clone();
+        // Per example: each task's claim and objective, as its description says.
+        let expected: [&[(&str, Option<f64>)]; 3] = [
+            &[("numerical_optimum", Some(9.0))],
+            &[("numerical_optimum", Some(18.0))],
+            &[
+                ("feasible", Some(18.0)),
+                ("feasible", Some(16.0)),
+                ("none", Some(23.0)),
+            ],
+        ];
+        assert_eq!(examples.len(), expected.len());
+        for (i, (example, expected)) in examples.iter().zip(expected).enumerate() {
+            let dir = fresh_directory();
+            let mut s = job_from_example(example, &dir, &format!("example-{i}"));
+            // What the runner and the worker SDK check around `prepare`.
+            s.validate().unwrap();
+            let p = Adapter
+                .prepare(&mut s, &dir)
+                .unwrap_or_else(|e| panic!("example {i}: {e}"));
+            s.task_count = Some(p.tasks());
+            s.validate().unwrap();
+            assert_eq!(p.tasks(), expected.len(), "example {i}");
+            for (t, (claim, objective)) in expected.iter().enumerate() {
+                let o = p.solve(t, 30.0).unwrap().outcome;
+                o.check().unwrap();
+                assert_eq!(o.claim, *claim, "example {i}, task {t}");
+                let close = |a: f64, b: f64| (a - b).abs() < 1e-7;
+                assert!(
+                    o.objective
+                        .zip(*objective)
+                        .is_some_and(|(a, b)| close(a, b)),
+                    "example {i}, task {t}: {:?}",
+                    o.objective
+                );
+            }
+            fs::remove_dir_all(dir).unwrap();
+        }
     }
 }

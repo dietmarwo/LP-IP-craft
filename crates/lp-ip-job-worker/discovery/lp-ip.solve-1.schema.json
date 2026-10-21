@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:optimization-jobs:payload:lp-ip.solve/1",
+  "title": "lp-ip.solve/1 payload",
+  "description": "Solve one lp-ip.model/1 artifact; one task per entry of starts.",
+  "$comment": "Rules outside this schema: the job has exactly one input, its name equals model_input, it holds an lp-ip.model/1 artifact and its sha256 matches. resources.inner_threads must lie in 1..8 and becomes Options::threads. The worker forces component_threads, packing_workers and tree_threads to 1, sets the time limit to the remaining wall time and keeps every other native option at its default. Integers are written without a fraction or exponent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model_input",
+    "starts",
+    "node_limit",
+    "iteration_limit",
+    "feasibility_tolerance",
+    "integrality_tolerance",
+    "presolve"
+  ],
+  "properties": {
+    "model_input": {
+      "description": "Name of the job input that holds the model.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,80}$",
+      "not": {"enum": [".", ".."]}
+    },
+    "starts": {
+      "description": "One task per entry: null, or a complete primal start of a MIP.",
+      "$comment": "A non-null start is allowed only when some kind is integer or binary, and it needs exactly n entries (n = length of the model's objective). It is evaluated as an incumbent candidate, never rounded or repaired. Starts are inline: keep the job well below the runner's 4 MiB validation output.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000000,
+      "items": {
+        "anyOf": [
+          {"type": "null"},
+          {"type": "array", "minItems": 1, "items": {"type": "number"}}
+        ]
+      }
+    },
+    "node_limit": {
+      "description": "MIP relaxations per task.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709551615
+    },
+    "iteration_limit": {
+      "description": "Simplex iterations per task, across all nodes.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709551615
+    },
+    "feasibility_tolerance": {
+      "description": "Absolute bound and row violation accepted, in original units (native default 1e-7).",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "integrality_tolerance": {
+      "description": "Distance to an integer accepted (native default 1e-7).",
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 0.5
+    },
+    "presolve": {
+      "description": "Native master switch; false skips the whole root stage, so a MIP then needs finite bounds as given.",
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:optimization-jobs:payload:lp-ip.evaluate/1",
+  "title": "lp-ip.evaluate/1 payload",
+  "description": "Check given points against one lp-ip.model/1 artifact without solving; one task per point.",
+  "$comment": "Rules outside this schema: the job has exactly one input, its name equals model_input, it holds an lp-ip.model/1 artifact and its sha256 matches. resources.inner_threads must be 1. Points are inline: keep the job well below the runner's 4 MiB validation output.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model_input",
+    "points",
+    "feasibility_tolerance",
+    "integrality_tolerance"
+  ],
+  "properties": {
+    "model_input": {
+      "description": "Name of the job input that holds the model.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,80}$",
+      "not": {"enum": [".", ".."]}
+    },
+    "points": {
+      "description": "Points to check, one task each; they may violate bounds.",
+      "$comment": "Every point needs exactly n entries (n = length of the model's objective).",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000000,
+      "items": {"type": "array", "minItems": 1, "items": {"type": "number"}}
+    },
+    "feasibility_tolerance": {
+      "description": "Absolute bound and row violation accepted, in original units.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "integrality_tolerance": {
+      "description": "Distance to an integer accepted.",
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 0.5
+    }
+  }
+}
