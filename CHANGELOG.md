@@ -135,6 +135,14 @@ and MPS converter tests.
   CPUs and memory; `workers add` accepts up to 1 MiB of `describe` output;
   and the shared harness, which CI runs from Cargo's checkout, checks the
   worker's payload schemas and runs its examples, also over MCP.
+- optimization-jobs pin `8d19278` (third review of agent workflows, N1):
+  the guide that `optimization-mcp` serves with `get_guide` has the
+  corrected Pareto guidance (scalarization gives candidates), and the
+  shared harness, which CI runs from the pinned checkout, checks that the
+  payload schemas and the worker agree on `null` optional fields. The new
+  workflow `shared-pin.yml` fails when optimization-jobs `main` has changed
+  the shared crates, guide, docs or scripts since the pinned revision
+  (weekly, and on changes to Cargo files), so the pin no longer drifts.
 - Shared job API docs and harness synchronized with fcmaes-rust (#16).
 
 ### Fixed

@@ -10,8 +10,9 @@ server (#18), and bounds and gaps published only for the point an outcome
 shows (#19); #20 moved the pin to `6a42472` and the release preparation to
 `423cd87`, which add worker-declared artifacts and paged artifact reads
 (`get_artifact` with `offset` and `limit` also pages through the `results`
-journal of a running job); the pin is now `069d87c`, which adds the MCP tools
-`put_input` and `get_guide` and a host report in `node doctor`. The numerical crates and the Python package did not
+journal of a running job); the pin is now `8d19278`, which adds the MCP tools
+`put_input` and `get_guide` (with the corrected Pareto guidance) and a host
+report in `node doctor`. The numerical crates and the Python package did not
 change in these pull requests. Since then (CHANGELOG `[Unreleased]`), the
 worker's `describe` lists JSON Schemas and runnable examples
 ([discovery](#discovery-schemas-and-examples)), and `scripts/mps_to_model.py`
