@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/dietmarwo/LP-IP-craft/main/docs/images/lp-ip-craft.png" alt="LP-IP-craft: linear and mixed-integer optimization in Rust">
+</p>
+
 # LP-IP-craft — native Rust LP/MIP solver
 
 Native Rust linear and mixed-integer linear optimization, with Python bindings
