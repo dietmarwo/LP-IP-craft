@@ -14,8 +14,9 @@ such as (#5) are pull requests.
 
 ## [0.29.0] - 2026-10-22
 
-The first release on PyPI (`lp-ip-craft`). The Rust crates follow on
-crates.io once their ownership is established ([RELEASING.md](RELEASING.md)).
+The first release on PyPI (`lp-ip-craft`) and crates.io (`lp-ip-craft`,
+`lp-ip-craft-native`). The first crates.io upload needs an API
+token; later releases use Trusted Publishing ([RELEASING.md](RELEASING.md)).
 
 Everything merged after the commit that set 0.28.0 (#11-#20), the
 release preparation and the fixes of the agent-discovery review. The code of
@@ -106,6 +107,12 @@ and MPS converter tests.
 
 ### Changed
 
+- `publish-crates.yml`: while Trusted Publishing is not enabled
+  (`CRATES_IO_TRUSTED_PUBLISHING`), a tag publishes the crates with the
+  secret `CARGO_REGISTRY_TOKEN`, one crate at a time in dependency order and
+  skipping versions already on crates.io. This publishes the first release
+  without a local toolchain; `RELEASING.md` describes the token and its
+  removal afterwards.
 - The PyPI description is `python/README.md`, a short page with installation,
   an example, the limits and absolute links; the repository README, with
   its relative links and history, stays on GitHub.

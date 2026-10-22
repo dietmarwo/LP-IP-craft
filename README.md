@@ -91,10 +91,10 @@ infinities remain unsupported. Numerical kernels accept a maximum of 1–8 worke
 
 ## Install from source
 
-From 0.29.0 the Python package is released to PyPI:
+From 0.29.0, releases go to PyPI and crates.io:
 `python -m pip install lp-ip-craft` installs a wheel (CPython 3.10 or newer on
-Linux x86_64, Windows x64 and macOS x86_64/arm64) and needs no Rust. The Rust
-crates are not on crates.io yet, and the job worker is source-only
+Linux x86_64, Windows x64 and macOS x86_64/arm64) and needs no Rust; the Rust
+crates are below. The job worker is source-only
 ([RELEASING.md](RELEASING.md) describes the releases). To build from source,
 for example for changes after the latest release, you need:
 
@@ -123,9 +123,14 @@ prepares an offline build), so no second checkout is needed:
 cargo build --release --locked -p optimization-runner -p lp-ip-job-worker
 ```
 
-To use the Rust crates from another project before a crates.io release,
-depend on both: `lp-ip-craft` has the model, options and checks,
-`lp-ip-craft-native` the solver.
+A Rust project depends on both crates: `lp-ip-craft` has the model, options
+and checks, `lp-ip-craft-native` the solver.
+
+```sh
+cargo add lp-ip-craft lp-ip-craft-native
+```
+
+For changes after the latest release, use git dependencies instead:
 
 ```toml
 [dependencies]

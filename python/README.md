@@ -56,8 +56,9 @@ check points and duals from any solver.
 
 ## More
 
-- [Repository](https://github.com/dietmarwo/LP-IP-craft), with the Rust crates
-  `lp-ip-craft` and `lp-ip-craft-native` and the source build
+- [Repository](https://github.com/dietmarwo/LP-IP-craft) and the source build;
+  the Rust crates are [`lp-ip-craft`](https://crates.io/crates/lp-ip-craft)
+  and [`lp-ip-craft-native`](https://crates.io/crates/lp-ip-craft-native)
 - [AI agent guide](https://github.com/dietmarwo/LP-IP-craft/blob/main/ai-context.md):
   modelling, options, results, MPS import and the job API
 - [Changelog](https://github.com/dietmarwo/LP-IP-craft/blob/main/CHANGELOG.md)

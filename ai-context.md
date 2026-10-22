@@ -54,9 +54,10 @@ dependency tree.
 | `lp-ip-job-worker` | `crates/lp-ip-job-worker` | Job worker for profiles `lp-ip.solve/1` and `lp-ip.evaluate/1` |
 
 Release 0.29.0 is the first on PyPI (`python -m pip install lp-ip-craft`);
-check PyPI for the latest version before relying on it. The two library
-crates are prepared for crates.io but not published there yet
-([RELEASING.md](RELEASING.md)); the worker stays source-only. For Rust, the
+the two library crates `lp-ip-craft` and `lp-ip-craft-native` go to
+crates.io with the same version. Check the registries for the latest
+version before relying on it ([RELEASING.md](RELEASING.md)); the worker
+stays source-only. For Rust, the
 job worker or changes after the latest release, use a checkout
 of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.29.0;
 the shared job crates are 0.2.0. Profile names such as `lp-ip.solve/1` are protocol
