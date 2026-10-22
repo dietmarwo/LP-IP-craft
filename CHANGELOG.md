@@ -106,6 +106,8 @@ and MPS converter tests.
   crate READMEs link them too. `pyproject.toml` adds keywords and project
   URLs (documentation, issues, changelog, ecosystem, agent guide).
   `RELEASING.md` covers discovery after a release.
+- The README opens with a banner (`docs/images/lp-ip-craft.png`). It is
+  linked by absolute URL, so the PyPI description shows it too.
 - Breaking: the worker speaks worker protocol `optimization.worker/0.2` and
   publishes results as `optimization.result/0.2` (shared job crates 0.2.0,
   #15). A 0.2 runner still accepts 0.1 workers; a 0.1 runner rejects 0.2
