@@ -1,7 +1,8 @@
 //! Conservative Lagrangian bounds for the exact model represented by binary64
 //! inputs. Unlike residual checks, these computations enclose rounding error.
 //!
-//! The derivation, assumptions and limitations are in `docs/safe-dual-bounds.md`.
+//! The derivation, assumptions and limitations are in
+//! [`docs/safe-dual-bounds.md`](https://github.com/dietmarwo/LP-IP-craft/blob/main/docs/safe-dual-bounds.md).
 //! This module neither validates an incumbent exactly nor certifies a solver's
 //! search tree. It does not change the floating-point environment.
 
@@ -73,7 +74,7 @@ pub struct SafeDualBound {
 /// and solver duals meet that only to the solver's tolerance, so the exact
 /// Lagrangian bound of those duals is often infinite itself. Request the duals
 /// from an LP whose one-sided costs are shifted by a small margin (see
-/// `docs/safe-dual-bounds.md`), or give free columns finite bounds.
+/// [`docs/safe-dual-bounds.md`](https://github.com/dietmarwo/LP-IP-craft/blob/main/docs/safe-dual-bounds.md)), or give free columns finite bounds.
 ///
 /// Runs in O(nnz + n + m) time and O(n) extra memory. Invalid multiplier
 /// length/nonfinite entries return [`crate::Error::InvalidInput`]. Arithmetic

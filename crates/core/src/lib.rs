@@ -3,7 +3,7 @@
 //! solver-independent checks.
 //!
 //! This crate has no dependencies. Real optimization is in the sibling crate
-//! `lp-ip-craft-native`, our dependency-free Rust simplex/branch-and-bound
+//! `lp-ip-craft-native`, our pure-Rust simplex/branch-and-bound
 //! implementation of [`LpIpSolver`]. [`DummySolver`] remains a contract fixture:
 //! it evaluates
 //! one candidate and returns it with [`Status::Stub`].

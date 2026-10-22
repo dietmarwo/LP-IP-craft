@@ -1,7 +1,7 @@
-//! Owned Rust LP/MIP solver (pure-Rust Rayon supplies bounded scheduling): a bounded-variable dual
-//! revised simplex on a sparse LU basis factorization, inside best-bound
-//! branch and bound with diving, pseudocost branching and independently
-//! checked results.
+//! Native Rust LP/MIP solver (pure Rust; Rayon for bounded parallel work): a
+//! bounded-variable dual revised simplex on a sparse LU basis factorization,
+//! inside best-bound branch and bound with diving, pseudocost branching and
+//! independently checked results.
 #![forbid(unsafe_code)]
 mod active;
 mod batch;

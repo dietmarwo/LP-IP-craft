@@ -107,6 +107,12 @@ and MPS converter tests.
 
 ### Changed
 
+- crates.io and docs.rs pages: `lp-ip-craft-native`'s description names the
+  dual revised simplex (it said "two-phase simplex", the 0.15 kernel); both
+  crates' homepage is their entry on the ecosystem page; the READMEs show
+  `cargo add`, and the native README a complete, tested example with the
+  limits; rustdoc links `docs/safe-dual-bounds.md` absolutely and no longer
+  calls the native engine dependency-free (it uses Rayon).
 - `publish-crates.yml`: while Trusted Publishing is not enabled
   (`CRATES_IO_TRUSTED_PUBLISHING`), a tag publishes the crates with the
   secret `CARGO_REGISTRY_TOKEN`, one crate at a time in dependency order and
