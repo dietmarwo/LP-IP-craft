@@ -12,6 +12,12 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-22
+
+The first release on PyPI (`lp-ip-craft`) and crates.io (`lp-ip-craft`,
+`lp-ip-craft-native`). The first crates.io upload needs an API
+token; later releases use Trusted Publishing ([RELEASING.md](RELEASING.md)).
+
 Everything merged after the commit that set 0.28.0 (#11-#20), the
 release preparation and the fixes of the agent-discovery review. The code of
 the numerical crates and the Python package is unchanged since 0.28.0; the
@@ -101,6 +107,21 @@ and MPS converter tests.
 
 ### Changed
 
+- crates.io and docs.rs pages: `lp-ip-craft-native`'s description names the
+  dual revised simplex (it said "two-phase simplex", the 0.15 kernel); both
+  crates' homepage is their entry on the ecosystem page; the READMEs show
+  `cargo add`, and the native README a complete, tested example with the
+  limits; rustdoc links `docs/safe-dual-bounds.md` absolutely and no longer
+  calls the native engine dependency-free (it uses Rayon).
+- `publish-crates.yml`: while Trusted Publishing is not enabled
+  (`CRATES_IO_TRUSTED_PUBLISHING`), a tag publishes the crates with the
+  secret `CARGO_REGISTRY_TOKEN`, one crate at a time in dependency order and
+  skipping versions already on crates.io. This publishes the first release
+  without a local toolchain; `RELEASING.md` describes the token and its
+  removal afterwards.
+- The PyPI description is `python/README.md`, a short page with installation,
+  an example, the limits and absolute links; the repository README, with
+  its relative links and history, stays on GitHub.
 - Discovery: the README opens with the title and a short description, then
   links the shared solver-selection guide and the ecosystem overview; both
   crate READMEs link them too. `pyproject.toml` adds keywords and project

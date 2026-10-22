@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 from ._native import solve_batch_native as _solve_batch_native
 
-__version__ = "0.28.0"
+__version__ = "0.29.0"
 
 __all__ = [
     "BACKENDS",

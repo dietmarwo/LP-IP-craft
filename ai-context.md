@@ -1,6 +1,7 @@
 # AI context for solving LP and MIP problems with LP-IP-craft
 
-Last reviewed 2026-10-20 against `main` at `f9ba356` (workspace 0.28.0). This
+Last reviewed 2026-10-20 against `main` at `f9ba356` (workspace 0.28.0; released
+unchanged in its numerical code as 0.29.0). This
 state includes the result contract 0.2 (claims with evidence,
 `lp-ip.evaluate/1`, error codes, JSON Schemas; #15, docs and harness synced in
 #16), the shared job crates 0.2.0 of
@@ -52,11 +53,13 @@ dependency tree.
 | `optimization-job-api`, `optimization-runner` | git dependency on [optimization-jobs](https://github.com/dietmarwo/optimization-jobs) | Shared job protocol, the `optimization-run` runner and the `optimization-mcp` server |
 | `lp-ip-job-worker` | `crates/lp-ip-job-worker` | Job worker for profiles `lp-ip.solve/1` and `lp-ip.evaluate/1` |
 
-Nothing is published yet: neither crates.io nor PyPI has an `lp-ip-craft`
-package at this review. The two library crates and the Python package are
-prepared for both registries ([RELEASING.md](RELEASING.md)); the worker
-stays source-only. Use a checkout
-of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.28.0;
+Release 0.29.0 is the first on PyPI (`python -m pip install lp-ip-craft`);
+the two library crates `lp-ip-craft` and `lp-ip-craft-native` go to
+crates.io with the same version. Check the registries for the latest
+version before relying on it ([RELEASING.md](RELEASING.md)); the worker
+stays source-only. For Rust, the
+job worker or changes after the latest release, use a checkout
+of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.29.0;
 the shared job crates are 0.2.0. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
 

@@ -3,7 +3,7 @@ members = ["crates/lp-ip-job-worker", "crates/core", "crates/native", "crates/py
 default-members = ["crates/core", "crates/native"]
 resolver = "3"
 [workspace.package]
-version = "0.28.0"
+version = "0.29.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"

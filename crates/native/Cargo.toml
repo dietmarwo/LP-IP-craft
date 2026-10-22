@@ -1,6 +1,6 @@
 [package]
 name = "lp-ip-craft-native"
-description = "Native Rust two-phase simplex and branch-and-bound engine"
+description = "Native Rust LP/MIP engine: dual revised simplex on a sparse LU factorization, presolve, cuts and branch-and-bound"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/lp-ip-craft-native"
-homepage = "https://github.com/dietmarwo/LP-IP-craft"
+homepage = "https://dietmarwo.github.io/optimization-jobs/#LP-IP-craft"
 keywords = ["linear-programming", "mip", "simplex", "branch-and-bound", "solver"]
 categories = ["mathematics", "science", "algorithms"]
 publish = ["crates-io"]
@@ -20,5 +20,5 @@ kernel-profile = []
 basis-replay = ["kernel-profile"]
 
 [dependencies]
-lp-ip-craft = { path = "../core", version = "0.28.0" }
+lp-ip-craft = { path = "../core", version = "0.29.0" }
 rayon = "=1.12.0"

@@ -28,19 +28,30 @@ Modeled on fcmaes-rust:
 2. PyPI: create a pending Trusted Publisher for project `lp-ip-craft`: owner
    `dietmarwo`, repository `LP-IP-craft`, workflow `python-release.yml`, environment
    `release`. The first tag then creates the project.
-3. crates.io: publish the first version manually to establish ownership,
-   from a clean checkout of the release commit:
+3. crates.io: the first version must be published with an API token, because
+   crates.io accepts a Trusted Publisher only for an existing crate. There are
+   two ways; the first needs only a browser:
+
+   - **Token in GitHub (no local toolchain):** on crates.io, Account Settings
+     → API Tokens, create a token with the scopes `publish-new` and
+     `publish-update`, restricted to the crates `lp-ip-craft*`, with a short
+     expiry. Add it as the secret `CARGO_REGISTRY_TOKEN` of the `release`
+     environment (Settings → Environments → `release`). The release tag then
+     publishes the crates in dependency order, skipping versions already
+     on crates.io, so rerunning the job completes a partial upload.
+   - **From a clean checkout of the release commit:**
 
    ```bash
    cargo login
    cargo publish -p lp-ip-craft -p lp-ip-craft-native --locked
    ```
 
-   Then configure a Trusted Publisher for each crate (owner `dietmarwo`,
+   After the first upload, delete the secret and revoke the token. Then
+   configure a Trusted Publisher for each crate (owner `dietmarwo`,
    repository `LP-IP-craft`, workflow `publish-crates.yml`, environment `release`)
    and set the repository variable `CRATES_IO_TRUSTED_PUBLISHING` to `true`.
-   Until it is set, `publish-crates.yml` runs every check and skips the
-   upload.
+   Until it is set, `publish-crates.yml` uploads only with the token secret;
+   without it, it runs every check and skips the upload.
 
 ## Pre-release checks
 
