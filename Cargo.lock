@@ -258,11 +258,11 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "lp-ip-craft"
-version = "0.28.0"
+version = "0.29.0"
 
 [[package]]
 name = "lp-ip-craft-native"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "lp-ip-craft",
  "rayon",
@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "lp-ip-craft-python"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "lp-ip-craft",
  "lp-ip-craft-native",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "lp-ip-job-worker"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "lp-ip-craft",
  "lp-ip-craft-native",

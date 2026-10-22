@@ -294,11 +294,11 @@ dependencies = [
 
 [[package]]
 name = "lp-ip-craft"
-version = "0.28.0"
+version = "0.29.0"
 
 [[package]]
 name = "lp-ip-craft-native"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "lp-ip-craft",
  "rayon",

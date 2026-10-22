@@ -91,8 +91,12 @@ infinities remain unsupported. Numerical kernels accept a maximum of 1–8 worke
 
 ## Install from source
 
-Nothing has been published to PyPI or crates.io yet ([RELEASING.md](RELEASING.md)
-describes the release workflows); build from source. Requirements:
+From 0.29.0 the Python package is released to PyPI:
+`python -m pip install lp-ip-craft` installs a wheel (CPython 3.10 or newer on
+Linux x86_64, Windows x64 and macOS x86_64/arm64) and needs no Rust. The Rust
+crates are not on crates.io yet, and the job worker is source-only
+([RELEASING.md](RELEASING.md) describes the releases). To build from source,
+for example for changes after the latest release, you need:
 
 - git and Rust 1.85 or newer (`rustup` from https://rustup.rs) for the
   numerical crates; Rust 1.88 or newer for the job worker and the runner.
