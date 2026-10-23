@@ -14,6 +14,15 @@ findings under tolerances; use the linked guide to check model limits.
 The guide compares this solver with Python/Rust black-box optimization
 and the other structured solver, then explains library, shell and MCP use.
 
+![Pure Rust solver](https://img.shields.io/badge/solver-100%25%20Rust-brightgreen)
+[![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)
+](https://github.com/rust-secure-code/safety-dance/)
+![No C/C++ dependencies](https://img.shields.io/badge/C%2FC%2B%2B%20dependencies-none-brightgreen)
+[![crates.io](https://img.shields.io/crates/v/lp-ip-craft.svg?cacheSeconds=300)](https://crates.io/crates/lp-ip-craft)
+[![docs.rs](https://docs.rs/lp-ip-craft-native/badge.svg)](https://docs.rs/lp-ip-craft-native)
+[![PyPI](https://img.shields.io/pypi/v/lp-ip-craft.svg?cacheSeconds=300)](https://pypi.org/project/lp-ip-craft/)
+[![AI agent guide](https://img.shields.io/badge/guide-AI%20agents-blue)](ai-context.md)
+
 > **AI agents:** read [ai-context.md](ai-context.md) first (modelling, options, results, the job API);
 > [AGENTS.md](AGENTS.md) is the short orientation with build and test commands.
 
