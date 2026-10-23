@@ -11,7 +11,7 @@ server (#18), and bounds and gaps published only for the point an outcome
 shows (#19); #20 moved the pin to `6a42472` and the release preparation to
 `423cd87`, which add worker-declared artifacts and paged artifact reads
 (`get_artifact` with `offset` and `limit` also pages through the `results`
-journal of a running job); the pin is now `43ef3ae`, which adds the MCP tools
+journal of a running job); the pin is now `37b30e4` (0.3.0, tag `v0.3.0`), which adds the MCP tools
 `put_input` and `get_guide` (with the corrected Pareto guidance) and a host
 report in `node doctor`. The numerical crates and the Python package did not
 change in these pull requests. Since then (CHANGELOG `[Unreleased]`), the
@@ -60,7 +60,7 @@ version before relying on it ([RELEASING.md](RELEASING.md)); the worker
 stays source-only. For Rust, the
 job worker or changes after the latest release, use a checkout
 of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.29.0;
-the shared job crates are 0.2.0. Profile names such as `lp-ip.solve/1` are protocol
+the shared job crates are 0.3.0. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
 
 Toolchains:
