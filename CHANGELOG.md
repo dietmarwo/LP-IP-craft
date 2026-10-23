@@ -12,7 +12,7 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
-### Prompt tutorials
+### Added
 
 - The [prompt-driven energy tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/energy) uses this repository's existing job worker for an independently checked one-hour dispatch LP. The larger energy simulator retains its original microlp backend.
 
