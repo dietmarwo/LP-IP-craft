@@ -1,5 +1,7 @@
 # Tutorial: LP and MIP jobs from checked model artifacts
 
+**Prompt-driven adaptation:** [agent walkthrough](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/lp-ip) using this repository's existing worker.
+
 This tutorial minimizes `2*x0 + 3*x1 + 5` with `x0+x1=1` and `0<=x<=1`, first
 with binary variables and then continuous ones. Both have objective 7 at
 `[1,0]`. A third example asks for `x0+x1=3` and is infeasible. A fourth

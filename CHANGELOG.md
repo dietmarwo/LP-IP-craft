@@ -14,6 +14,8 @@ such as (#5) are pull requests.
 
 ### Added
 
+- Link the [lp-ip prompt tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/lp-ip) with checked examples and follow-up experiments over the existing native worker. No numerical code or dependency pins change.
+
 - The [prompt-driven energy tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/energy) uses this repository's existing job worker for an independently checked one-hour dispatch LP. The larger energy simulator retains its original microlp backend.
 
 ### Changed
