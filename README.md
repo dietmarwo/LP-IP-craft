@@ -98,6 +98,8 @@ MIPs still require finite bounds on **all** variables, including continuous
 variables, of magnitude at most 2^53-1 after justified root inference; unresolved
 infinities remain unsupported. Numerical kernels accept a maximum of 1–8 workers through `Options.threads`; small work stays scalar. Independent components, residual neighborhoods and binary frontiers keep their existing worker controls. Explicit numerical width > 1 serializes these outer mechanisms. Ordered batches also support outer × inner ≤ 8; the existing 16-worker serial-inner API remains compatible. The two real SpOC4 matching tables are now application benchmarks; their current quality/bound progress and remaining root bottleneck are documented in [the 0.26 results](docs/spoc4-026/RESULTS.md). GTOC application readiness remains unverified.
 
+The [prompt-driven energy tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/energy) uses this repository's existing job worker for an independently checked one-hour dispatch LP. The larger energy simulator retains its original microlp backend.
+
 ## Install from source
 
 From 0.29.0, releases go to PyPI and crates.io:
