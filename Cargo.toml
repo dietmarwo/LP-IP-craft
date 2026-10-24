@@ -12,8 +12,8 @@ publish = false
 [workspace.dependencies]
 # The shared job API (envelope, result contract, worker SDK, runner) lives in
 # github.com/dietmarwo/optimization-jobs; change the revision there first.
-optimization-job-api = { git = "https://github.com/dietmarwo/optimization-jobs", rev = "70e210fbf562900c1be8f278e2ab2852ef5934e3" }
-optimization-runner = { git = "https://github.com/dietmarwo/optimization-jobs", rev = "70e210fbf562900c1be8f278e2ab2852ef5934e3" }
+optimization-job-api = { git = "https://github.com/dietmarwo/optimization-jobs", rev = "466a373ff81815493451063a9885db28c1946504" }
+optimization-runner = { git = "https://github.com/dietmarwo/optimization-jobs", rev = "466a373ff81815493451063a9885db28c1946504" }
 
 [profile.release]
 codegen-units = 1
