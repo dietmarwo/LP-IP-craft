@@ -1179,36 +1179,34 @@ impl Lu {
                 w,
                 (unit && self.etas.is_empty()).then(|| self.eta_support[0]),
             );
-        } else {
-            if self.reach.find_seeded(
-                v,
-                &self.u,
-                Some(&self.col_step),
-                &self.col_step,
-                2,
-                unit.then_some(&self.eta_support),
-            ) {
-                w.fill(0.);
-                for &p in &self.reach.nodes {
-                    let k = self.col_step[p];
-                    let t = v[p] * self.diag_inv[k];
-                    w[self.prow[k]] = t;
-                    if t != 0. {
-                        let (index, value) = self.u.get(k);
-                        for (&q, &u) in index.iter().zip(value) {
-                            v[q] -= u * t;
-                        }
+        } else if self.reach.find_seeded(
+            v,
+            &self.u,
+            Some(&self.col_step),
+            &self.col_step,
+            2,
+            unit.then_some(&self.eta_support),
+        ) {
+            w.fill(0.);
+            for &p in &self.reach.nodes {
+                let k = self.col_step[p];
+                let t = v[p] * self.diag_inv[k];
+                w[self.prow[k]] = t;
+                if t != 0. {
+                    let (index, value) = self.u.get(k);
+                    for (&q, &u) in index.iter().zip(value) {
+                        v[q] -= u * t;
                     }
                 }
-            } else {
-                for k in 0..self.m {
-                    let t = v[self.pcol[k]] * self.diag_inv[k];
-                    w[self.prow[k]] = t;
-                    if t != 0.0 {
-                        let (index, value) = self.u.get(k);
-                        for (&q, &u) in index.iter().zip(value) {
-                            v[q] -= u * t;
-                        }
+            }
+        } else {
+            for k in 0..self.m {
+                let t = v[self.pcol[k]] * self.diag_inv[k];
+                w[self.prow[k]] = t;
+                if t != 0.0 {
+                    let (index, value) = self.u.get(k);
+                    for (&q, &u) in index.iter().zip(value) {
+                        v[q] -= u * t;
                     }
                 }
             }
