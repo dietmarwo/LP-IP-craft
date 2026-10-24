@@ -27,6 +27,9 @@ such as (#5) are pull requests.
   shared guide that `get_guide` serves names the October 2026 registry
   releases, and the job crates are 0.3.0. Envelope, result contract and
   worker protocol are unchanged.
+- Clippy 1.88, the job layer's minimum Rust, is clean on the workspace too:
+  a nested `else { if … }` in the LU `btran` is collapsed. Results are
+  unchanged.
 
 ## [0.29.0] - 2026-10-22
 
