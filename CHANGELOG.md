@@ -12,6 +12,16 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+### Shared runtime P1
+
+- Move every optimization-jobs dependency and lockfile to `4f93d75ba9dc0ca40d6de455261b7a753f130976`.
+  The shared runner extracts private execution/admission/supervision modules,
+  adds `execution.record/0.1` and capability discovery, and preserves native
+  optimization results. No solver algorithms, tolerances or public worker
+  schemas change. The new runner passed mixed-node tests with both existing
+  pinned SDK workers and checkout-SDK workers before this pin move.
+
+
 ### Added
 
 - The [prompt-driven LP/MIP tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/lp-ip) chooses projects with an LP relaxation and a binary model through the existing `lp-ip-job-worker`, checks them by enumeration and keeps the deliberately infeasible case's `claimed` evidence. No numerical code or dependency pin changes.

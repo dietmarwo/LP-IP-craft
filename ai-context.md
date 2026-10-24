@@ -1,5 +1,13 @@
 # AI context for solving LP and MIP problems with LP-IP-craft
 
+P1 pin update (2026-10-24): the shared runner now exposes
+`node capabilities` and `jobs execution ID`, with a neutral terminal record
+referencing the native result. The existing optimization envelope, worker
+protocol, numerical behavior and solver claims are unchanged. Command and
+fleet execution are not enabled. All tracked tutorial/subcrate manifests
+and lockfiles move with the workspace pin.
+
+
 Last reviewed 2026-10-20 against `main` at `f9ba356` (workspace 0.28.0; released
 unchanged in its numerical code as 0.29.0). This
 state includes the result contract 0.2 (claims with evidence,
@@ -11,7 +19,7 @@ server (#18), and bounds and gaps published only for the point an outcome
 shows (#19); #20 moved the pin to `6a42472` and the release preparation to
 `423cd87`, which add worker-declared artifacts and paged artifact reads
 (`get_artifact` with `offset` and `limit` also pages through the `results`
-journal of a running job); the pin is now `37b30e4` (0.3.0, tag `v0.3.0`), which adds the MCP tools
+journal of a running job); the pin is now `4f93d75` (P1 source candidate, crates remain 0.3.0), which adds the MCP tools
 `put_input` and `get_guide` (with the corrected Pareto guidance) and a host
 report in `node doctor`. The numerical crates and the Python package did not
 change in these pull requests. Since then (CHANGELOG `[Unreleased]`), the
