@@ -11,10 +11,10 @@ server (#18), and bounds and gaps published only for the point an outcome
 shows (#19); #20 moved the pin to `6a42472` and the release preparation to
 `423cd87`, which add worker-declared artifacts and paged artifact reads
 (`get_artifact` with `offset` and `limit` also pages through the `results`
-journal of a running job); the pin is now `fcc4d5f` (after tag `v0.3.0`; the crates are still 0.3.0), which adds
-explicit SSH placement, checked remote files and persistent dispatch/reconciliation
-through the CLI, retaining opt-in local commands, `node capabilities` and
-`jobs execution JOB_ID`; `37b30e4` (tag `v0.3.0`)
+journal of a running job); the pin is now `8b4489d` (after tag `v0.3.0`; the crates are still 0.3.0), which adds
+`node capabilities`, `jobs execution JOB_ID`, opt-in trusted local command
+jobs with verified binary file transfer, and explicitly placed jobs on SSH
+nodes, all through the CLI; `37b30e4` (tag `v0.3.0`)
 added the MCP tools `put_input` and `get_guide` (with the corrected Pareto
 guidance) and a host report in `node doctor`. The numerical crates and the Python package did not
 change in these pull requests. Since then (CHANGELOG `[Unreleased]`), the

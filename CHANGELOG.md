@@ -20,14 +20,13 @@ such as (#5) are pull requests.
 
 ### Changed
 
-- optimization-jobs pin `fcc4d5f` (source after tag `v0.3.0`; the shared
-  crates remain 0.3.0) in every shared manifest/lockfile, including optional
-  tutorial workers where present. The runner adds explicitly placed SSH jobs,
-  pinned node identities, checked remote file transfers and persisted
-  dispatch/reconciliation. Local command opt-in, terminal execution records
-  and the MCP refusal of commands are retained. This is a runtime pin update;
-  numerical algorithms and optimization worker/result contracts are unchanged.
-
+- optimization-jobs pin `8b4489d` (after tag `v0.3.0`; the crates are still
+  0.3.0) in the manifest and the lockfile. The runner gains `node
+  capabilities`, `jobs execution JOB_ID` (an execution record of how each
+  job's worker process ended), opt-in trusted command jobs with verified
+  binary file transfer, and explicitly placed jobs on SSH nodes with persisted
+  dispatch and reconciliation, all through the CLI. Envelope, result contract,
+  worker protocol and solver behavior are unchanged.
 - README badges as in fcmaes-rust: pure-Rust solver, `unsafe` forbidden in the library crates, no C/C++
   dependencies, crates.io, docs.rs, PyPI and the AI agent guide.
 - optimization-jobs pin `37b30e4` (tag `v0.3.0`, the first crates.io release
