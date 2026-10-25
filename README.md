@@ -36,6 +36,7 @@ and the other structured solver, then explains library, shell and MCP use.
 > [validation report](docs/job-api/VALIDATION.md) and the
 > [review](docs/job-api/REVIEW.md). Existing solver APIs remain available.
 > The same node also runs the [SQP-craft](https://github.com/dietmarwo/SQP-craft) (smooth NLP) and [fcmaes-rust](https://github.com/dietmarwo/fcmaes-rust) (black-box, multi-objective) workers.
+> [experiment-craft](https://github.com/dietmarwo/experiment-craft) runs reproducible campaigns of these jobs (parameter sweeps, dependent steps, budgets and reports); its baseline rebuilds and tests `lp-ip-job-worker` at a pinned revision. It is in early development.
 
 > Native 0.28: explicit 1–8 numerical workers, reusable local Rayon resources, parallel dense-LU/pricing and packing-root phases, improved ordered batch/component/tree/residual orchestration, bounded mixed batches and a fail-closed scaling/oracle harness. See [30 iteration plans](docs/parallel-028/PLAN.md), [execution and numerical contract](docs/parallel-028/VALIDITY.md) and [reproduction](docs/parallel-028/REPRODUCE.md). Default numerical width stays 1; current MIP presolve/coefficient-tightening defaults stay on. See [measured gains and regressions](docs/parallel-028/RESULTS.md) and [the review's corrections](docs/parallel-028/REVIEW.md); raw evidence is included with the delivery archive.
 
