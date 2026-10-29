@@ -4,6 +4,8 @@
 
 # LP-IP-craft — native Rust LP/MIP solver
 
+**Structured application workshops:** see the [new learning sequence](tutorials/README.md). The twenty-chapter series uses the native Rust solvers through Python, with independent checks, agent prompts and local campaign execution.
+
 Native Rust linear and mixed-integer linear optimization, with Python bindings
 and a worker for durable shell or MCP jobs. Solve statuses are numerical
 findings under tolerances; use the linked guide to check model limits.
@@ -246,7 +248,7 @@ across all nodes, phase 1, certification LPs and retries. Parallel components
 reserve shares of the global node/iteration limits; unused shares are not
 redistributed. Serial component execution shares the remaining budget
 instead. Bases with heavy LU fill (random sparse structure) remain
-solve-bound; hypersparse solves and Forrest–Tomlin updates are the next steps.
+solve-bound; further hypersparse traversal and broader measured coverage of the existing Forrest–Tomlin updates remain priorities.
 
 See [API](docs/api.md), [the dual simplex design, validation and
 benchmarks](docs/simplex/README.md) and the still-incomplete [application

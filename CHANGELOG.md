@@ -14,6 +14,10 @@ such as (#5) are pull requests.
 
 ### Added
 
+- Structured application workshops with executable native-solver examples, independent references, prompt exercises and retained smoke results; shared direct/command execution and a local campaign example.
+
+### Added
+
 - The [prompt-driven LP/MIP tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/lp-ip) chooses projects with an LP relaxation and a binary model through the existing `lp-ip-job-worker`, checks them by enumeration and keeps the deliberately infeasible case's `claimed` evidence. No numerical code or dependency pin changes.
 
 - The [prompt-driven energy tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/energy) uses this repository's existing job worker for an independently checked one-hour dispatch LP. The larger energy simulator retains its original microlp backend.

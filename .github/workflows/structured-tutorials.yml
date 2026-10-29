@@ -1,0 +1,36 @@
+name: Structured tutorial smoke
+on:
+  push:
+    paths: ['tutorials/**', 'crates/**', '.github/workflows/structured-tutorials.yml']
+  pull_request:
+    paths: ['tutorials/**', 'crates/**', '.github/workflows/structured-tutorials.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '2'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install this source and reference dependencies
+        run: python -m pip install . numpy scipy matplotlib
+      - name: Execute independent tutorial checks
+        run: |
+          for chapter in resource-allocation battery-dispatch sudoku staff-rostering transportation-duals facility-location cutting-stock stochastic-planning spoc4-matching; do
+            python "tutorials/$chapter/run.py" --output "$RUNNER_TEMP/structured-$chapter"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: structured-results
+          path: ${{ runner.temp }}/structured-*
