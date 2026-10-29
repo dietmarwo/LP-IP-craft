@@ -1,6 +1,6 @@
 # Structured application tutorials
 
-Run a chapter directly with the native solver API, or use the shared agent/command driver. Start with the first two chapters, then select an application.
+Each chapter is a Python script that builds a model, solves it with the native solver (`backend="native"`) and checks the answer against an independent reference. Run one with `python tutorials/<chapter>/run.py --output /new/dir`. Start with the first two chapters, then pick an application.
 
 | ID | Chapter |
 |---|---|
@@ -16,4 +16,4 @@ Run a chapter directly with the native solver API, or use the shared agent/comma
 
 [LP10: rail formulation](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/rail-formulation/README.md).
 
-[Shared setup, all twenty chapters, and command-job execution](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/structured/README.md). The existing [job API tutorial](job-api/README.md) remains available.
+The [shared setup](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/structured/README.md) in optimization-jobs runs the whole twenty-chapter series (LP, SQP, fcmaes and cross-solver chapters) directly or as trusted command jobs. The [job API tutorial](job-api/README.md) shows the `lp-ip-job-worker` profiles.

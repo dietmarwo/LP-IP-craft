@@ -1,6 +1,6 @@
 # LP1: Resource allocation: relaxation to integer decisions
 
-This executable chapter uses the existing native Rust solver through its Python API. The numerical definitions live with this chapter's owner; the shared driver supplies orchestration and figures.
+This chapter runs native Rust solvers through their Python APIs. Its model and independent checks live in this directory; the shared driver in optimization-jobs adds figures and command-job execution.
 
 ## Model and decision
 
@@ -19,19 +19,19 @@ $$\max 9A+8B+7C,\qquad 6A+5B+4C\le B_0,\quad A,B,C\in\{0,1\}.$$
 
 ## Run
 
-Install the pinned solver distributions and scientific dependencies using the [shared setup](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/structured/README.md). Keep the patched repositories as sibling directories. From this repository's root:
+Install the pinned solver packages and scientific dependencies as described in the [shared setup](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/structured/README.md), with the repositories it lists cloned side by side. From this repository's root:
 
 ```bash
 python ../optimization-jobs/tutorials/structured/run.py --chapter LP1 --output /absolute/new/lp1
 ```
 
-For the owner entry point, run `python tutorials/resource-allocation/run.py --preset smoke --output /absolute/new/lp1-direct`. It produces JSON; the shared driver additionally renders PNG/SVG figures. `--preset study` selects the declared larger cases. Output may be new or empty, and an occupied directory is refused.
+To run the chapter on its own, use `python tutorials/resource-allocation/run.py --preset smoke --output /absolute/new/lp1-direct`. It produces JSON; the shared driver additionally renders PNG/SVG figures. `--preset study` runs the larger declared cases; a chapter without them repeats the smoke case. Output may be new or empty, and an occupied directory is refused.
 
 ## Independent answer and validation
 
 At budget 10 the LP value is 16.5 and A+C gives integer value 16. At budget 9, B+C gives 15 and the relaxation is integral. All eight assignments are enumerated independently. The six-project optimum is 16. The script also runs a greedy MIP start and a forced-all infeasibility case.
 
-Every run retains native status, points and available diagnostics. LP candidates are checked against row/bound/integrality requirements; SQP results retain derivative checks and independently reconstructed KKT residuals. Application-specific references are computed separately. All failures remain in the report.
+Every run keeps the native status, points and available diagnostics, and every LP candidate is checked against its rows, bounds and integrality independently of the solver. Application-specific references are computed separately. All failures remain in the report.
 
 ## Read the result
 
@@ -51,7 +51,7 @@ Change budget 10 to 9; predict the answer first. Add C <= B and explain why the 
 
 ## Provenance and limits
 
-The original plan's probes are historical planning evidence. The checked-in `results/smoke/summary.json` and figures record this implementation's executed case. Source and installed-package identities are also recorded by the shared driver. These are reproducible teaching experiments, not industrial or hardware performance certifications. Cross-formulation and cross-solver tables are descriptive.
+The checked-in `results/` record one run of each preset. The shared driver writes source and package identities to `environment.json` for the runs it makes. These are reproducible teaching experiments, not industrial or hardware performance certifications. Tables that compare formulations or solvers are descriptive.
 
 ## Recorded example
 
@@ -59,4 +59,4 @@ The original plan's probes are historical planning evidence. The checked-in `res
 
 Inspect the [complete smoke summary](results/smoke/summary.json) alongside the figure.
 
-The [study summary](results/study/summary.json) and [study figure](results/study/figure.png) retain the declared study preset separately.
+The [study summary](results/study/summary.json) and [study figure](results/study/figure.png) record the study preset.

@@ -7,7 +7,21 @@ import json
 import math
 from pathlib import Path
 import numpy as np
-from lp_ip_craft import Model, NativeOptions, Options, solve
+from lp_ip_craft import Model, NativeOptions, Options, safe_dual_bound, solve
+
+
+class CheckFailure(AssertionError):
+    """An independent tutorial check failed."""
+
+
+def require(condition, message="independent check failed"):
+    """Raise ``CheckFailure`` unless ``condition`` holds.
+
+    Tutorial checks use this instead of ``assert`` so that ``python -O`` and
+    ``PYTHONOPTIMIZE`` cannot remove them.
+    """
+    if not condition:
+        raise CheckFailure(message)
 
 
 def plain(value):
@@ -147,8 +161,8 @@ class LinearModel:
             self.check(r.candidate, relaxation) if r.candidate is not None else None
         )
         if r.status == "optimal":
-            assert record["independent"] and record["independent"]["feasible"], record
-            assert (
+            require(record["independent"] and record["independent"]["feasible"], record)
+            require(
                 abs(r.evaluation.objective - record["independent"]["objective"]) < 1e-6
             )
         return r, record
@@ -167,3 +181,22 @@ def exact_cover_bound(A, demand, prices):
         if sum(Fraction(a) * v for a, v in zip(col, y)) > 1:
             raise ValueError("dual infeasible")
     return sum(Fraction(d) * v for d, v in zip(demand, y))
+
+
+def rational_prices(values, max_denominator=1000):
+    """Rationalize solver duals; the exact checks decide whether they are valid."""
+    return [Fraction(v).limit_denominator(max_denominator) for v in values]
+
+
+def safe_bound(m, result):
+    """Binary64-safe objective bound from the solver's own LP row duals."""
+    require(result.duals is not None, "the LP result has no duals")
+    b = safe_dual_bound(m.model(relaxation=True), result.duals.row_duals)
+    require(b.status == "finite", f"no safe dual bound: {b.status}")
+    gap = (
+        result.evaluation.objective - b.bound
+        if m.sense == "minimize"
+        else b.bound - result.evaluation.objective
+    )
+    require(-1e-9 <= gap <= 1e-6 * max(1.0, abs(b.bound)), (b, gap))
+    return dict(status=b.status, bound=b.bound, gap_to_objective=gap)

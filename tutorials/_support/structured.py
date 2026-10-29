@@ -11,18 +11,37 @@ import math
 from pathlib import Path
 import sys
 import time
+import traceback
 import numpy as np
-from scipy.optimize import linprog, linear_sum_assignment
-from linear_model import LinearModel, exact_cover_bound, write
+from scipy.optimize import (
+    Bounds,
+    LinearConstraint,
+    linear_sum_assignment,
+    linprog,
+    milp,
+)
+from linear_model import (
+    LinearModel,
+    exact_cover_bound,
+    rational_prices,
+    require,
+    safe_bound,
+    write,
+)
 
 
 def optimal(m, expected=None, relaxation=False, **kw):
     r, rec = m.run(relaxation=relaxation, **kw)
-    assert r.status == "optimal", rec
+    require(r.status == "optimal", rec)
     if expected is not None:
-        assert abs(r.evaluation.objective - expected) < 1e-5, (
-            r.evaluation.objective,
-            expected,
+        require(
+            abs(r.evaluation.objective - expected) < 1e-5,
+            (
+                (
+                    r.evaluation.objective,
+                    expected,
+                )
+            ),
         )
     return r, rec
 
@@ -38,7 +57,7 @@ def allocation(preset):
             for p in itertools.product([0, 1], repeat=3)
             if sum(v * z for v, z in zip([6, 5, 4], p)) <= budget
         )
-        assert ref == expected
+        require(ref == expected)
         lp, a = optimal(m, 16.5 if budget == 10 else 15, True)
         ip, b = optimal(m, expected)
         greedy = [0, 0, 0]
@@ -48,6 +67,9 @@ def allocation(preset):
                 greedy[i] = 1
                 remaining -= [6, 5, 4][i]
         _, warm = optimal(m, expected, start=greedy)
+        fractional = m.check(lp.candidate)
+        # At budget 10 the relaxation is fractional, so it must fail the binary check.
+        require(fractional["feasible"] == (budget == 9), fractional)
         records.append(
             dict(
                 budget=budget,
@@ -57,12 +79,13 @@ def allocation(preset):
                 enumerated=ref,
                 warm_start=warm,
                 greedy=greedy,
-                fractional_binary_check=m.check(lp.candidate),
+                fractional_binary_check=fractional,
             )
         )
     m.row("force_all", {i: 1 for i in x}, lower=3)
+    require(sum([6, 5, 4]) > 9, "the forced selection fits the budget")
     r, bad = m.run()
-    assert r.status == "infeasible"
+    require(r.status == "infeasible")
     extended = LinearModel("maximize")
     costs = [6, 5, 4, 3, 2, 1]
     staff = [3, 2, 2, 2, 1, 1]
@@ -81,12 +104,12 @@ def allocation(preset):
         and z[0] + z[3] <= 1
     )
     _, ext = optimal(extended, oracle)
-    assert oracle == 16
+    require(oracle == 16)
     return dict(
         cases=records,
         infeasible=bad,
         extended=ext,
-        independent_contradiction="cost 15 exceeds budget 9",
+        independent_contradiction=f"forcing all projects costs {sum([6, 5, 4])}, above budget 9",
     )
 
 
@@ -170,14 +193,21 @@ def battery(preset):
         r, rec = optimal(m)
         x = np.array(r.candidate)
         c, d, e, g = [x[ix[k]] for k in ["charge", "discharge", "energy", "grid"]]
-        assert np.max(np.abs(np.diff(e) - 0.95 * c + d / 0.95)) < 1e-7
-        assert (
-            np.max(
-                np.abs(
-                    g + np.asarray(solar) - x[ix["curtail"]] + d - np.asarray(load) - c
+        require(np.max(np.abs(np.diff(e) - 0.95 * c + d / 0.95)) < 1e-7)
+        require(
+            (
+                np.max(
+                    np.abs(
+                        g
+                        + np.asarray(solar)
+                        - x[ix["curtail"]]
+                        + d
+                        - np.asarray(load)
+                        - c
+                    )
                 )
+                < 1e-7
             )
-            < 1e-7
         )
         replay = []
         for lf, pf in [(1.15, 1), (1, 0.75), (1.15, 0.75)]:
@@ -313,14 +343,14 @@ def sudoku(preset):
         if two:
             g[4, 2] = 0
         oracle = count_sudoku(g, 3)
-        assert len(oracle) == (2 if two else 1)
+        require(len(oracle) == (2 if two else 1))
         m, x = sudoku_model(g)
         r, a = optimal(m, 0)
         solution = np.argmax(np.array(r.candidate)[x], axis=2) + 1
-        assert any(np.array_equal(solution, z) for z in oracle)
+        require(any(np.array_equal(solution, z) for z in oracle))
         m2, _ = sudoku_model(g, solution)
         rr, b = m2.run()
-        assert rr.status == ("optimal" if two else "infeasible"), b
+        require(rr.status == ("optimal" if two else "infeasible"), b)
         records.append(
             dict(
                 two_solutions=two,
@@ -332,7 +362,7 @@ def sudoku(preset):
             )
         )
     tiny = count_sudoku(np.zeros((4, 4), int), 1000)
-    assert len(tiny) == 288
+    require(len(tiny) == 288)
     unique = tiny[0].copy()
     for r, c in itertools.product(range(4), repeat=2):
         test = unique.copy()
@@ -347,20 +377,29 @@ def sudoku(preset):
             if len(count_sudoku(test, 3)) == 2:
                 multiple = test
                 break
-    assert multiple is not None
+    require(multiple is not None)
     for g, count in [(unique, 1), (multiple, 2)]:
-        assert (
-            sum(
-                all(
-                    g[r, c] == 0 or g[r, c] == s[r, c]
-                    for r, c in itertools.product(range(4), repeat=2)
+        require(
+            (
+                sum(
+                    all(
+                        g[r, c] == 0 or g[r, c] == s[r, c]
+                        for r, c in itertools.product(range(4), repeat=2)
+                    )
+                    for s in tiny
                 )
-                for s in tiny
+                == count
             )
-            == count
         )
-        mm, _ = sudoku_model(g)
-        optimal(mm, 0)
+        mm, xx = sudoku_model(g)
+        rr, _ = optimal(mm, 0)
+        found = np.argmax(np.array(rr.candidate)[xx], axis=2) + 1
+        cut, _ = sudoku_model(g, found)
+        after, _ = cut.run()
+        # The no-good row must leave exactly the other completions.
+        require(
+            after.status == ("infeasible" if count == 1 else "optimal"), after.status
+        )
     return dict(
         shidoku_count=len(tiny),
         unique_shidoku=unique,
@@ -385,8 +424,12 @@ def rostering(preset):
 
     lp, _ = make(False)
     r, a = optimal(lp, 67 / 3)
-    bound = exact_cover_bound(A, demand, [F(1, 3), 0, F(1, 3), F(1, 3), 0, F(1, 3), 0])
-    assert bound == F(67, 3)
+    # The certificate is the solver's own duals, rationalized and then checked
+    # exactly; a wrong or merely approximate dual vector is refused.
+    prices = rational_prices(r.duals.row_duals)
+    bound = exact_cover_bound(A, demand, prices)
+    require(bound == F(67, 3), bound)
+    safe = safe_bound(lp, r)
     m, x = make(True)
     r, b = optimal(m, 23)
     m.row("minimum_headcount", {j: 1 for j in x}, lower=23, upper=23)
@@ -394,13 +437,31 @@ def rostering(preset):
     for j in x:
         m.c[j] = A[5][j] + A[6][j]
     r, c = optimal(m)
+    # Independent reference for the second objective: SciPy's HiGHS MILP.
+    weekend = np.array(m.c)
+    ref = milp(
+        weekend,
+        constraints=[
+            LinearConstraint(np.array(A), lb=demand),
+            LinearConstraint(np.ones((1, 7)), lb=23, ub=23),
+        ],
+        integrality=np.ones(7),
+        bounds=Bounds(0, 19),
+    )
+    require(ref.status == 0, ref.message)
+    require(
+        abs(r.evaluation.objective - ref.fun) < 1e-6, (r.evaluation.objective, ref.fun)
+    )
     return dict(
         demand=demand,
         coverage_matrix=A,
         lp=a,
         mip=b,
         lexicographic=c,
+        lexicographic_reference=float(ref.fun),
+        native_dual_prices=[str(v) for v in prices],
         exact_bound=str(bound),
+        safe_dual_bound=safe,
         integer_lower_bound=math.ceil(bound),
     )
 
@@ -433,7 +494,7 @@ def transport_model(carrier=False, integer=False, extra=0):
 
 def transportation(preset):
     base, x = transport_model()
-    r, a = optimal(base, 585)
+    base_r, a = optimal(base, 585)
     weak, _ = transport_model(True)
     rr, b = optimal(weak, 617)
     discrete, _ = transport_model(True, True)
@@ -448,18 +509,21 @@ def transportation(preset):
     enum = min(
         sum(A[i, p[i]] for i in range(4)) for p in itertools.permutations(range(4))
     )
-    assert enum == sum(A[row, col]) == 13
-    # Exact transport dual from the balanced equality formulation.
-    u = [2, 7, 5]
-    v = [2, 4, 6, 0]
-    assert all(
-        u[i] + v[j] <= COST[i, j] for i, j in itertools.product(range(3), range(4))
+    require(enum == sum(A[row, col]) == 13)
+    # The assignment LP through the native solver: integral without integrality.
+    am = LinearModel()
+    z = [[am.var(f"assign{i}{j}", int(A[i, j])) for j in range(4)] for i in range(4)]
+    for i in range(4):
+        am.row(f"worker{i}", {z[i][j]: 1 for j in range(4)}, lower=1, upper=1)
+        am.row(f"task{i}", {z[j][i]: 1 for j in range(4)}, lower=1, upper=1)
+    ar, assignment_lp = optimal(am, 13, True)
+    require(
+        max(abs(v - round(v)) for v in ar.candidate) <= 1e-9,
+        "the assignment LP vertex is not integral",
     )
-    assert (
-        sum(u[i] * q for i, q in enumerate([20, 30, 25]))
-        + sum(v[j] * q for j, q in enumerate([10, 25, 15, 25]))
-        == 585
-    )
+    # Bound from the solver's own duals of the solved model, binary64-safe.
+    base_bound = safe_bound(base, base_r)
+    require(abs(base_bound["bound"] - 585) < 1e-6, base_bound)
     return dict(
         costs=COST,
         base=a,
@@ -467,7 +531,9 @@ def transportation(preset):
         carrier_mip=c,
         whatif=whatif,
         assignment=enum,
-        dual_certificate=dict(plants=u, markets=v),
+        assignment_lp=assignment_lp,
+        native_duals=base_r.duals.row_duals,
+        safe_dual_bound=base_bound,
     )
 
 
@@ -489,7 +555,7 @@ def facility(preset):
                 )
             )
     reference = min(enumeration)
-    assert reference[0] == 134
+    require(reference[0] == 134)
     results = []
     for strong in [False, True]:
         m = LinearModel()
@@ -507,8 +573,12 @@ def facility(preset):
                 m.row(f"link{i}", {**{int(k): 1 for k in x[i]}, y[i]: -10}, upper=0)
         lp, a = optimal(m, 134 if strong else 87.6, True)
         ip, b = optimal(m, 134)
-        assert np.all(
-            np.array(ip.candidate)[x] <= np.array(ip.candidate)[y, None] + 1e-7
+        require(
+            (
+                np.all(
+                    np.array(ip.candidate)[x] <= np.array(ip.candidate)[y, None] + 1e-7
+                )
+            )
         )
         results.append(
             dict(strong=strong, lp=a, mip=b, sites=sites, customers=customers)
@@ -532,7 +602,10 @@ def facility(preset):
             bounds=(0, 1),
             method="highs",
         )
-        if rr.success:
+        # HiGHS status 2 means this open set cannot serve all demand; any other
+        # failure would leave the reference incomplete and is an error.
+        require(rr.status in (0, 2), (mask, rr.status, rr.message))
+        if rr.status == 0:
             best = min(best, float(rr.fun + fixed @ allowed))
     m = LinearModel()
     y = [m.var(f"open{i}", fixed[i], kind="binary") for i in range(5)]
@@ -586,13 +659,15 @@ def cutting(preset):
         history.append(dict(columns=columns.copy(), result=rec, pricing_value=price))
         if price <= 1 + 1e-8:
             break
-        assert best not in columns
+        require(best not in columns)
         columns.append(best)
     else:
         raise AssertionError("pricing did not terminate")
-    assert abs(r.evaluation.objective - 452.25) < 1e-6
-    certificate = [F(1, 2), F(1, 2), F(1, 4), F(0)]
-    assert max(sum(n * v for n, v in zip(p, certificate)) for p in allp) == 1
+    require(abs(r.evaluation.objective - 452.25) < 1e-6)
+    # Rationalize the solver's final master duals; the exact DP below decides.
+    certificate = rational_prices(r.duals.row_duals, 64)
+    require(all(v >= 0 for v in certificate), certificate)
+    require(max(sum(n * v for n, v in zip(p, certificate)) for p in allp) == 1)
     dp = [F(0)] * 101
     for capacity in range(1, 101):
         dp[capacity] = max(
@@ -603,9 +678,9 @@ def cutting(preset):
                 if w <= capacity
             ]
         )
-    assert dp[-1] == 1
+    require(dp[-1] == 1)
     bound = sum(F(d) * v for d, v in zip(demand, certificate))
-    assert bound == F(1809, 4)
+    require(bound == F(1809, 4))
     m.kinds = ["integer"] * len(m.c)
     ip, integer = optimal(m, 453)
     return dict(
@@ -632,16 +707,16 @@ def stochastic(preset):
         m.row(f"availability{i}", {s: 1, q: -1}, upper=0)
     m.c[q] += 1
     r, rec = optimal(m, 198)
-    assert abs(r.candidate[q] - 60) < 1e-6
+    require(abs(r.candidate[q] - 60) < 1e-6)
 
     def profit(q):
         return float(
             np.dot(prob, 10 * np.minimum(demand, q) + np.maximum(q - demand, 0) - 4 * q)
         )
 
-    assert abs(profit(48) - 190.8) < 1e-9
+    require(abs(profit(48) - 190.8) < 1e-9)
     ws = float(6 * np.dot(prob, demand))
-    assert ws == 288
+    require(ws == 288)
 
     def application(S):
         rng = np.random.default_rng(42)
@@ -662,6 +737,32 @@ def stochastic(preset):
                 )
         rr, record = optimal(m)
         q = np.array(rr.candidate)[initial]
+
+        # Independent reference: the sample-average profit is concave and
+        # piecewise linear in the integer-valued orders, with breakpoints at the
+        # integer demands, so an integer grid search attains its maximum.
+        def sample_average(q0, q1):
+            qq = np.array([q0, q1])
+            return float(
+                (
+                    draw * np.array([10, 12])
+                    - qq * np.array([4, 5])
+                    - np.maximum(draw - qq, 0) * np.array([8, 10])
+                    + np.maximum(qq - draw, 0)
+                )
+                .sum(axis=1)
+                .mean()
+            )
+
+        grid = max(sample_average(a, b) for a in range(81) for b in range(81 - a))
+        require(
+            abs(rr.evaluation.objective - grid) < 1e-6,
+            (rr.evaluation.objective, grid),
+        )
+        require(
+            abs(sample_average(*q) - rr.evaluation.objective) < 1e-6,
+            "the LP objective differs from the closed-form recourse at its own orders",
+        )
         hold = np.random.default_rng(314159).integers([15, 10], [66, 56], size=(128, 2))
         profits = (
             hold * np.array([10, 12])
@@ -672,6 +773,7 @@ def stochastic(preset):
         return dict(
             samples=S,
             result=record,
+            in_sample_reference=grid,
             order=q,
             holdout_mean=float(np.mean(profits)),
             holdout_profit=profits,
@@ -708,7 +810,7 @@ def spoc(preset):
     )
     triples, milli, A, selected = mod.load(path)
     baseline = mod.candidate_check(triples, milli, mod.greedy(triples, milli))
-    assert baseline["feasible"]
+    require(baseline["feasible"])
     prices = np.array(
         [
             np.max(milli[A.indices[A.indptr[i] : A.indptr[i + 1]]]) / 3
@@ -731,9 +833,21 @@ def spoc(preset):
             start="greedy",
         )
         record = mod.solve(options)
-        assert record["status"] != "exception", record.get("error")
-        if record.get("candidate") is not None:
-            assert record["candidate"]["feasible"]
+        require(record["status"] != "exception", record.get("error"))
+        candidate = record.get("candidate")
+        require(candidate is not None, "the native solve returned no candidate")
+        require(candidate["feasible"], "the native candidate is infeasible")
+        require(
+            abs(record["objective"] - candidate["objective"]) <= 1e-6,
+            "native and independently checked objectives differ",
+        )
+        require(
+            candidate["objective_milli"] <= certificate["objective_upper_milli"],
+            "the candidate exceeds the independent upper bound",
+        )
+        record["improved_on_start"] = (
+            candidate["objective_milli"] > baseline["objective_milli"]
+        )
         records.append(record)
     return dict(
         full_table_edges=len(triples),
@@ -766,7 +880,9 @@ def main(chapter=None):
     args = p.parse_args()
     if not args.chapter:
         p.error("a chapter is required")
-    if args.output.exists() and any(args.output.iterdir()):
+    if args.output.exists() and (
+        not args.output.is_dir() or any(args.output.iterdir())
+    ):
         raise FileExistsError("retain old results; choose a new output directory")
     args.output.mkdir(parents=True, exist_ok=True)
     start = time.time()
@@ -788,7 +904,14 @@ def main(chapter=None):
             )
         )
     except Exception as e:
-        write(args.output / "failure.json", dict(chapter=args.chapter, error=repr(e)))
+        write(
+            args.output / "failure.json",
+            dict(
+                chapter=args.chapter,
+                error=repr(e),
+                traceback=traceback.format_exc(),
+            ),
+        )
         raise
 
 

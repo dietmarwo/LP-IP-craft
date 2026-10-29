@@ -784,4 +784,4 @@ optimization-jobs' CI does that with all three workers.
 
 ## Structured application tutorials
 
-See [the solver-local learning sequence](tutorials/README.md). The twenty-chapter cross-repository series uses existing native numerical engines through the Python APIs. Application scripts can run through trusted command jobs using the shared CLI driver; they are not serialized callbacks or additional MCP profiles. Direct APIs expose duals and multipliers for independent checks.
+[tutorials/README.md](tutorials/README.md) lists nine application chapters (LP1–LP9). Each builds its model with `tutorials/_support/linear_model.py`, solves it with `solve(..., backend="native")` and checks every candidate independently of the solver. LP4, LP5 and LP7 also check the solver's own LP duals: rationalized prices are verified exactly, and `safe_dual_bound` gives a binary64-safe bound. Run a chapter with `python tutorials/<chapter>/run.py --output DIR`. The cross-repository driver in optimization-jobs (`tutorials/structured/`) runs all twenty chapters of the series directly or as trusted command jobs; the chapters add no job profile or worker.

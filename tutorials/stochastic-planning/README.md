@@ -1,6 +1,6 @@
 # LP8: Two-stage planning under uncertainty
 
-This executable chapter uses the existing native Rust solver through its Python API. The numerical definitions live with this chapter's owner; the shared driver supplies orchestration and figures.
+This chapter runs native Rust solvers through their Python APIs. Its model and independent checks live in this directory; the shared driver in optimization-jobs adds figures and command-job execution.
 
 ## Model and decision
 
@@ -16,19 +16,19 @@ Order $q$ units before demand is known. Purchase costs 4, sales earn 10 and left
 
 ## Run
 
-Install the pinned solver distributions and scientific dependencies using the [shared setup](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/structured/README.md). Keep the patched repositories as sibling directories. From this repository's root:
+Install the pinned solver packages and scientific dependencies as described in the [shared setup](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/structured/README.md), with the repositories it lists cloned side by side. From this repository's root:
 
 ```bash
 python ../optimization-jobs/tutorials/structured/run.py --chapter LP8 --output /absolute/new/lp8
 ```
 
-For the owner entry point, run `python tutorials/stochastic-planning/run.py --preset smoke --output /absolute/new/lp8-direct`. It produces JSON; the shared driver additionally renders PNG/SVG figures. `--preset study` selects the declared larger cases. Output may be new or empty, and an occupied directory is refused.
+To run the chapter on its own, use `python tutorials/stochastic-planning/run.py --preset smoke --output /absolute/new/lp8-direct`. It produces JSON; the shared driver additionally renders PNG/SVG figures. `--preset study` runs the larger declared cases; a chapter without them repeats the smoke case. Output may be new or empty, and an occupied directory is refused.
 
 ## Independent answer and validation
 
 The critical ratio is 2/3; order 60 yields expected profit 198. Ordering mean demand 48 yields 190.8. Perfect-information profit is 288, so VSS=7.2 and EVPI=90. The two-product model uses fixed training and disjoint holdout seeds; study runs use 8,16,32 scenarios.
 
-Every run retains native status, points and available diagnostics. LP candidates are checked against row/bound/integrality requirements; SQP results retain derivative checks and independently reconstructed KKT residuals. Application-specific references are computed separately. All failures remain in the report.
+Every run keeps the native status, points and available diagnostics, and every LP candidate is checked against its rows, bounds and integrality independently of the solver. Application-specific references are computed separately. All failures remain in the report.
 
 ## Read the result
 
@@ -48,7 +48,7 @@ Explain why the wait-and-see solution is not a realizable first-stage plan. Insp
 
 ## Provenance and limits
 
-The original plan's probes are historical planning evidence. The checked-in `results/smoke/summary.json` and figures record this implementation's executed case. Source and installed-package identities are also recorded by the shared driver. These are reproducible teaching experiments, not industrial or hardware performance certifications. Cross-formulation and cross-solver tables are descriptive.
+The checked-in `results/` record one run of each preset. The shared driver writes source and package identities to `environment.json` for the runs it makes. These are reproducible teaching experiments, not industrial or hardware performance certifications. Tables that compare formulations or solvers are descriptive.
 
 ## Recorded example
 
@@ -56,4 +56,4 @@ The original plan's probes are historical planning evidence. The checked-in `res
 
 Inspect the [complete smoke summary](results/smoke/summary.json) alongside the figure.
 
-The [study summary](results/study/summary.json) and [study figure](results/study/figure.png) retain the declared study preset separately.
+The [study summary](results/study/summary.json) and [study figure](results/study/figure.png) record the study preset.

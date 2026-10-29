@@ -4,11 +4,14 @@
 
 # LP-IP-craft — native Rust LP/MIP solver
 
-**Structured application workshops:** see the [new learning sequence](tutorials/README.md). The twenty-chapter series uses the native Rust solvers through Python, with independent checks, agent prompts and local campaign execution.
-
 Native Rust linear and mixed-integer linear optimization, with Python bindings
 and a worker for durable shell or MCP jobs. Solve statuses are numerical
 findings under tolerances; use the linked guide to check model limits.
+
+Nine [application tutorials](tutorials/README.md) (LP1–LP9) model allocation,
+battery dispatch, Sudoku, rostering, transportation, facility location,
+cutting stock, stochastic planning and the SpOC4 matching tables, each with an
+independent reference.
 
 **Choosing an optimization tool?** Start with the
 [shared solver-selection and agent guide](https://github.com/dietmarwo/optimization-jobs/blob/main/ai-context.md) or the
