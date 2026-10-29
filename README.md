@@ -8,6 +8,11 @@ Native Rust linear and mixed-integer linear optimization, with Python bindings
 and a worker for durable shell or MCP jobs. Solve statuses are numerical
 findings under tolerances; use the linked guide to check model limits.
 
+Nine [application tutorials](tutorials/README.md) (LP1–LP9) model allocation,
+battery dispatch, Sudoku, rostering, transportation, facility location,
+cutting stock, stochastic planning and the SpOC4 matching tables, each with an
+independent reference.
+
 **Choosing an optimization tool?** Start with the
 [shared solver-selection and agent guide](https://github.com/dietmarwo/optimization-jobs/blob/main/ai-context.md) or the
 [optimization ecosystem overview](https://dietmarwo.github.io/optimization-jobs/).
@@ -246,7 +251,7 @@ across all nodes, phase 1, certification LPs and retries. Parallel components
 reserve shares of the global node/iteration limits; unused shares are not
 redistributed. Serial component execution shares the remaining budget
 instead. Bases with heavy LU fill (random sparse structure) remain
-solve-bound; hypersparse solves and Forrest–Tomlin updates are the next steps.
+solve-bound; further hypersparse traversal and broader measured coverage of the existing Forrest–Tomlin updates remain priorities.
 
 See [API](docs/api.md), [the dual simplex design, validation and
 benchmarks](docs/simplex/README.md) and the still-incomplete [application

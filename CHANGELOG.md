@@ -14,12 +14,16 @@ such as (#5) are pull requests.
 
 ### Added
 
+- [Application tutorials](tutorials/README.md) LP1–LP9 (allocation, battery dispatch, Sudoku, rostering, transportation, facility location, cutting stock, stochastic planning, SpOC4 matching). Each solves with the native engine through the Python API, checks every candidate independently, compares with an exact or independent reference, and keeps recorded smoke and study results. LP4, LP5 and LP7 verify the solver's own LP duals exactly and with `safe_dual_bound`. The `structured-tutorials` workflow runs all nine chapters and compares the deterministic ones with the recorded results.
+
 - The [prompt-driven LP/MIP tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/lp-ip) chooses projects with an LP relaxation and a binary model through the existing `lp-ip-job-worker`, checks them by enumeration and keeps the deliberately infeasible case's `claimed` evidence. No numerical code or dependency pin changes.
 
 - The [prompt-driven energy tutorial](https://github.com/dietmarwo/optimization-jobs/tree/main/tutorials/agentic/energy) uses this repository's existing job worker for an independently checked one-hour dispatch LP. The larger energy simulator retains its original microlp backend.
 
 ### Changed
 
+- The README's performance paragraph no longer lists Forrest–Tomlin updates as a
+  next step; they are implemented (`crates/native/src/ft.rs`).
 - The README points to [experiment-craft](https://github.com/dietmarwo/experiment-craft),
   which runs reproducible campaigns of `lp-ip-job-worker` jobs and rebuilds and
   tests this repository at a pinned revision.

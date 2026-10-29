@@ -1,0 +1,68 @@
+name: Structured tutorials
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tutorials/**'
+      - 'crates/**'
+      - 'python/**'
+      - 'pyproject.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'benchmarks/spoc4_matching.py'
+      - 'benchmarks/spoc4-025/**'
+      - '.github/workflows/structured-tutorials.yml'
+  pull_request:
+    paths:
+      - 'tutorials/**'
+      - 'crates/**'
+      - 'python/**'
+      - 'pyproject.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'benchmarks/spoc4_matching.py'
+      - 'benchmarks/spoc4-025/**'
+      - '.github/workflows/structured-tutorials.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  chapters:
+    name: LP1-LP9 with the source-built package
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CARGO_BUILD_JOBS: '2'
+      MATURIN_PEP517_ARGS: --locked
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install this source and the reference dependencies
+        run: python -m pip install . "numpy>=1.26,<3" "scipy>=1.11,<2"
+      - name: Run each chapter and compare with its recorded summary
+        run: |
+          for chapter in resource-allocation battery-dispatch sudoku staff-rostering transportation-duals facility-location cutting-stock stochastic-planning spoc4-matching; do
+            for preset in smoke study; do
+              out="$RUNNER_TEMP/structured/$chapter-$preset"
+              python "tutorials/$chapter/run.py" --preset "$preset" --output "$out"
+              # LP9 runs under wall-clock limits, so its work counters vary.
+              if [ "$chapter" != spoc4-matching ]; then
+                python tutorials/_support/compare_results.py \
+                  "tutorials/$chapter/results/$preset/summary.json" "$out/summary.json"
+              fi
+            done
+          done
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: structured-results
+          path: ${{ runner.temp }}/structured

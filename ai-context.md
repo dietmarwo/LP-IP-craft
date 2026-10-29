@@ -781,3 +781,7 @@ optimization-jobs' CI does that with all three workers.
   the docstring
 - [AGENTS.md](AGENTS.md): short orientation and contributor commands
 - `python/lp_ip_craft/__init__.py`: Python API and defaults
+
+## Structured application tutorials
+
+[tutorials/README.md](tutorials/README.md) lists nine application chapters (LP1–LP9). Each builds its model with `tutorials/_support/linear_model.py`, solves it with `solve(..., backend="native")` and checks every candidate independently of the solver. LP4, LP5 and LP7 also check the solver's own LP duals: rationalized prices are verified exactly, and `safe_dual_bound` gives a binary64-safe bound. Run a chapter with `python tutorials/<chapter>/run.py --output DIR`. The cross-repository driver in optimization-jobs (`tutorials/structured/`) runs all twenty chapters of the series directly or as trusted command jobs; the chapters add no job profile or worker.
