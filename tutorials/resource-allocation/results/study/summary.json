@@ -1,7 +1,7 @@
 {
   "chapter": "LP1",
   "preset": "study",
-  "seconds": 0.0050661563873291016,
+  "seconds": 0.0027997493743896484,
   "result": {
     "cases": [
       {
@@ -226,10 +226,10 @@
               "diagnostics.objective_lattice": "false",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000127061,
-            "conversion_seconds": 1.3109000000000001e-05,
-            "solve_seconds": 2.5489e-05,
-            "check_seconds": 7.722e-06,
+            "total_seconds": 0.000114854,
+            "conversion_seconds": 1.2136e-05,
+            "solve_seconds": 2.3272e-05,
+            "check_seconds": 6.798e-06,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -442,10 +442,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000111067,
-            "conversion_seconds": 4.0922e-05,
-            "solve_seconds": 9.564e-06,
-            "check_seconds": 2.7582e-05,
+            "total_seconds": 8.9967e-05,
+            "conversion_seconds": 3.6033999999999994e-05,
+            "solve_seconds": 7.876e-06,
+            "check_seconds": 2.0103e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -659,10 +659,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 9.244e-05,
-            "conversion_seconds": 2.6762000000000002e-05,
-            "solve_seconds": 1.1407e-05,
-            "check_seconds": 2.1913e-05,
+            "total_seconds": 6.1604e-05,
+            "conversion_seconds": 1.8518e-05,
+            "solve_seconds": 6.648e-06,
+            "check_seconds": 1.4974e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -912,10 +912,10 @@
               "diagnostics.objective_lattice": "false",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000169115,
-            "conversion_seconds": 5.098e-06,
-            "solve_seconds": 1.0536e-05,
-            "check_seconds": 2.624e-06,
+            "total_seconds": 4.2379e-05,
+            "conversion_seconds": 3.747e-06,
+            "solve_seconds": 6.575e-06,
+            "check_seconds": 1.755e-06,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -1128,10 +1128,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000117778,
-            "conversion_seconds": 2.1182e-05,
-            "solve_seconds": 1.0256e-05,
-            "check_seconds": 2.2975000000000003e-05,
+            "total_seconds": 5.0928e-05,
+            "conversion_seconds": 1.3928e-05,
+            "solve_seconds": 4.909e-06,
+            "check_seconds": 1.4075999999999999e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -1345,10 +1345,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 7.8569e-05,
-            "conversion_seconds": 1.9699999999999998e-05,
-            "solve_seconds": 9.184e-06,
-            "check_seconds": 1.8969e-05,
+            "total_seconds": 4.5121e-05,
+            "conversion_seconds": 1.0661e-05,
+            "solve_seconds": 4.617e-06,
+            "check_seconds": 1.2975e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -1562,10 +1562,10 @@
           "singleton_removed_rows": "0",
           "numeric_threads": "1"
         },
-        "total_seconds": 7.1227e-05,
-        "conversion_seconds": 1.8899e-05,
+        "total_seconds": 4.1982e-05,
+        "conversion_seconds": 1.1024e-05,
         "solve_seconds": 0.0,
-        "check_seconds": 1.7366e-05,
+        "check_seconds": 1.1139e-05,
         "time_budget_exceeded": false
       },
       "independent": null
@@ -1776,10 +1776,10 @@
           "singleton_removed_rows": "0",
           "numeric_threads": "1"
         },
-        "total_seconds": 0.000117867,
-        "conversion_seconds": 3.5643e-05,
-        "solve_seconds": 1.9149e-05,
-        "check_seconds": 2.9885e-05,
+        "total_seconds": 8.0703e-05,
+        "conversion_seconds": 2.3544e-05,
+        "solve_seconds": 1.5761e-05,
+        "check_seconds": 1.9601e-05,
         "time_budget_exceeded": false
       },
       "independent": {
@@ -1795,7 +1795,7 @@
         ]
       }
     },
-    "independent_contradiction": "cost 15 exceeds budget 9"
+    "independent_contradiction": "forcing all projects costs 15, above budget 9"
   },
   "implementation": "native Rust solver through Python API"
 }

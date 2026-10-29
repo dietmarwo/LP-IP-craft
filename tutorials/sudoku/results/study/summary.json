@@ -1,7 +1,7 @@
 {
   "chapter": "LP3",
   "preset": "study",
-  "seconds": 0.18674254417419434,
+  "seconds": 0.20804095268249512,
   "result": {
     "shidoku_count": 288,
     "unique_shidoku": [
@@ -1511,10 +1511,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.00132248,
-            "conversion_seconds": 0.001126184,
-            "solve_seconds": 4.937e-06,
-            "check_seconds": 8.889299999999999e-05,
+            "total_seconds": 0.001134472,
+            "conversion_seconds": 0.000906234,
+            "solve_seconds": 1.1177e-05,
+            "check_seconds": 9.7302e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -2037,10 +2037,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.001777745,
-            "conversion_seconds": 0.00141607,
-            "solve_seconds": 9.454000000000001e-06,
-            "check_seconds": 2.0461e-05,
+            "total_seconds": 0.001387857,
+            "conversion_seconds": 0.001076327,
+            "solve_seconds": 9.218e-06,
+            "check_seconds": 2.3688e-05,
             "time_budget_exceeded": false
           },
           "independent": null
@@ -3502,10 +3502,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.016707084,
-            "conversion_seconds": 0.0015960059999999992,
-            "solve_seconds": 0.0005357999999999982,
-            "check_seconds": 0.00035256199999999973,
+            "total_seconds": 0.020942046,
+            "conversion_seconds": 0.0013615479999999998,
+            "solve_seconds": 0.0003975109999999994,
+            "check_seconds": 0.00046523600000000006,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -5091,10 +5091,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.001277242,
-            "conversion_seconds": 0.001069349,
-            "solve_seconds": 7.982e-06,
-            "check_seconds": 9.6926e-05,
+            "total_seconds": 0.001403063,
+            "conversion_seconds": 0.001159054,
+            "solve_seconds": 1.1949e-05,
+            "check_seconds": 0.00010993299999999999,
             "time_budget_exceeded": false
           },
           "independent": {

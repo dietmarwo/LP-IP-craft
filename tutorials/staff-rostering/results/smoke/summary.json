@@ -1,7 +1,7 @@
 {
   "chapter": "LP4",
   "preset": "smoke",
-  "seconds": 0.001743316650390625,
+  "seconds": 0.007864713668823242,
   "result": {
     "demand": [
       17,
@@ -270,10 +270,10 @@
           "diagnostics.objective_lattice": "false",
           "numeric_threads": "1"
         },
-        "total_seconds": 0.000110717,
-        "conversion_seconds": 1.0586e-05,
-        "solve_seconds": 3.4432e-05,
-        "check_seconds": 6.36e-06,
+        "total_seconds": 0.000140246,
+        "conversion_seconds": 1.8549e-05,
+        "solve_seconds": 3.9442e-05,
+        "check_seconds": 7.623e-06,
         "time_budget_exceeded": false
       },
       "independent": {
@@ -502,10 +502,10 @@
           "singleton_removed_rows": "0",
           "numeric_threads": "1"
         },
-        "total_seconds": 0.000131528,
-        "conversion_seconds": 3.2429e-05,
-        "solve_seconds": 2.033e-05,
-        "check_seconds": 4.9995e-05,
+        "total_seconds": 0.00011917,
+        "conversion_seconds": 3.6734e-05,
+        "solve_seconds": 2.2594e-05,
+        "check_seconds": 2.8948e-05,
         "time_budget_exceeded": false
       },
       "independent": {
@@ -735,10 +735,10 @@
           "singleton_removed_rows": "0",
           "numeric_threads": "1"
         },
-        "total_seconds": 9.1587e-05,
-        "conversion_seconds": 2.3274e-05,
-        "solve_seconds": 2.2715e-05,
-        "check_seconds": 1.9238e-05,
+        "total_seconds": 8.7513e-05,
+        "conversion_seconds": 2.1777e-05,
+        "solve_seconds": 2.122e-05,
+        "check_seconds": 1.9144000000000002e-05,
         "time_budget_exceeded": false
       },
       "independent": {
@@ -758,7 +758,22 @@
         ]
       }
     },
+    "lexicographic_reference": 27.0,
+    "native_dual_prices": [
+      "1/3",
+      "0",
+      "1/3",
+      "1/3",
+      "0",
+      "1/3",
+      "0"
+    ],
     "exact_bound": "67/3",
+    "safe_dual_bound": {
+      "status": "finite",
+      "bound": 22.333333333333265,
+      "gap_to_objective": 6.750155989720952e-14
+    },
     "integer_lower_bound": 23
   },
   "implementation": "native Rust solver through Python API"

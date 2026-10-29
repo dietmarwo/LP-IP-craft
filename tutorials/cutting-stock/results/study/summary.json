@@ -1,7 +1,7 @@
 {
   "chapter": "LP7",
   "preset": "study",
-  "seconds": 0.0029685497283935547,
+  "seconds": 0.002418041229248047,
   "result": {
     "widths": [
       45,
@@ -260,10 +260,10 @@
               "singleton_removed_rows": "2",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000102874,
-            "conversion_seconds": 1.5142000000000002e-05,
-            "solve_seconds": 2.009e-05,
-            "check_seconds": 2.2964e-05,
+            "total_seconds": 0.000119071,
+            "conversion_seconds": 1.9369e-05,
+            "solve_seconds": 2.2439e-05,
+            "check_seconds": 2.3466999999999997e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -533,10 +533,10 @@
               "singleton_removed_rows": "1",
               "numeric_threads": "1"
             },
-            "total_seconds": 5.4261e-05,
-            "conversion_seconds": 5.719e-06,
-            "solve_seconds": 1.0515e-05,
-            "check_seconds": 1.6185000000000002e-05,
+            "total_seconds": 6.4316e-05,
+            "conversion_seconds": 7.799000000000001e-06,
+            "solve_seconds": 1.1838e-05,
+            "check_seconds": 1.9228e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -814,10 +814,10 @@
               "singleton_removed_rows": "1",
               "numeric_threads": "1"
             },
-            "total_seconds": 5.987e-05,
-            "conversion_seconds": 6.811e-06,
-            "solve_seconds": 1.1136e-05,
-            "check_seconds": 1.7397e-05,
+            "total_seconds": 5.6433e-05,
+            "conversion_seconds": 6.503e-06,
+            "solve_seconds": 9.887e-06,
+            "check_seconds": 1.6512e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -1042,10 +1042,10 @@
           "singleton_removed_rows": "1",
           "numeric_threads": "1"
         },
-        "total_seconds": 8.5128e-05,
-        "conversion_seconds": 2.8413e-05,
-        "solve_seconds": 1.0556e-05,
-        "check_seconds": 2.2475e-05,
+        "total_seconds": 9.1171e-05,
+        "conversion_seconds": 3.1103e-05,
+        "solve_seconds": 1.0021e-05,
+        "check_seconds": 2.5149e-05,
         "time_budget_exceeded": false
       },
       "independent": {

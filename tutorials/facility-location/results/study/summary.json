@@ -1,7 +1,7 @@
 {
   "chapter": "LP6",
   "preset": "study",
-  "seconds": 0.040241241455078125,
+  "seconds": 0.04216480255126953,
   "result": {
     "reference": [
       134.0,
@@ -321,10 +321,10 @@
               "diagnostics.objective_lattice": "false",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000124547,
-            "conversion_seconds": 1.324e-05,
-            "solve_seconds": 4.0701e-05,
-            "check_seconds": 9.484e-06,
+            "total_seconds": 0.000169265,
+            "conversion_seconds": 1.967e-05,
+            "solve_seconds": 4.8263e-05,
+            "check_seconds": 1.1614e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -617,10 +617,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000449265,
-            "conversion_seconds": 8.0612e-05,
-            "solve_seconds": 0.00020129400000000003,
-            "check_seconds": 0.000132948,
+            "total_seconds": 0.000565516,
+            "conversion_seconds": 0.00010098099999999999,
+            "solve_seconds": 0.00025839200000000003,
+            "check_seconds": 0.00016647499999999997,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -1109,10 +1109,10 @@
               "diagnostics.objective_lattice": "false",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000110035,
-            "conversion_seconds": 9.123e-06,
-            "solve_seconds": 5.4391e-05,
-            "check_seconds": 8.083e-06,
+            "total_seconds": 0.000216198,
+            "conversion_seconds": 1.1195e-05,
+            "solve_seconds": 0.000139585,
+            "check_seconds": 9.833e-06,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -1495,10 +1495,10 @@
               "singleton_removed_rows": "0",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000196275,
-            "conversion_seconds": 8.7361e-05,
-            "solve_seconds": 5.1708e-05,
-            "check_seconds": 2.5519e-05,
+            "total_seconds": 0.000195777,
+            "conversion_seconds": 6.9462e-05,
+            "solve_seconds": 5.9584e-05,
+            "check_seconds": 3.0758e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -1954,10 +1954,10 @@
             "singleton_removed_rows": "0",
             "numeric_threads": "1"
           },
-          "total_seconds": 0.000394012,
-          "conversion_seconds": 9.8789e-05,
-          "solve_seconds": 0.000111778,
-          "check_seconds": 0.00013917900000000002,
+          "total_seconds": 0.000491314,
+          "conversion_seconds": 0.000142779,
+          "solve_seconds": 0.000128225,
+          "check_seconds": 0.00016314600000000003,
           "time_budget_exceeded": false
         },
         "independent": {

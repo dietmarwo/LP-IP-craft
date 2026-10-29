@@ -1,7 +1,7 @@
 {
   "chapter": "LP8",
   "preset": "study",
-  "seconds": 0.006186723709106445,
+  "seconds": 0.10912704467773438,
   "result": {
     "scenarios": [
       20,
@@ -204,10 +204,10 @@
           "diagnostics.objective_lattice": "false",
           "numeric_threads": "1"
         },
-        "total_seconds": 0.000136025,
-        "conversion_seconds": 1.5533e-05,
-        "solve_seconds": 2.9084e-05,
-        "check_seconds": 9.294e-06,
+        "total_seconds": 0.000133003,
+        "conversion_seconds": 1.7412e-05,
+        "solve_seconds": 3.2906e-05,
+        "check_seconds": 9.932e-06,
         "time_budget_exceeded": false
       },
       "independent": {
@@ -531,10 +531,10 @@
               "diagnostics.objective_lattice": "false",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000129304,
-            "conversion_seconds": 1.2659e-05,
-            "solve_seconds": 5.1087e-05,
-            "check_seconds": 1.1207e-05,
+            "total_seconds": 9.7123e-05,
+            "conversion_seconds": 9.04e-06,
+            "solve_seconds": 3.9822e-05,
+            "check_seconds": 7.323e-06,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -563,6 +563,7 @@
             ]
           }
         },
+        "in_sample_reference": 427.375,
         "order": [
           35.0,
           45.0
@@ -1128,10 +1129,10 @@
               "diagnostics.objective_lattice": "false",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000175224,
-            "conversion_seconds": 1.3931000000000001e-05,
-            "solve_seconds": 9.1918e-05,
-            "check_seconds": 1.5142e-05,
+            "total_seconds": 0.00017986,
+            "conversion_seconds": 1.8324999999999998e-05,
+            "solve_seconds": 8.3693e-05,
+            "check_seconds": 1.4174e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -1176,6 +1177,7 @@
             ]
           }
         },
+        "in_sample_reference": 409.4375,
         "order": [
           40.0,
           40.0
@@ -1997,10 +1999,10 @@
               "diagnostics.objective_lattice": "false",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000374342,
-            "conversion_seconds": 2.2043999999999998e-05,
-            "solve_seconds": 0.000271177,
-            "check_seconds": 2.4437e-05,
+            "total_seconds": 0.000357026,
+            "conversion_seconds": 2.3698e-05,
+            "solve_seconds": 0.000220359,
+            "check_seconds": 4.0806e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -2077,6 +2079,7 @@
             ]
           }
         },
+        "in_sample_reference": 405.71875,
         "order": [
           41.0,
           39.0

@@ -1,7 +1,7 @@
 {
   "chapter": "LP8",
   "preset": "smoke",
-  "seconds": 0.0018129348754882812,
+  "seconds": 0.034967660903930664,
   "result": {
     "scenarios": [
       20,
@@ -204,10 +204,10 @@
           "diagnostics.objective_lattice": "false",
           "numeric_threads": "1"
         },
-        "total_seconds": 0.000109264,
-        "conversion_seconds": 1.0777e-05,
-        "solve_seconds": 2.7872e-05,
-        "check_seconds": 6.339e-06,
+        "total_seconds": 0.000138797,
+        "conversion_seconds": 1.6595e-05,
+        "solve_seconds": 3.8665e-05,
+        "check_seconds": 7.758e-06,
         "time_budget_exceeded": false
       },
       "independent": {
@@ -531,10 +531,10 @@
               "diagnostics.objective_lattice": "false",
               "numeric_threads": "1"
             },
-            "total_seconds": 0.000282034,
-            "conversion_seconds": 0.00019234900000000002,
-            "solve_seconds": 3.9069e-05,
-            "check_seconds": 7.221e-06,
+            "total_seconds": 0.000114791,
+            "conversion_seconds": 9.389000000000001e-06,
+            "solve_seconds": 4.749e-05,
+            "check_seconds": 1.0889e-05,
             "time_budget_exceeded": false
           },
           "independent": {
@@ -563,6 +563,7 @@
             ]
           }
         },
+        "in_sample_reference": 427.375,
         "order": [
           35.0,
           45.0
