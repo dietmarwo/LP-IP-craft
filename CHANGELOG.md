@@ -23,8 +23,8 @@ such as (#5) are pull requests.
 - The README points to [experiment-craft](https://github.com/dietmarwo/experiment-craft),
   which runs reproducible campaigns of `lp-ip-job-worker` jobs and rebuilds and
   tests this repository at a pinned revision.
-- optimization-jobs pin `8b4489d` (after tag `v0.3.0`; the crates are still
-  0.3.0) in the manifest and the lockfile. The runner gains `node
+- optimization-jobs pin `602d31a` (its 0.4.0 release, so the
+  job crates are 0.4.0) in the manifest and the lockfile. The runner gains `node
   capabilities`, `jobs execution JOB_ID` (an execution record of how each
   job's worker process ended), opt-in trusted command jobs with verified
   binary file transfer, and explicitly placed jobs on SSH nodes with persisted
