@@ -12,6 +12,10 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+### Documentation
+
+- Linked the CFD source-allocation LP and sensor-coverage MIP tutorials from the tutorial index; their independent validation remains simulator-owned.
+
 ### Added
 
 - [Application tutorials](tutorials/README.md) LP1–LP9 (allocation, battery dispatch, Sudoku, rostering, transportation, facility location, cutting stock, stochastic planning, SpOC4 matching). Each solves with the native engine through the Python API, checks every candidate independently, compares with an exact or independent reference, and keeps recorded smoke and study results. LP4, LP5 and LP7 verify the solver's own LP duals exactly and with `safe_dual_bound`. The `structured-tutorials` workflow runs all nine chapters and compares the deterministic ones with the recorded results.
