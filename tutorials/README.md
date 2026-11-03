@@ -17,3 +17,7 @@ Each chapter is a Python script that builds a model, solves it with the native s
 [LP10: rail formulation](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/rail-formulation/README.md).
 
 The [shared setup](https://github.com/dietmarwo/optimization-jobs/blob/main/tutorials/structured/README.md) in optimization-jobs runs the whole twenty-chapter series (LP, SQP, fcmaes and cross-solver chapters) directly or as trusted command jobs. The [job API tutorial](job-api/README.md) shows the `lp-ip-job-worker` profiles.
+
+## CFD applications
+
+[CFD F1](https://github.com/dietmarwo/CFD-craft/blob/main/tutorials/optimization/F1-allocation.md) exposes a linear source-response matrix and compares native LP with BiteOpt/GP on the same bounds. [CFD F2](https://github.com/dietmarwo/CFD-craft/blob/main/tutorials/optimization/F2-sensors.md) solves a bounded sensor-coverage MIP, checks all twenty three-sensor subsets, and separately tests source identifiability. Both use this repository's native Python API and simulator-owned validation.
