@@ -23,6 +23,7 @@ such as (#5) are pull requests.
 
 ### Changed
 
+- README: links the [overview of the 18 related repositories](https://github.com/dietmarwo/fcmaes-rust/blob/main/docs/repositories.md).
 - The README's performance paragraph no longer lists Forrest–Tomlin updates as a
   next step; they are implemented (`crates/native/src/ft.rs`).
 - The README points to [experiment-craft](https://github.com/dietmarwo/experiment-craft),

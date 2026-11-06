@@ -4,6 +4,8 @@
 
 # LP-IP-craft — native Rust LP/MIP solver
 
+> **One of 18 related repositories.** The [repository overview](https://github.com/dietmarwo/fcmaes-rust/blob/main/docs/repositories.md) shows what each one does and how they connect.
+
 Native Rust linear and mixed-integer linear optimization, with Python bindings
 and a worker for durable shell or MCP jobs. Solve statuses are numerical
 findings under tolerances; use the linked guide to check model limits.
