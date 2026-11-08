@@ -47,6 +47,15 @@ such as (#5) are pull requests.
   a nested `else { if … }` in the LU `btran` is collapsed. Results are
   unchanged.
 
+### Fixed
+
+- Documentation errors:
+  - `ai-context.md` said the MCP server has thirteen tools; the pinned optimization-jobs server has fifteen, including `get_guide` and `put_input`.
+  - `docs/api.md` said the branching score is the pseudocost product (the default is `weighted_sum`), that column replacements are eta updates (the default `auto` chooses Forrest–Tomlin or eta) and that triangular solves are never sparse.
+  - Its "Deliberate limits" listed cuts, strong branching, MIP presolve and tree parallelism as absent.
+  - The README called 0.28.0 the current version.
+  - The rust-solvers benchmark commands pointed at `target/release/solvercmp`, but the crate's own workspace builds `benchmarks/rust-solvers/target/release/solvercmp`.
+
 ## [0.29.0] - 2026-10-22
 
 The first release on PyPI (`lp-ip-craft`) and crates.io (`lp-ip-craft`,

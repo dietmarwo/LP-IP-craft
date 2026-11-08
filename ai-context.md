@@ -431,9 +431,9 @@ with `lp-ip.evaluate/1`. `--bin-dir` selects the binaries (default
 `result`, are in the guide.
 
 Agents can drive the same jobs through `optimization-mcp`, the MCP server
-that the runner's build also makes. Its thirteen tools describe the node and
-its workers; validate, submit, wait for, cancel, kill and repair jobs; and
-read results, events and artifacts. With the MCP Tasks extension, a submitted
+that the runner's build also makes. Its fifteen tools serve the guide;
+describe the node and its workers; validate jobs, stage inputs, submit, wait
+for, cancel, kill and repair jobs; and read results, events and artifacts. With the MCP Tasks extension, a submitted
 job is a task that completes with its result. Initialize the node and
 register the worker with `optimization-run` first: the server cannot
 register workers or change the node. Then connect a client, for example
