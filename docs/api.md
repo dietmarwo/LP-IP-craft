@@ -68,8 +68,11 @@ are in [simplex/README.md](simplex/README.md); in brief:
 - **Factorization.** Markowitz pivot search with threshold 0.1 over row and
   column count buckets, switching to dense partial-pivoting elimination once
   the active submatrix reaches 30% density. L and U are stored by pivot and
-  transposed, so both triangular solves skip zeros. Column replacements are
-  product-form (eta) updates; a singular basis is repaired by logicals.
+  transposed, so both triangular solves skip zeros, and a bounded symbolic
+  reach makes them sparse when the right-hand side is. Column replacements
+  follow `basis_update`: Forrest–Tomlin row updates or a product-form (eta)
+  file, chosen adaptively by the default `auto`; a singular basis is repaired
+  by logicals.
 - **Iteration.** Dual steepest-edge pricing, the tableau row from
   `ρ = B⁻ᵀ e_r` with a row-wise matrix copy, a bound-flipping ratio test with
   Harris tolerances, and a row/column consistency check that forces a
@@ -110,8 +113,10 @@ column is boxed. A snapshot that differs from the current basis in at most 16
 positions (within the refactor interval) is reached by eta updates instead of
 a refactorization.
 
-The branching variable maximizes the product of pseudocost estimates (down
-and up degradation per unit, learned from every solved child), with most
+The branching variable maximizes a pseudocost score over the down and up
+degradation per unit, learned from every solved child: by default the
+weighted sum 0.8·min + 0.2·max (`branching_score="weighted_sum"`; `"product"`
+is opt-in), with most
 fractional as the rule until the first child is solved. If rounding an
 integral-looking LP point cannot be certified feasible, a smaller fractional
 split is tried when both children strictly restrict the integer domain.
@@ -202,11 +207,13 @@ belongs to the solve phase.
 
 ## Deliberate limits
 
-No cuts, strong branching, basis import/export, parallel search within a
-connected tree, advanced presolve or MIP relative-gap stop. MIPs require
+No basis import/export or MIP relative-gap stop. Cuts, strong branching,
+parallel search within a connected tree and MIP presolve were added after this
+section was first written (see the sections below and the option table in
+[ai-context.md](../ai-context.md)); all but MIP presolve are opt-in. MIPs require
 finite variable bounds of magnitude <=2^53-1, including continuous columns.
-Triangular solves use dense work vectors of the row dimension (no
-hypersparse solves), and product-form updates store dense eta columns when
+Triangular solves use dense work vectors of the row dimension, and
+product-form updates store dense eta columns when
 `B⁻¹` is dense; bases with heavy LU fill are solve-bound. `max_factor_entries`
 is an engineering guard, not a whole-process memory cap: matrix copies, work
 vectors, the open-node queue and basis snapshots need additional memory. No
@@ -274,7 +281,7 @@ mixed = solve_batch(models, workers=2, options=Options(threads=4))
 
 Rust uses the same `Options { threads:8, ..Default::default() }` and `solver.solve_batch(&model_refs, &options, workers, &cancel)` contracts. Mixed numerical batches require outer × inner ≤ 8. The legacy serial-inner outer limit remains 16. Results/errors retain input order. Models are borrowed; worker-local numerical state is not shared. Numeric resources stay owned for the batch, while per-job deadlines begin at each solve; batch setup belongs to whole-batch workflow time.
 
-A width is a maximum. Small/sparse work can use scalar paths; compatible simultaneous owners share a pool, so a mixed product need not be fully busy. For packing neighborhoods use numerical width 1 plus packing_workers8; numerical width 8 selects within-root/kernel work and serializes outer repair/tree/component execution. No Python callback is introduced and the GIL remains released during native work. Independent callers must manage their combined budgets.
+A width is a maximum. Small/sparse work can use scalar paths; compatible simultaneous owners share a pool, so a mixed product need not be fully busy. For packing neighborhoods use numerical width 1 plus packing_workers=8; numerical width 8 selects within-root/kernel work and serializes outer repair/tree/component execution. No Python callback is introduced and the GIL remains released during native work. Independent callers must manage their combined budgets.
 
 Large structural reduced-cost/column-pricing outputs, retained dense Schur rows and independent packing primal-dual root phases can run in parallel. Scalar within-output operation order and ordered merges are preserved. Sparse Markowitz pivot selection, factor/triangular dependencies, dual-bound certification and acceptance checks remain ordered. Worker setup is charged to a direct solve deadline; pre-cancelled/expired calls skip unnecessary resources. Validation remains ahead of cancellation. See [validity](parallel-028/VALIDITY.md) and [reproduction](parallel-028/REPRODUCE.md).
 

@@ -69,7 +69,7 @@ and the other structured solver, then explains library, shell and MCP use.
 
 > Native 0.17 performance update: ten measured iterations add integral row strengthening, short-row integer propagation, a direct box-LP path, reachability-based sparse triangular solves, sparse eta work and adaptive refactorization. See [the iteration plans](docs/performance-ten/ITERATIONS.md) and [the complete results](docs/performance-ten/RESULTS.md). The core and native solver remain dependency-free Rust.
 
-Version **0.28.0** extends the 0.16 architecture, which replaced both 0.15
+Version **0.29.0** (numerically unchanged since 0.28.0) extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine

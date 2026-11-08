@@ -8,9 +8,9 @@ The development list has eight MIPs plus avgas, a continuous LP control. Frozen 
 
 ```bash
 cargo build --release --manifest-path benchmarks/rust-solvers/Cargo.toml --locked
-python benchmarks/rust-solvers/run.py --binary target/release/solvercmp --seconds 10 --policies presolve gmi mir combined heuristics branch-product branch-clamped --solvers native ripsolve highs --output docs/ripsolve-027/data/public.json
-LPIP_COMPARE_NODES=1000000 LPIP_COMPARE_PIVOTS=10000000 python benchmarks/rust-solvers/run.py --binary target/release/solvercmp --seconds 60 --policies combined heuristics --solvers native ripsolve highs --output docs/ripsolve-027/data/public-60s.json
-python benchmarks/rust-solvers/run.py --binary target/release/solvercmp --seconds 60 --policies serial --solvers ripsolve --output docs/ripsolve-027/data/ripsolve-serial.json
+python benchmarks/rust-solvers/run.py --binary benchmarks/rust-solvers/target/release/solvercmp --seconds 10 --policies presolve gmi mir combined heuristics branch-product branch-clamped --solvers native ripsolve highs --output docs/ripsolve-027/data/public.json
+LPIP_COMPARE_NODES=1000000 LPIP_COMPARE_PIVOTS=10000000 python benchmarks/rust-solvers/run.py --binary benchmarks/rust-solvers/target/release/solvercmp --seconds 60 --policies combined heuristics --solvers native ripsolve highs --output docs/ripsolve-027/data/public-60s.json
+python benchmarks/rust-solvers/run.py --binary benchmarks/rust-solvers/target/release/solvercmp --seconds 60 --policies serial --solvers ripsolve --output docs/ripsolve-027/data/ripsolve-serial.json
 python benchmarks/rust-solvers/plain_lp.py --output docs/ripsolve-027/data/plain-lp.json
 python benchmarks/rust-solvers/summarize.py
 ```
