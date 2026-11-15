@@ -1,0 +1,30 @@
+name: Documentation site
+
+# Builds the pages listed in book/SUMMARY.md with the workflow shared through
+# optimization-jobs (its docs/shared-workflows.md). The site is deployed to
+# GitHub Pages only from main, and only when the repository variable
+# PUBLISH_DOCS_SITE is "true".
+on:
+  pull_request:
+    paths: ['**.md', 'book/**', 'docs/**', 'tutorials/**', '.github/workflows/docs.yml']
+  push:
+    branches: [main]
+    paths: ['**.md', 'book/**', 'docs/**', 'tutorials/**', '.github/workflows/docs.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    uses: dietmarwo/optimization-jobs/.github/workflows/docs-site.yml@main
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    with:
+      publish: ${{ vars.PUBLISH_DOCS_SITE == 'true' }}
