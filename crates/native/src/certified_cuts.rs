@@ -767,8 +767,8 @@ pub(crate) fn separate(
                 }
                 let a = model.matrix();
                 let mut divisors = vec![1.];
-                for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
-                    let c = a.values[k].abs();
+                for &value in &a.values[a.pattern.indptr[i]..a.pattern.indptr[i + 1]] {
+                    let c = value.abs();
                     if c > 1e-6 && !divisors.contains(&c) {
                         divisors.push(c);
                     }

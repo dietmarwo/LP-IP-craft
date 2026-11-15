@@ -119,8 +119,8 @@ impl Nat {
         debug_assert!(self.cmp(b) != Ordering::Less);
         let mut v = Vec::new();
         let mut borrow = 0i64;
-        for i in 0..self.0.len() {
-            let x = i64::from(self.0[i]) - i64::from(*b.0.get(i).unwrap_or(&0)) - borrow;
+        for (i, &limb) in self.0.iter().enumerate() {
+            let x = i64::from(limb) - i64::from(*b.0.get(i).unwrap_or(&0)) - borrow;
             v.push(x as u32);
             borrow = i64::from(x < 0);
         }
