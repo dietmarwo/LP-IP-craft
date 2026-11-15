@@ -21,11 +21,10 @@ concurrency:
 
 jobs:
   site:
-    uses: dietmarwo/optimization-jobs/.github/workflows/docs-site.yml@ci/shared-workflows
+    uses: dietmarwo/optimization-jobs/.github/workflows/docs-site.yml@main
     permissions:
       contents: read
       pages: write
       id-token: write
     with:
       publish: ${{ vars.PUBLISH_DOCS_SITE == 'true' }}
-      tools-ref: ci/shared-workflows
