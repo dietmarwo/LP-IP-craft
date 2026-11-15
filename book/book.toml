@@ -1,0 +1,21 @@
+[book]
+title = "LP-IP-craft"
+description = "Native Rust LP/MIP solver with Python bindings: API, tutorials and the job interface"
+language = "en"
+src = "src"
+
+[build]
+# Every SUMMARY.md entry must have a file. Never create pages implicitly.
+create-missing = false
+
+[output.html]
+site-url = "/LP-IP-craft/"
+git-repository-url = "https://github.com/dietmarwo/LP-IP-craft"
+mathjax-support = true
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.print]
+enable = false

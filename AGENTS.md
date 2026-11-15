@@ -34,6 +34,19 @@ python3 tutorials/job-api/run.py --root /tmp/lp-ip-job-tutorial
 The complete CI list, with the shared job harness, is in
 [ai-context.md](ai-context.md#test-commands) and `.github/workflows/`.
 
+## Documentation site
+
+`book/SUMMARY.md` lists the pages that the documentation site renders; plans,
+logs and evidence are linked to GitHub instead. A new user-facing page needs an
+entry there. The build and its link checks come from optimization-jobs
+([shared workflows](https://github.com/dietmarwo/optimization-jobs/blob/main/docs/shared-workflows.md));
+with `mdbook` on the path and a sibling optimization-jobs checkout:
+
+```sh
+python ../optimization-jobs/scripts/check_markdown_links.py --root . --exclude book
+python ../optimization-jobs/scripts/build_docs_site.py --repo .   # target/docs-site/book
+```
+
 ## Conventions
 
 - MSRV: Rust 1.85 for the numerical crates and the Python crate (CI checks
