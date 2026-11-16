@@ -11,7 +11,7 @@ server (#18), and bounds and gaps published only for the point an outcome
 shows (#19); #20 moved the pin to `6a42472` and the release preparation to
 `423cd87`, which add worker-declared artifacts and paged artifact reads
 (`get_artifact` with `offset` and `limit` also pages through the `results`
-journal of a running job); the pin is now `12f9d57` (the optimization-jobs 0.4.0 release `602d31a` plus documentation: doc comments on every public item, and a simulator section and corrections in the guide that `get_guide` serves); 0.4.0 adds
+journal of a running job); the pin is now `78970a2` (tag `v0.4.1`, the optimization-jobs 0.4.1 release: doc comments on every public item and a current guide behind `get_guide`, with job and worker protocols as in 0.4.0); 0.4.0 adds
 `node capabilities`, `jobs execution JOB_ID`, opt-in trusted local command
 jobs with verified binary file transfer, and explicitly placed jobs on SSH
 nodes, all through the CLI; `37b30e4` (tag `v0.3.0`)
@@ -62,8 +62,8 @@ crates.io with the same version. Check the registries for the latest
 version before relying on it ([RELEASING.md](RELEASING.md)); the worker
 stays source-only. For Rust, the
 job worker or changes after the latest release, use a checkout
-of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.29.0;
-the shared job crates are 0.4.0. Profile names such as `lp-ip.solve/1` are protocol
+of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.30.0;
+the shared job crates are 0.4.1. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
 
 Toolchains:
@@ -143,8 +143,7 @@ Prefer another tool when:
   bounds and whose bounds root inference cannot derive (it runs only with
   `presolve` on): native returns `Unsupported` (LPs may have infinite
   bounds);
-- the user needs a relative-gap stopping rule: there is no MIP gap stop; use
-  node, iteration or time limits and report the gap.
+- a positive MIP gap stop must run in specialized packing or a split parallel tree: these paths reject it. The general search supports both absolute and relative limits.
 
 ## Choose the integration surface
 
@@ -263,8 +262,7 @@ independent check. The README's 0.20–0.28 sections and
 [docs/api.md](docs/api.md) describe each mechanism and its measured gains and
 regressions. The "Deliberate limits" paragraph of docs/api.md predates several
 of these options (cuts, strong branching, MIP presolve, tree workers); its
-remaining limits, such as no basis import or export and no MIP relative-gap
-stop, still hold.
+remaining limits, such as no basis import or export, still hold. Since 0.30.0 the general MIP search has optional gap stops.
 
 ### In process or as a job
 
@@ -785,3 +783,7 @@ optimization-jobs' CI does that with all three workers.
 ## Structured application tutorials
 
 [tutorials/README.md](tutorials/README.md) lists nine application chapters (LP1–LP9). Each builds its model with `tutorials/_support/linear_model.py`, solves it with `solve(..., backend="native")` and checks every candidate independently of the solver. LP4, LP5 and LP7 also check the solver's own LP duals: rationalized prices are verified exactly, and `safe_dual_bound` gives a binary64-safe bound. Run a chapter with `python tutorials/<chapter>/run.py --output DIR`. The cross-repository driver in optimization-jobs (`tutorials/structured/`) runs all twenty chapters of the series directly or as trusted command jobs; the chapters add no job profile or worker.
+
+## Optional MIP gap stops (since 0.30.0)
+
+`NativeOptions` and `lp-ip.solve/1` accept `mip_relative_gap` and `mip_absolute_gap`, both off by default. The general MIP search stops when either positive limit is met against a known global bound. `gap_limit` retains a checked feasible point and a gap, with no optimality claim. Zero requests complete search; LPs ignore these controls. Relative gaps include the objective offset and use the incumbent's magnitude; at zero objective use an absolute limit. Gap-limited separable MIPs run whole. Positive limits with specialized packing or split-tree controls are rejected, never ignored. See [API](docs/api.md#mip-gap-stopping-since-0300) and [evidence](docs/benchmarks/gap-limits/README.md).

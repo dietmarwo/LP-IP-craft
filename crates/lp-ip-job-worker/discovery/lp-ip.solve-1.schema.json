@@ -61,6 +61,18 @@
     "presolve": {
       "description": "Native master switch; false skips the whole root stage, so a MIP then needs finite bounds as given.",
       "type": "boolean"
+    },
+    "mip_relative_gap": {
+      "description": "Stop a MIP once |incumbent - bound| / |incumbent| is at most this value; ends with gap_limit and a feasible claim, never optimal. Null or 0 searches to completion; LPs ignore it.",
+      "type": ["number", "null"],
+      "minimum": 0,
+      "default": null
+    },
+    "mip_absolute_gap": {
+      "description": "Stop a MIP once |incumbent - bound| is at most this value, in objective units; ends with gap_limit and a feasible claim, never optimal. Null or 0 searches to completion; LPs ignore it.",
+      "type": ["number", "null"],
+      "minimum": 0,
+      "default": null
     }
   }
 }

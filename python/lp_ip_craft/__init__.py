@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 from ._native import solve_batch_native as _solve_batch_native
 
-__version__ = "0.29.0"
+__version__ = "0.30.0"
 
 __all__ = [
     "BACKENDS",
@@ -71,6 +71,7 @@ Status = Literal[
     "infeasible_or_unbounded",
     "time_limit",
     "node_limit",
+    "gap_limit",
     "iteration_limit",
     "solution_limit",
     "objective_limit",
@@ -101,6 +102,8 @@ class NativeOptions:
     Field meanings and units are documented in ``docs/api.md``."""
     time_limit_seconds: Optional[float] = None
     node_limit: Optional[int] = 100_000
+    mip_relative_gap: Optional[float] = None
+    mip_absolute_gap: Optional[float] = None
     iteration_limit: Optional[int] = 1_000_000
     pivot_tolerance: float = 1e-9
     dual_tolerance: float = 1e-7

@@ -378,6 +378,8 @@ fn native_settings(
         match key.as_str() {
             "time_limit_seconds" => settings.time_limit_seconds = field(&value, &key)?,
             "node_limit" => settings.node_limit = field(&value, &key)?,
+            "mip_relative_gap" => settings.mip_relative_gap = field(&value, &key)?,
+            "mip_absolute_gap" => settings.mip_absolute_gap = field(&value, &key)?,
             "iteration_limit" => settings.iteration_limit = field(&value, &key)?,
             "dual_tolerance" => settings.dual_tolerance = field(&value, &key)?,
             "pivot_tolerance" => settings.pivot_tolerance = field(&value, &key)?,

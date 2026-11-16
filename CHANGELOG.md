@@ -12,7 +12,13 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-16
+
 ### Added
+
+- Opt-in `mip_relative_gap` and `mip_absolute_gap` controls in native Rust, Python and `lp-ip.solve/1`. Reaching either positive limit with a known global bound returns `gap_limit`, with a feasible job claim and the reported gap, rather than optimality. Zero limits preserve complete search; LPs ignore the controls.
+- Gap-limited separable MIPs are searched whole and report `decompose=false` / `gap_limit_scope=whole_model`. Specialized packing and parallel tree search reject positive limits with `Unsupported` until they implement a global stopping rule.
+- Gap benchmark evidence and default comparisons under `docs/benchmarks/gap-limits/`.
 
 - README: links the [documentation site](https://dietmarwo.github.io/LP-IP-craft/), now that it is published.
 - A documentation site of the user pages: this overview, the API, the crate and Python package pages, the nine application tutorials, the AI context and the job interface. `book/SUMMARY.md` lists the pages; plans, logs and evidence are linked to GitHub, and no file moved. The workflow shared through optimization-jobs builds it with mdBook, checks the relative links of all Markdown files and the links of the built pages, and deploys to GitHub Pages only when the repository variable `PUBLISH_DOCS_SITE` is `true`.
@@ -31,6 +37,10 @@ such as (#5) are pull requests.
 - The README points to [experiment-craft](https://github.com/dietmarwo/experiment-craft),
   which runs reproducible campaigns of `lp-ip-job-worker` jobs and rebuilds and
   tests this repository at a pinned revision.
+- optimization-jobs pin `78970a2` (tag `v0.4.1`; the job crates are 0.4.1) in
+  the manifest and the lockfile. That release documents every public item
+  and updates the guide that `get_guide` serves; the CLI, the MCP tools, the
+  job envelope, the worker protocol and the result contract are unchanged.
 - optimization-jobs pin `12f9d57` (its 0.4.0 release `602d31a` plus
   documentation-only changes: doc comments on every public item, and a
   simulator section and corrections in the guide that `get_guide` serves, so

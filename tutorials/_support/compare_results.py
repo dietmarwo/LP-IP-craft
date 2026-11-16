@@ -1,8 +1,12 @@
 """Compare a fresh chapter summary with the recorded one.
 
-Timing fields are ignored. Integers, strings and booleans must match exactly;
-floats must agree to a relative tolerance of 1e-9 and never match a null, a
-boolean or a string. Usage:
+Timing fields are ignored, and so is the LP-IP-craft package version of the
+native backend (``{"name": "native", "version": "0.29.0"}``, or ``"backend":
+"native"`` in a record): a release bump changes that label, not the
+arithmetic, which every numerical field still checks; the backend name must
+match, and any other backend's version stays exact. Integers, strings and
+booleans must match exactly; floats must agree to a relative tolerance of 1e-9
+and never match a null, a boolean or a string. Usage:
 
     python tutorials/_support/compare_results.py RECORDED.json NEW.json
 """
@@ -14,6 +18,16 @@ import math
 import sys
 
 TIMING = ("seconds", "time", "elapsed", "wall", "duration")
+
+
+def is_native(entry):
+    """True for an entry labelled with LP-IP-craft's own native backend."""
+    return entry.get("name") == "native" or entry.get("backend") == "native"
+
+
+def own_version(recorded, new, key):
+    """True for the version label of the native backend in both summaries."""
+    return key == "version" and is_native(recorded) and is_native(new)
 
 
 def is_number(value):
@@ -28,6 +42,8 @@ def differences(recorded, new, path="", out=None):
                 continue
             if key not in recorded or key not in new:
                 out.append(f"{path}/{key}: present in only one summary")
+            elif own_version(recorded, new, key):
+                continue
             else:
                 differences(recorded[key], new[key], f"{path}/{key}", out)
     elif isinstance(recorded, list) and isinstance(new, list):

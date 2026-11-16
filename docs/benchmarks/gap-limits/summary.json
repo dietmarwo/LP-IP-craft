@@ -1,0 +1,13 @@
+{
+  "records": 48,
+  "cases": 16,
+  "errors": [],
+  "default_fixed_node_cases": 16,
+  "default_fixed_node_identical": true,
+  "gap_stops": {
+    "0.01": 7,
+    "0.0001": 2
+  },
+  "wall_budget_seconds": 10,
+  "node_comparison_budget": 8192
+}
