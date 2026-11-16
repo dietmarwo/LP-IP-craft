@@ -1,6 +1,6 @@
 # MIP gap stop evidence
 
-The 0.30.0 source preparation is based on LP-IP-craft `e29a4b0a688b4d59724992f969b83e0e6d0c9881` (0.29.0). No default gap tolerance is introduced. Independent candidate, bound and objective checks retain their existing tolerances.
+The 0.30.0 changes are based on LP-IP-craft `e29a4b0a688b4d59724992f969b83e0e6d0c9881` (0.29.0). No default gap tolerance is introduced. Independent candidate, bound and objective checks retain their existing tolerances.
 
 The panel covers eight public MIP-search cases, two existing continuous packing fixtures, three LP reference cases, and three generated binary packing cases with independent HiGHS optima. Generated cases include their exact JSON and source seed; existing corpus inputs are reused by path and recorded SHA-256. All failed and time/node-limited outcomes remain in the records.
 

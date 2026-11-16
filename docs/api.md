@@ -294,7 +294,7 @@ For durable native jobs with an explicit CPU budget, use the
 The job profile is a deliberately smaller, versioned surface than the full
 in-process solver API. Unknown profile options are rejected.
 
-## MIP gap stopping (0.30.0 source)
+## MIP gap stopping (since 0.30.0)
 
 `NativeOptions(mip_relative_gap=None, mip_absolute_gap=None)` leaves early gap stopping disabled. Supplied limits must be finite and nonnegative. A positive absolute **or** relative threshold is sufficient; zero performs a complete search. Continuous LPs ignore these settings, as they ignore a MIP node limit.
 
