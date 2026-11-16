@@ -180,3 +180,7 @@ See the [shared API guide](https://github.com/dietmarwo/optimization-jobs/blob/m
 recovery, and [shared job API](../../docs/job-api.md) for running the shared
 acceptance harness against this adapter. The native solver API remains documented in
 [docs/api.md](../../docs/api.md).
+
+### Stop with a requested MIP gap
+
+Add `"mip_relative_gap": 0.01` or `"mip_absolute_gap": 1.0` to an MIP solve payload when a bounded-quality incumbent is sufficient. Either limit may stop the search, but a simple tutorial MIP may close its frontier first and still return `optimal`. A `gap_limit` result is a checked feasible point; inspect `details.gap` and do not describe it as optimal. Omit both fields for the previous behavior.

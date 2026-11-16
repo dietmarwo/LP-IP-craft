@@ -14,6 +14,12 @@ such as (#5) are pull requests.
 
 ### Added
 
+- Opt-in `mip_relative_gap` and `mip_absolute_gap` controls in native Rust, Python and `lp-ip.solve/1`. Reaching either positive limit with a known global bound returns `gap_limit`, with a feasible job claim and the reported gap, rather than optimality. Zero limits preserve complete search; LPs ignore the controls.
+- Gap-limited separable MIPs are searched whole and report `decompose=false` / `gap_limit_scope=whole_model`. Specialized packing and parallel tree search reject positive limits with `Unsupported` until they implement a global stopping rule.
+- Gap benchmark evidence and default comparisons under `docs/benchmarks/gap-limits/`; synchronized 0.30.0 metadata prepared for the maintainer's tag.
+
+### Added
+
 - README: links the [documentation site](https://dietmarwo.github.io/LP-IP-craft/), now that it is published.
 - A documentation site of the user pages: this overview, the API, the crate and Python package pages, the nine application tutorials, the AI context and the job interface. `book/SUMMARY.md` lists the pages; plans, logs and evidence are linked to GitHub, and no file moved. The workflow shared through optimization-jobs builds it with mdBook, checks the relative links of all Markdown files and the links of the built pages, and deploys to GitHub Pages only when the repository variable `PUBLISH_DOCS_SITE` is `true`.
 - Links to the CFD source-allocation LP and sensor-coverage MIP tutorials from the tutorial index; their independent validation remains simulator-owned.

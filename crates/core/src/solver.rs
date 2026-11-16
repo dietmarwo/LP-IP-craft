@@ -43,6 +43,8 @@ pub enum Status {
     TimeLimit,
     /// A branch-and-bound node limit stopped the engine.
     NodeLimit,
+    /// An opt-in absolute or relative MIP gap was reached; no optimality claim.
+    GapLimit,
     /// An LP iteration limit stopped the engine.
     IterationLimit,
     /// A limit on the number of solutions (or a native limit the engine
@@ -71,6 +73,7 @@ impl Status {
             Status::InfeasibleOrUnbounded => "infeasible_or_unbounded",
             Status::TimeLimit => "time_limit",
             Status::NodeLimit => "node_limit",
+            Status::GapLimit => "gap_limit",
             Status::IterationLimit => "iteration_limit",
             Status::SolutionLimit => "solution_limit",
             Status::ObjectiveLimit => "objective_limit",
@@ -129,9 +132,9 @@ impl Tolerances {
 
 /// Settings accepted by the solvers in this crate.
 ///
-/// Only settings that a backend actually honours are exposed. Time, node and
-/// gap limits, presolve, scaling and seeds will be added together with the
-/// backend that implements them, so no setting is ever silently ignored.
+/// Only backend-neutral controls live here. Time, node, MIP gap and presolve
+/// controls live in the implementing backend's options (for example native's
+/// `NativeOptions`), so unsupported paths can reject them explicitly.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Options {
     /// Tolerances of the candidate check.

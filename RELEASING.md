@@ -100,3 +100,7 @@ Package descriptions and README links reach registries only with a new
 release. Check the rendered package page after publishing and update the
 shared catalog when installation availability changes. Repository topics
 and About text are GitHub settings, not fields a commit changes.
+
+## Prepared 0.30.0 gap-stop release
+
+The source metadata is synchronized at 0.30.0. Review the [gap-stop evidence](docs/benchmarks/gap-limits/README.md), run the usual package gates and create the release tag as maintainer. MIP gap stops are optional and have a feasible claim; specialized packing/tree combinations reject them explicitly. No registry upload is performed by the patch.

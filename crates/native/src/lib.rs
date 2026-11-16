@@ -91,6 +91,11 @@ pub struct NativeOptions {
     pub time_limit_seconds: Option<f64>,
     /// Number of LP relaxations processed in a MIP.
     pub node_limit: Option<u64>,
+    /// Relative MIP gap limit, |incumbent-bound|/|incumbent|; off by default.
+    /// Zero retains a complete solve. Ignored for continuous LPs.
+    pub mip_relative_gap: Option<f64>,
+    /// Absolute MIP gap limit in original objective units; off by default.
+    pub mip_absolute_gap: Option<f64>,
     /// Total simplex iterations across the solve, including all MIP nodes.
     pub iteration_limit: Option<u64>,
     /// Smallest pivot-row entry accepted by the scaled dual ratio test.
@@ -273,6 +278,8 @@ impl Default for NativeOptions {
         Self {
             time_limit_seconds: None,
             node_limit: Some(100_000),
+            mip_relative_gap: None,
+            mip_absolute_gap: None,
             iteration_limit: Some(1_000_000),
             pivot_tolerance: 1e-9,
             dual_tolerance: 1e-7,
@@ -358,7 +365,23 @@ impl Default for NativeOptions {
 }
 impl NativeOptions {
     /// Validate settings before cancellation or numerical work.
+    /// Whether a positive gap limit requests early MIP termination.
+    pub fn has_gap_limit(&self) -> bool {
+        self.mip_relative_gap.is_some_and(|v| v > 0.0)
+            || self.mip_absolute_gap.is_some_and(|v| v > 0.0)
+    }
+
     pub fn validate(&self) -> Result<()> {
+        for (name, value) in [
+            ("mip_relative_gap", self.mip_relative_gap),
+            ("mip_absolute_gap", self.mip_absolute_gap),
+        ] {
+            if value.is_some_and(|v| !v.is_finite() || v < 0.0) {
+                return Err(Error::InvalidInput(format!(
+                    "{name} must be finite and nonnegative"
+                )));
+            }
+        }
         for (valid, message) in [
             (
                 self.mip_presolve_rounds <= 32,
@@ -964,6 +987,39 @@ fn diagnostic_frontier_bound(
     }
     bound.is_finite().then_some(bound)
 }
+/// Compare a known global frontier with a certified incumbent. Unknown,
+/// contradictory, overflowing and zero gaps never create a gap-limit status.
+fn gap_reached(
+    settings: &NativeOptions,
+    model: &Model,
+    pool: &Incumbents<'_>,
+    result: &SolveResult,
+    bound: Option<f64>,
+) -> bool {
+    if !settings.has_gap_limit() || !pool.upper.is_finite() {
+        return false;
+    }
+    let (Some(bound), Some(e)) = (bound, result.evaluation.as_ref()) else {
+        return false;
+    };
+    let within = |gap: lp_ip_craft::Gap| {
+        gap.absolute.is_finite()
+            && gap.absolute > 0.0
+            && (settings
+                .mip_absolute_gap
+                .is_some_and(|limit| limit > 0.0 && gap.absolute <= limit)
+                || settings
+                    .mip_relative_gap
+                    .is_some_and(|limit| limit > 0.0 && gap.relative <= limit))
+    };
+    within(lp_ip_craft::Gap::new(Sense::Minimize, pool.upper, bound))
+        && within(lp_ip_craft::Gap::new(
+            Sense::Minimize,
+            oriented(model, e.objective),
+            bound,
+        ))
+}
+
 impl PartialEq for Open {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other).is_eq()
@@ -1094,6 +1150,7 @@ impl NativeSolver {
             _ => false,
         };
         if self.settings.decompose
+            && !(model.is_mip() && self.settings.has_gap_limit())
             && !preserve_start
             && model.nnz() > 0
             && model.n() >= self.settings.decomposition_min_variables
@@ -1127,6 +1184,15 @@ impl NativeSolver {
         let mut report = BackendReport::new("native");
         report.version = Some(env!("CARGO_PKG_VERSION").into());
         report.effective_options = effective_options(settings);
+        if model.is_mip() && settings.has_gap_limit() {
+            report.effective_options.retain(|(k, _)| k != "decompose");
+            report
+                .effective_options
+                .push(("decompose".into(), "false".into()));
+            report
+                .effective_options
+                .push(("gap_limit_scope".into(), "whole_model".into()));
+        }
         report.start_status = match start {
             None => StartStatus::NotProvided,
             Some(_) if model.is_mip() => StartStatus::Evaluated,
@@ -1223,10 +1289,28 @@ impl NativeSolver {
                     None => break,
                 },
             };
-            let stop = budget.stop().or_else(|| {
-                (model.is_mip() && settings.node_limit.is_some_and(|n| result.nodes >= n))
-                    .then_some(Status::NodeLimit)
-            });
+            let stop = budget
+                .stop()
+                .or_else(|| {
+                    (model.is_mip() && settings.node_limit.is_some_and(|n| result.nodes >= n))
+                        .then_some(Status::NodeLimit)
+                })
+                .or_else(|| {
+                    (model.is_mip()
+                        && gap_reached(
+                            settings,
+                            model,
+                            &pool,
+                            &result,
+                            diagnostic_frontier_bound(
+                                closed_bound,
+                                all_bounds,
+                                &open,
+                                Some(node.bound),
+                            ),
+                        ))
+                    .then_some(Status::GapLimit)
+                });
             if let Some(s) = stop {
                 status = s;
                 serial += 1;
@@ -1521,6 +1605,23 @@ impl NativeSolver {
                 &mut result,
                 &mut budget,
             )?;
+            if gap_reached(
+                settings,
+                model,
+                &pool,
+                &result,
+                diagnostic_frontier_bound(closed_bound, all_bounds, &open, Some(bound)),
+            ) {
+                node.bound = bound;
+                serial += 1;
+                open.push(Open {
+                    key: bound.unwrap_or(f64::NEG_INFINITY),
+                    serial,
+                    node,
+                });
+                status = Status::GapLimit;
+                break;
+            }
             if bound.is_some_and(|b| b >= pool.upper) {
                 if let Some(trace) = &mut pool.trace {
                     trace.solved_prunes += 1;
@@ -2178,7 +2279,7 @@ fn controls(model: &Model, options: &Options, settings: &NativeOptions) -> lp::C
 }
 
 fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
-    [
+    let mut options: Vec<(String, String)> = [
         (
             "algorithm",
             "dual_simplex+best_bound_diving_branch_and_bound".to_string(),
@@ -2326,7 +2427,14 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
-    .collect()
+    .collect();
+    if let Some(value) = s.mip_relative_gap {
+        options.push(("mip_relative_gap".into(), value.to_string()));
+    }
+    if let Some(value) = s.mip_absolute_gap {
+        options.push(("mip_absolute_gap".into(), value.to_string()));
+    }
+    options
 }
 
 impl LpIpSolver for NativeSolver {
@@ -2340,6 +2448,16 @@ impl LpIpSolver for NativeSolver {
         let began = Instant::now();
         options.validate()?;
         self.settings.validate()?;
+        if model.is_mip()
+            && self.settings.has_gap_limit()
+            && (self.settings.tree_threads > 1
+                || self.settings.packing_root
+                || self.settings.packing_neighborhoods > 0
+                || self.settings.packing_cuts)
+        {
+            return Err(Error::Unsupported("MIP gap limits require the general serial search; tree splitting and specialized packing do not implement a global gap stop".into()));
+        }
+
         if let Some(s) = start {
             if s.primal.len() != model.n() || s.primal.iter().any(|v| !v.is_finite()) {
                 return Err(Error::InvalidInput(

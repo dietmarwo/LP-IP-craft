@@ -119,6 +119,10 @@ struct Payload {
     model_input: String,
     starts: Vec<Option<Vec<f64>>>,
     node_limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mip_relative_gap: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mip_absolute_gap: Option<f64>,
     iteration_limit: u64,
     feasibility_tolerance: f64,
     integrality_tolerance: f64,
@@ -146,6 +150,8 @@ impl Payload {
         let defaults = NativeOptions::default();
         NativeOptions {
             node_limit: Some(self.node_limit),
+            mip_relative_gap: self.mip_relative_gap,
+            mip_absolute_gap: self.mip_absolute_gap,
             iteration_limit: Some(self.iteration_limit),
             presolve: self.presolve,
             singleton_presolve: self.presolve && defaults.singleton_presolve,
@@ -190,7 +196,7 @@ impl Worker for Adapter {
         );
         d["cancellation"] = json!("native cooperative token plus runner process deadline");
         d["terminations"] = json!(
-            "native statuses (optimal, infeasible, unbounded, infeasible_or_unbounded, *_limit, cancelled, ...), unsupported for a model outside the native domain, evaluated for lp-ip.evaluate/1"
+            "native statuses (gap_limit, optimal, infeasible, unbounded, infeasible_or_unbounded, *_limit, cancelled, ...), unsupported for a model outside the native domain, evaluated for lp-ip.evaluate/1"
         );
         d["claims"] = json!({
             "numerical_optimum":"native optimal status; the candidate is re-evaluated (objective, bounds, constraints, integrality) and an LP's duals pass the KKT acceptance; numerical, not an exact certificate",
@@ -237,6 +243,7 @@ impl Worker for Adapter {
         {
             return Err("nonempty starts and positive node/iteration limits required".into());
         }
+        p.settings().validate()?;
         let model = load(s, base, &p.model_input)?;
         for x in p.starts.iter().flatten() {
             if !model.is_mip() {
@@ -944,6 +951,19 @@ mod tests {
             ("node_limit", "feasible")
         );
         assert_eq!(o.evidence.as_ref().unwrap().level, "rechecked");
+        let o = mip
+            .judge(
+                1,
+                reported(&mip, Status::GapLimit, vec![1.0, 0.0], 7.0, Some(6.9), None),
+            )
+            .unwrap()
+            .outcome;
+        assert_eq!(
+            (o.termination.as_str(), o.claim.as_str()),
+            ("gap_limit", "feasible")
+        );
+        assert!(o.details["gap"].is_object());
+        o.check().unwrap();
     }
 
     /// `native` with the solver's own evaluation of the candidate, its
@@ -1245,6 +1265,8 @@ mod tests {
         }
         // Only the switches themselves change; the rest keeps native defaults.
         let on = Payload {
+            mip_relative_gap: None,
+            mip_absolute_gap: None,
             presolve: true,
             ..serde_json::from_value(job("0", 1).payload).unwrap()
         }

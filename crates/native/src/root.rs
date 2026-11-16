@@ -479,7 +479,11 @@ pub(crate) fn solve(
             .iter_mut()
             .find(|(k, _)| k == &key)
         {
-            v.1 = value;
+            v.1 = if key == "decompose" && model.is_mip() && solver.settings.has_gap_limit() {
+                "false".into()
+            } else {
+                value
+            };
         }
     }
     result

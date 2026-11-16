@@ -19,6 +19,7 @@ call Python during optimization.
 |---|---:|---|
 | time_limit_seconds | None | Whole-call cooperative budget after validation |
 | node_limit | 100000 | MIP relaxations processed; None removes the limit |
+| mip_relative_gap, mip_absolute_gap | None | Opt-in positive MIP gap stops; zero requests full search; see below |
 | iteration_limit | 1000000 | Simplex iterations across phase 1/2, all nodes, certification LPs and retries |
 | pivot_tolerance | 1e-9 | Smallest pivot-row entry accepted by the scaled dual ratio test |
 | dual_tolerance | 1e-7 | Independent LP dual acceptance threshold |
@@ -207,7 +208,7 @@ belongs to the solve phase.
 
 ## Deliberate limits
 
-No basis import/export or MIP relative-gap stop. Cuts, strong branching,
+No basis import/export. MIP gap stops are available in the general search (see below). Cuts, strong branching,
 parallel search within a connected tree and MIP presolve were added after this
 section was first written (see the sections below and the option table in
 [ai-context.md](../ai-context.md)); all but MIP presolve are opt-in. MIPs require
@@ -292,3 +293,11 @@ For durable native jobs with an explicit CPU budget, use the
 [solver-specific tutorial](../tutorials/job-api/README.md).
 The job profile is a deliberately smaller, versioned surface than the full
 in-process solver API. Unknown profile options are rejected.
+
+## MIP gap stopping (0.30.0 source)
+
+`NativeOptions(mip_relative_gap=None, mip_absolute_gap=None)` leaves early gap stopping disabled. Supplied limits must be finite and nonnegative. A positive absolute **or** relative threshold is sufficient; zero performs a complete search. Continuous LPs ignore these settings, as they ignore a MIP node limit.
+
+The relative gap is the same quotient as `SolveResult.gap`: absolute objective-to-bound distance divided by the absolute incumbent objective, including its offset and original sense. At objective zero it is infinite for a positive absolute gap. A missing, non-finite or contradictory frontier bound never triggers a stop. Limits are checked at node boundaries and after the root/node incumbent heuristics with the current relaxation still included in the global frontier.
+
+An open positive gap within a supplied limit returns `gap_limit`. The candidate is independently checked and a job reports claim `feasible`, with `details.gap`; this status never asserts optimality. A fully closed frontier retains `optimal`. Separable MIPs are searched as one model, reporting `decompose=false` and `gap_limit_scope=whole_model`. Positive limits with specialized packing controls or `tree_threads>1` return `Unsupported`. Numerical parallel kernels remain available. See [evidence and commands](benchmarks/gap-limits/README.md).

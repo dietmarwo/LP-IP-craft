@@ -20,7 +20,12 @@
       "description": "Name of the job input that holds the model.",
       "type": "string",
       "pattern": "^[A-Za-z0-9_.-]{1,80}$",
-      "not": {"enum": [".", ".."]}
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
     },
     "starts": {
       "description": "One task per entry: null, or a complete primal start of a MIP.",
@@ -30,8 +35,16 @@
       "maxItems": 1000000,
       "items": {
         "anyOf": [
-          {"type": "null"},
-          {"type": "array", "minItems": 1, "items": {"type": "number"}}
+          {
+            "type": "null"
+          },
+          {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "number"
+            }
+          }
         ]
       }
     },
@@ -61,6 +74,24 @@
     "presolve": {
       "description": "Native master switch; false skips the whole root stage, so a MIP then needs finite bounds as given.",
       "type": "boolean"
+    },
+    "mip_relative_gap": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "default": null,
+      "description": "Optional MIP gap limit; gap_limit returns a feasible claim, never optimal. Zero disables early stopping. LPs ignore this option."
+    },
+    "mip_absolute_gap": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "default": null,
+      "description": "Optional MIP gap limit; gap_limit returns a feasible claim, never optimal. Zero disables early stopping. LPs ignore this option."
     }
   }
 }
