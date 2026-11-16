@@ -37,6 +37,10 @@ such as (#5) are pull requests.
 - The README points to [experiment-craft](https://github.com/dietmarwo/experiment-craft),
   which runs reproducible campaigns of `lp-ip-job-worker` jobs and rebuilds and
   tests this repository at a pinned revision.
+- optimization-jobs pin `78970a2` (tag `v0.4.1`; the job crates are 0.4.1) in
+  the manifest and the lockfile. That release documents every public item
+  and updates the guide that `get_guide` serves; the CLI, the MCP tools, the
+  job envelope, the worker protocol and the result contract are unchanged.
 - optimization-jobs pin `12f9d57` (its 0.4.0 release `602d31a` plus
   documentation-only changes: doc comments on every public item, and a
   simulator section and corrections in the guide that `get_guide` serves, so

@@ -49,3 +49,25 @@ def test_integers_and_strings_match_exactly_and_timings_are_ignored():
         "/b: present in only one summary",
     ]
     assert compare.differences({"a": [1, 2]}, {"a": [1]}) == ["/a: length 2 != 1"]
+
+
+def test_only_the_native_backend_version_is_ignored():
+    native = {"name": "native", "version": "0.29.0"}
+    assert compare.differences(native, {"name": "native", "version": "0.30.0"}) == []
+    assert (
+        compare.differences(
+            {"backend": "native", "version": "0.29.0"},
+            {"backend": "native", "version": "0.30.0"},
+        )
+        == []
+    )
+    assert compare.differences(native, {"name": "highs", "version": "0.30.0"}) == [
+        "/name: 'native' != 'highs'",
+        "/version: '0.29.0' != '0.30.0'",
+    ]
+    assert compare.differences(
+        {"name": "highs", "version": "1.11.0"}, {"name": "highs", "version": "1.12.0"}
+    ) == ["/version: '1.11.0' != '1.12.0'"]
+    assert compare.differences({"version": "1"}, {"version": "2"}) == [
+        "/version: '1' != '2'"
+    ]
