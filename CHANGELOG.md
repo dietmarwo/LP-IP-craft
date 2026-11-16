@@ -14,6 +14,7 @@ such as (#5) are pull requests.
 
 ### Added
 
+- README: links the [documentation site](https://dietmarwo.github.io/LP-IP-craft/), now that it is published.
 - A documentation site of the user pages: this overview, the API, the crate and Python package pages, the nine application tutorials, the AI context and the job interface. `book/SUMMARY.md` lists the pages; plans, logs and evidence are linked to GitHub, and no file moved. The workflow shared through optimization-jobs builds it with mdBook, checks the relative links of all Markdown files and the links of the built pages, and deploys to GitHub Pages only when the repository variable `PUBLISH_DOCS_SITE` is `true`.
 - Links to the CFD source-allocation LP and sensor-coverage MIP tutorials from the tutorial index; their independent validation remains simulator-owned.
 - [Application tutorials](tutorials/README.md) LP1–LP9 (allocation, battery dispatch, Sudoku, rostering, transportation, facility location, cutting stock, stochastic planning, SpOC4 matching). Each solves with the native engine through the Python API, checks every candidate independently, compares with an exact or independent reference, and keeps recorded smoke and study results. LP4, LP5 and LP7 verify the solver's own LP duals exactly and with `safe_dual_bound`. The `structured-tutorials` workflow runs all nine chapters and compares the deterministic ones with the recorded results.
