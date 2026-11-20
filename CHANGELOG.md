@@ -14,7 +14,7 @@ such as (#5) are pull requests.
 
 ### Changed
 
-- optimization-jobs pin `2bfa8e4` (tag `v0.5.0`, the optimization-jobs 0.5.0
+- optimization-jobs pin `2bfa8e4` (the merge of the optimization-jobs 0.5.0
   release; was `41d5f00`, main after 0.4.1; the job crates are 0.5.0). It
   adds an optional progress file to command jobs (`jobs progress`), which
   experiment-craft uses to prune adaptive trials, and guide entries, among
