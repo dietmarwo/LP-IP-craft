@@ -14,11 +14,13 @@ such as (#5) are pull requests.
 
 ### Changed
 
-- optimization-jobs pin `41d5f00` (main after the 0.4.1 release; the job
-  crates are still 0.4.1). It adds an optional progress file to command jobs
-  (`jobs progress`), which experiment-craft uses to prune adaptive trials,
-  and guide entries; the job envelope, the worker protocol and the result
-  contract are unchanged.
+- optimization-jobs pin `2bfa8e4` (tag `v0.5.0`, the optimization-jobs 0.5.0
+  release; was `41d5f00`, main after 0.4.1; the job crates are 0.5.0). It
+  adds an optional progress file to command jobs (`jobs progress`), which
+  experiment-craft uses to prune adaptive trials, and guide entries, among
+  them the releases of 20 November 2026 (fcmaes 2.2.0, fcmaes-rust 0.4.0);
+  the job envelope, the worker protocol and the result contract are
+  unchanged.
 
 ## [0.30.0] - 2026-11-16
 
