@@ -996,6 +996,13 @@ fn root_local_search(
         trace.skip = skip;
     }
     if skip != "dispatched" {
+        // A caller who asked for the search learns why it did not run.
+        if settings.local_mip_effort != 0 {
+            result
+                .backend
+                .effective_options
+                .push(("diagnostics.root_local_search.skip".into(), skip.into()));
+        }
         return Ok(jump_stats);
     }
 
@@ -1037,6 +1044,7 @@ fn root_local_search(
         local_stats = stats;
         proposal
     };
+    let previous_best = pool.best;
     let stop = match proposal {
         Ok(x) => {
             let first = !pool.best.is_finite();
@@ -1047,11 +1055,14 @@ fn root_local_search(
         }
         Err(reason) => reason,
     };
+    // A feasible point that is worse than the incumbent ends the attempt too.
+    let improved = u64::from(pool.best < previous_best);
     meter.report(
         &mut result.backend.effective_options,
         source,
         stop,
         &[
+            ("improved_incumbent", improved),
             (
                 "proposals",
                 if matched_fj {

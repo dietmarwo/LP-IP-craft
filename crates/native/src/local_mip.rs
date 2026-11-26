@@ -303,7 +303,7 @@ pub(crate) fn search(
             let rows = state.sample_rows(&mut rng);
             let step = state
                 .choose(&rows, &mut rng, meter, &mut stats)?
-                .ok_or(Stop::Stalled)?;
+                .ok_or(Stop::NoMove)?;
             if step.score <= 0 {
                 stats.weight_bumps += 1;
                 for row in rows {
@@ -339,6 +339,10 @@ mod tests {
         WarmStart, check,
     };
     use std::time::Instant;
+
+    // Measured floors of the enumeration test, with room for search changes.
+    const DISPATCHED_FLOOR: usize = 48;
+    const REPAIRED_FLOOR: usize = 72;
 
     fn mixed(sense: Sense) -> Model {
         Model::new(ModelData {
@@ -448,6 +452,321 @@ mod tests {
             );
             assert!(meter.used() <= effort);
         }
+    }
+
+    fn budget<'a>(settings: &'a NativeOptions, cancel: &'a CancellationToken) -> Budget<'a> {
+        Budget {
+            start: Instant::now(),
+            settings,
+            cancel,
+            pivots: 0,
+        }
+    }
+
+    #[test]
+    fn plateau_bumps_the_weight_and_the_reverse_tabu_ends_without_a_move() {
+        // x >= 2 and x <= 1 for one integer x in [0, 3]. From 0 the tight move
+        // to 2 repairs one row and breaks the other (score 0, a plateau), so
+        // the sampled row's weight rises and the move is still taken. The
+        // only move left then reverses it, which the tabu forbids.
+        let model = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![1.],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.], vec![3.]),
+            kinds: vec![VariableKind::Integer],
+            matrix: CsrMatrix::from_dense(2, 1, &[1., 1.]).unwrap(),
+            rows: Bounds::new(vec![2., f64::NEG_INFINITY], vec![f64::INFINITY, 1.]),
+        })
+        .unwrap();
+        let settings = NativeOptions::default();
+        let cancel = CancellationToken::default();
+        let budget = budget(&settings, &cancel);
+        let tol = Tolerances::default();
+        for seed in [0, 11, 29] {
+            let mut meter = Meter::new(&budget, 1000, 250);
+            let (result, stats) = search(
+                &model,
+                &model,
+                model.variables(),
+                &[0.2],
+                &tol,
+                &mut meter,
+                seed,
+            );
+            assert_eq!(result, Err(Stop::NoMove));
+            assert_eq!(
+                (stats.moves, stats.proposals, stats.weight_bumps),
+                (1, 1, 1)
+            );
+            assert!(meter.used() < 250, "ended before patience could run out");
+        }
+        let mut meter = Meter::new(&budget, 1000, 250);
+        let mut state = Search::new(
+            &model,
+            model.variables(),
+            &[0.2],
+            tol.feasibility,
+            &mut meter,
+        )
+        .unwrap();
+        let mut stats = Stats::default();
+        let step = state
+            .choose(&[0], &mut Rng(0), &mut meter, &mut stats)
+            .unwrap()
+            .unwrap();
+        assert_eq!((step.value, step.score), (2., 0));
+        state.apply(step, &mut meter, 1).unwrap();
+        stats.moves = 1;
+        assert_eq!(state.violated, [1]);
+        for moves in 1..1 + TABU_MOVES {
+            stats.moves = moves;
+            assert!(
+                state
+                    .choose(&[1], &mut Rng(0), &mut meter, &mut stats)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        stats.moves = 1 + TABU_MOVES;
+        let back = state
+            .choose(&[1], &mut Rng(0), &mut meter, &mut stats)
+            .unwrap()
+            .unwrap();
+        assert_eq!(back.value, 1.);
+    }
+
+    /// Small signed integer models with a known feasible point: three
+    /// binaries, three general integers (two with a negative lower bound) and
+    /// a ranged, an upper, a lower and a second ranged row.
+    fn enumerable(case: u64) -> (Model, f64) {
+        const LOW: [i64; 6] = [0, 0, 0, -1, -1, 0];
+        const HIGH: [i64; 6] = [1, 1, 1, 2, 2, 3];
+        let mut rng = Rng(0x4c50_4950 ^ case);
+        let mut pick = |lo: i64, hi: i64| lo + rng.index((hi - lo + 1) as usize) as i64;
+        let witness: Vec<i64> = (0..6).map(|j| pick(LOW[j], HIGH[j])).collect();
+        let a: Vec<i64> = (0..24).map(|_| pick(-4, 4)).collect();
+        let mut lower = vec![f64::NEG_INFINITY; 4];
+        let mut upper = vec![f64::INFINITY; 4];
+        for i in 0..4 {
+            let center: i64 = (0..6).map(|j| a[6 * i + j] * witness[j]).sum();
+            if i % 3 != 1 {
+                lower[i] = (center - pick(0, 3)) as f64;
+            }
+            if i % 3 != 2 {
+                upper[i] = (center + pick(0, 3)) as f64;
+            }
+        }
+        let c: Vec<i64> = (0..6).map(|_| pick(-9, 9)).collect();
+        let offset = pick(-20, 20);
+        let sense = if case % 2 == 0 {
+            Sense::Maximize
+        } else {
+            Sense::Minimize
+        };
+        let mut optimum: Option<i64> = None;
+        let mut x = LOW;
+        'points: loop {
+            let feasible = (0..4).all(|i| {
+                let lhs = (0..6).map(|j| a[6 * i + j] * x[j]).sum::<i64>() as f64;
+                lower[i] <= lhs && lhs <= upper[i]
+            });
+            if feasible {
+                let value = offset + (0..6).map(|j| c[j] * x[j]).sum::<i64>();
+                optimum = Some(optimum.map_or(value, |best| match sense {
+                    Sense::Minimize => best.min(value),
+                    Sense::Maximize => best.max(value),
+                }));
+            }
+            for j in 0..6 {
+                if x[j] < HIGH[j] {
+                    x[j] += 1;
+                    continue 'points;
+                }
+                x[j] = LOW[j];
+            }
+            break;
+        }
+        let mut kinds = vec![VariableKind::Binary; 3];
+        kinds.extend([VariableKind::Integer; 3]);
+        let model = Model::new(ModelData {
+            sense,
+            objective: c.iter().map(|&v| v as f64).collect(),
+            objective_offset: offset as f64,
+            variables: Bounds::new(
+                LOW.iter().map(|&v| v as f64).collect(),
+                HIGH.iter().map(|&v| v as f64).collect(),
+            ),
+            kinds,
+            matrix: CsrMatrix::from_dense(4, 6, &a.iter().map(|&v| v as f64).collect::<Vec<_>>())
+                .unwrap(),
+            rows: Bounds::new(lower, upper),
+        })
+        .unwrap();
+        (model, optimum.expect("the witness is feasible") as f64)
+    }
+
+    fn exactly_feasible(model: &Model, x: &[f64]) -> bool {
+        let integral_in_box = x.iter().enumerate().all(|(j, &v)| {
+            v == v.round() && model.variables().lower[j] <= v && v <= model.variables().upper[j]
+        });
+        let mut lhs = vec![0.; model.m()];
+        model.matrix().multiply(x, &mut lhs);
+        // Small integers: the activities are exact.
+        integral_in_box
+            && (0..model.m())
+                .all(|i| model.rows().lower[i] <= lhs[i] && lhs[i] <= model.rows().upper[i])
+    }
+
+    #[test]
+    fn enumerated_signed_models_keep_their_optimum_and_admit_only_feasible_points() {
+        let options = Options::default();
+        let cancel = CancellationToken::default();
+        let tol = Tolerances::default();
+        let unlimited = NativeOptions::default();
+        let budget = budget(&unlimited, &cancel);
+        let (mut dispatched, mut repaired, mut stopped) = (0, 0, 0);
+        for case in 0..96 {
+            let (model, optimum) = enumerable(case);
+            // The solver, with and without Feasibility Jump ahead of the search.
+            let settings = NativeOptions {
+                feasibility_jump: case % 4 < 2,
+                local_mip_effort: 10_000,
+                local_mip_seed: case,
+                ..NativeOptions::default()
+            };
+            let solve = || {
+                NativeSolver::new(settings.clone())
+                    .solve(&model, &options, None, &cancel)
+                    .unwrap()
+            };
+            let result = solve();
+            assert_eq!(result.status, Status::Optimal, "case {case}");
+            let point = result.candidate.as_ref().unwrap();
+            assert!(exactly_feasible(&model, point), "case {case}");
+            let objective = result.evaluation.as_ref().unwrap().objective;
+            assert!((objective - optimum).abs() <= 1e-9, "case {case}");
+            let metadata = &result.backend.effective_options;
+            let field = |name: &str| {
+                let key = format!("diagnostics.root_local_search.{name}");
+                metadata.iter().find(|(k, _)| *k == key).map(|(_, v)| &**v)
+            };
+            if field("source") == Some("local_mip") {
+                dispatched += 1;
+                let number = |name| field(name).unwrap().parse::<u64>().unwrap();
+                assert!(number("effort") <= number("effort_cap"), "case {case}");
+                assert!(number("improved_incumbent") <= 1);
+                assert!(field("skip").is_none());
+            }
+            // The same seed replays the solve.
+            let again = solve();
+            assert_eq!(again.candidate, result.candidate, "case {case}");
+            assert_eq!(
+                (again.nodes, again.iterations),
+                (result.nodes, result.iterations),
+                "case {case}"
+            );
+
+            // The search alone, from the rounded box centre.
+            let centre: Vec<f64> = (0..model.n())
+                .map(|j| (model.variables().lower[j] + model.variables().upper[j]) / 2.)
+                .collect();
+            let run = |seed| {
+                let mut meter = Meter::new(&budget, 5_000, 0);
+                let (point, stats) = search(
+                    &model,
+                    &model,
+                    model.variables(),
+                    &centre,
+                    &tol,
+                    &mut meter,
+                    seed,
+                );
+                assert!(meter.used() <= 5_000);
+                (point, stats.moves, meter.used())
+            };
+            let first = run(case);
+            assert_eq!(first, run(case), "case {case}");
+            match &first.0 {
+                Ok(x) => {
+                    repaired += 1;
+                    assert!(exactly_feasible(&model, x), "case {case}");
+                }
+                Err(stop) => {
+                    stopped += 1;
+                    assert!(matches!(stop, Stop::NoMove | Stop::Effort), "case {case}");
+                }
+            }
+        }
+        // Not vacuous: the search ran inside the solver and repaired points alone.
+        assert!(dispatched >= DISPATCHED_FLOOR, "dispatched {dispatched}");
+        assert!(
+            repaired >= REPAIRED_FLOOR,
+            "repaired {repaired}, stopped {stopped}"
+        );
+    }
+
+    #[test]
+    fn a_skipped_or_disabled_search_says_so_and_nested_solves_cannot_start_it() {
+        let model = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![1., 3.],
+            objective_offset: 2.,
+            variables: Bounds::new(vec![0.; 2], vec![1.; 2]),
+            kinds: vec![VariableKind::Binary; 2],
+            matrix: CsrMatrix::from_dense(1, 2, &[0.7, 0.9]).unwrap(),
+            rows: Bounds::new(vec![1.2], vec![f64::INFINITY]),
+        })
+        .unwrap();
+        let cancel = CancellationToken::default();
+        let base = NativeOptions {
+            incumbent_heuristic: false,
+            root_propagation: false,
+            mip_presolve: false,
+            coefficient_tightening: false,
+            decompose: false,
+            feasibility_jump: true,
+            ..NativeOptions::default()
+        };
+        let report = |settings: &NativeOptions, threads: usize| {
+            let options = Options {
+                threads,
+                ..Options::default()
+            };
+            let result = NativeSolver::new(settings.clone())
+                .solve(&model, &options, None, &cancel)
+                .unwrap();
+            assert_eq!(result.status, Status::Optimal);
+            assert_eq!(result.evaluation.unwrap().objective, 6.);
+            result
+                .backend
+                .effective_options
+                .into_iter()
+                .filter(|(key, _)| key.contains("local"))
+                .collect::<Vec<_>>()
+        };
+        // Zero effort: Feasibility Jump alone, no setup and no report.
+        assert!(report(&base, 1).is_empty());
+        let enabled = NativeOptions {
+            local_mip_effort: 1000,
+            local_mip_seed: 7,
+            ..base
+        };
+        let has = |fields: &[(String, String)], key: &str, value: &str| {
+            let key = format!("diagnostics.root_local_search.{key}");
+            fields.iter().any(|(k, v)| *k == key && v == value)
+        };
+        let ran = report(&enabled, 1);
+        assert!(has(&ran, "source", "local_mip"));
+        assert!(ran.contains(&("local_mip_seed".into(), "7".into())));
+        // More than one numeric thread is outside the measured serial path.
+        let skipped = report(&enabled, 2);
+        assert!(has(&skipped, "skip", "ineligible_path"));
+        assert!(!skipped.iter().any(|(k, _)| k.ends_with(".source")));
+        // RENS, tree and packing children take their settings from here.
+        let child = crate::packing::child_settings(&enabled, Instant::now());
+        assert_eq!(child.local_mip_effort, 0);
+        assert!(child.feasibility_jump);
     }
 
     #[test]

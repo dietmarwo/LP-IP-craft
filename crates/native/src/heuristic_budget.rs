@@ -1,4 +1,10 @@
 //! Cooperative, solve-local work limits for root local search.
+//!
+//! The split into a hard effort cap and an effort-since-progress patience, and
+//! the renewal of patience on a 10% cut in violated rows, follow the reference
+//! implementation of Spoorendonk's HiGHS study
+//! (<https://github.com/spoorendonk/mip-heuristics>, MIT). The code is written
+//! for this solver; nothing is translated from it.
 use crate::Budget;
 use lp_ip_craft::{Model, Tolerances, check};
 use std::time::{Duration, Instant};
@@ -6,7 +12,10 @@ use std::time::{Duration, Instant};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Stop {
     Feasible,
+    /// Patience ran out: no 10% cut in violated rows within the allowance.
     Stalled,
+    /// No sampled row had a move that was neither fixed nor tabu.
+    NoMove,
     Effort,
     LocalTime,
     Global,
@@ -20,6 +29,7 @@ impl Stop {
         match self {
             Self::Feasible => "feasible",
             Self::Stalled => "stalled",
+            Self::NoMove => "no_admissible_move",
             Self::Effort => "effort_exhausted",
             Self::LocalTime => "local_timeout",
             Self::Global => "global_stop",

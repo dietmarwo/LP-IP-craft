@@ -494,6 +494,14 @@ pub(crate) fn solve_if_separable(
 mod tests {
     use super::*;
     #[test]
+    fn component_solves_do_not_start_the_root_local_search() {
+        let settings = NativeOptions {
+            local_mip_effort: 1000,
+            ..NativeOptions::default()
+        };
+        assert_eq!(controls(&settings, Instant::now()).local_mip_effort, 0);
+    }
+    #[test]
     fn reservations_never_exceed_the_global_budget() {
         for count in 1..=16 {
             for limit in [0, 1, 17, u64::MAX] {

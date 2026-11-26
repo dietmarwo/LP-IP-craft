@@ -1,5 +1,6 @@
 """Regression checks using the release driver built by the reproduction guide."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -7,7 +8,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from replay_fixing import audit
-from run import REPO
+from run import REPO, observation
 
 HERE = Path(__file__).resolve().parent
 BINARY = REPO / "benchmarks/target/release/local-mip-pilot"
@@ -71,6 +72,40 @@ class PilotReviewTests(unittest.TestCase):
             reject("run identity differs")
             (path / "extra.json").write_text("{}")
             reject("1 unexpected")
+
+    def test_scoring_the_same_records_gives_the_same_bytes(self):
+        limits, records = (30, 5000, 250000), {}
+        for split, case in (("public", "p"), ("heldout", "h"), ("development", "d")):
+            entry = {"case": case, "split": split, "reference": 4.0, "sense": "minimize", "model_sha256": case}
+            for arm, first in (("A", 8.0), ("B", 6.0)):
+                name, expected = observation(entry, arm, 11, "trace", limits, "binary", 0, 0)
+                work = {"phase": "root", "nodes": 1, "pivots": 1}
+                events = [{"kind": "root_relaxation", "source": "search_root_lp", "seconds": 0.5,
+                           "objective": 3.0, "bound": 3.0, **work},
+                          {"kind": "checked_incumbent", "source": "rounding", "seconds": 1.0,
+                           "objective": first, "bound": None, **work},
+                          {"kind": "root_exit", "source": "disabled", "seconds": 2.0,
+                           "objective": first, "bound": None, **work}]
+                result = {"status": "node_limit", "objective": first, "bound": 3.0, "nodes": 1,
+                          "pivots": 1, "seconds": 2.0, "rss_kib": 1, "metadata": []}
+                records[name] = {**expected, "failure": None, "issues": [], "events": events, "result": result}
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            schedule = {name: {k: v for k, v in row.items() if k not in ("failure", "issues", "events", "result")}
+                        for name, row in records.items()}
+            (path / "run-config.txt").write_text(json.dumps({"observations": schedule}))
+            for name, row in records.items():
+                (path / name).write_text(json.dumps(row))
+            outputs = [subprocess.run([sys.executable, HERE / "analyze.py", path], capture_output=True, text=True,
+                                      check=True, env={**os.environ, "PYTHONHASHSEED": seed}).stdout
+                       for seed in ("1", "2", "3", "4")]
+        self.assertEqual(len(set(outputs)), 1)
+        scored = json.loads(outputs[0])
+        self.assertEqual(list(scored["comparisons"]), ["development", "heldout", "public", "external"])
+        # 1 s without a point, then a six-decimal gap of (6 - 4) / 6 against (8 - 4) / 8.
+        expected = ((1 * 2 + 29 * 0.333333) / 30 + 0.001) / ((1 * 2 + 29 * 0.5) / 30 + 0.001)
+        self.assertAlmostEqual(scored["comparisons"]["heldout"]["B/A"]["complete"]["ratio"], expected, places=12)
+        self.assertEqual(scored["pre_hook_pairs_verified"], 3)
 
 
 if __name__ == "__main__":

@@ -27,3 +27,6 @@ __pycache__/
 /benchmarks/spoc4-026/results/
 /benchmarks/spoc4-026/results-adapter/
 /benchmarks/spoc4-026/reference/
+
+# The benchmark workspace builds into its own target directory.
+/benchmarks/target/

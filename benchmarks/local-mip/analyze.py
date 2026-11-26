@@ -182,7 +182,8 @@ def main():
     prefix_checks = check_root_prefix(raw)
     rows = sorted(map(measurements, raw),
                   key=lambda r: (r["split"], r["case"], r["seed"], r["arm"]))
-    subsets = {s: [r for r in rows if r["split"] == s] for s in {r["split"] for r in rows}}
+    # Sorted, so that the same records give the same bytes in every process.
+    subsets = {s: [r for r in rows if r["split"] == s] for s in sorted({r["split"] for r in rows})}
     subsets["external"] = subsets.get("heldout", []) + subsets.get("development", [])
     comparisons = {s: {f"{b}/{a}": {"complete": compare(rs, a, b),
                                      "conservative": compare(rs, a, b, conservative=True)}

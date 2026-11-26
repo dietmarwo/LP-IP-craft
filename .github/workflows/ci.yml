@@ -36,6 +36,38 @@ jobs:
       - run: >-
           cargo check --workspace --all-targets --locked
           --exclude lp-ip-job-worker
+  local-mip-pilot:
+    # The experimental root search: its benchmark feature, the pilot driver
+    # and the regression tests that need the release driver.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            benchmarks
+      - run: >-
+          cargo clippy -p lp-ip-craft-native --all-targets --locked
+          --features local-mip-bench -- -D warnings
+      - run: cargo test -p lp-ip-craft-native --locked --features local-mip-bench
+      - run: >-
+          cargo clippy --manifest-path benchmarks/Cargo.toml --locked
+          --bin local-mip-pilot --features local-mip-pilot -- -D warnings
+      - name: The stock-compatible driver builds without the feature
+        run: >-
+          cargo clippy --manifest-path benchmarks/Cargo.toml --locked
+          --bin local-mip-pilot -- -D warnings
+      - run: >-
+          cargo build --manifest-path benchmarks/Cargo.toml --release --locked
+          --bin local-mip-pilot --features local-mip-pilot
+      - run: python benchmarks/local-mip/test_pilot.py -v
   python:
     runs-on: ${{ matrix.os }}
     strategy:
