@@ -130,3 +130,31 @@ re-measured instead of relying on them; see
 ## Eight-worker 0.28 evidence
 
 The 0.28 archive contains all tracked source, 30 checkpoint plans/results, raw `docs/parallel-028/data/` journals and failed/excluded campaigns, independent audit vectors/certificates, SHA-checked application points and validation logs. `data/validation-summary.json` identifies numerical checkpoint, baseline, executable/extension hashes, frozen inputs, each iteration test count and final campaigns. [Results](parallel-028/RESULTS.md) distinguish within-solver latency, existing outer throughput and fixed-work root progress. An exact base-to-release patch and complete git bundle preserve development/reversions. The new root `MANIFEST.sha256` covers every delivered file other than itself. This does not recreate historical raw evidence already missing from upstream.
+
+## LocalMIP pilot evidence
+
+The raw records of the [LocalMIP pilot](local-mip-pilot/RESULTS.md) are not
+committed. They ship in the delivery archive:
+
+- `LP-IP-craft-LocalMIP-review-v2.zip`, 1,104,801 bytes,
+  SHA-256 `1225736595597d29d9b90c93a965c10fb5c763214ba9552895c1ec93c54b77bb`
+
+[`evidence-local-mip-pilot.sha256`](evidence-local-mip-pilot.sha256) is the
+archive's own `SHA256SUMS` and lists its 289 other files; check a copy with
+`sha256sum -c` from the extracted directory. All entries matched at import.
+
+| Directory | Files | Contents |
+| --- | ---: | --- |
+| evidence/campaign | 175 | 174 run records (A/B on 19 models, C/D on the 10 external ones, three seeds) and the frozen schedule |
+| evidence/smoke | 31 | 30 calibration records and the schedule |
+| evidence/repeats | 25 | 24 repeats of `bell5`, `gt2` and `50v-10` and the schedule |
+| evidence/parity, evidence/parity-stock | 28 | 13 effort-zero runs each of the patched and the stock driver |
+| evidence/validation | 18 | build, test and oracle logs, the enumeration check and the FPR replay |
+| evidence (top level) | 5 | scored summaries, `source.json` and the input manifest |
+| history | 3 | the plan, the first edition's log and its comparisons |
+
+The archive's full patch (`LP-IP-craft-LocalMIP-v2.patch`, applied to
+`2468f09`, tree `64ea895`) is the first commit of #52. The plan, the delivered report, the
+first edition's log and `input-manifest.json` are committed under
+`docs/local-mip-pilot/`. `python benchmarks/local-mip/analyze.py
+/path/to/evidence/campaign` reproduces the values of `evidence/scored.json`.

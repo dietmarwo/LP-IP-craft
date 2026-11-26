@@ -1,5 +1,9 @@
 # LocalMIP root pilot
 
+The plan, the measured results and their review are in
+[docs/local-mip-pilot](../../docs/local-mip-pilot/RESULTS.md); the raw records
+ship in the delivery archive named in [docs/EVIDENCE.md](../../docs/EVIDENCE.md).
+
 The benchmark uses LP-IP-craft's general serial MIP search, consumes frozen
 MPS conversions, and emits checked incumbent trajectories from solve entry.
 It uses one process per observation and checks the final point against the
@@ -69,8 +73,10 @@ the solver keeps up to eight subsequent fractional-node rounding attempts.
 A successful rounding or an accepted integral leaf ends this allowance.
 Existing global limits and proof admission still apply to every solve.
 
-For a reproduction using the supplied evidence, pass
-`--verify-against /path/to/evidence/input-manifest.json` to `prepare.py`.
+For a reproduction of the measured inputs, pass
+`--verify-against docs/local-mip-pilot/input-manifest.json` to `prepare.py`.
+It is the archive's `evidence/input-manifest.json`: original MPS hashes,
+conversions, references, exclusions and the ordered roster.
 Each output directory holds a frozen run schedule. Repeat the same command
 to resume missing work. Use a fresh directory when changing the build,
 selection, CPU placement, mode, memory limit or runner. The scorer verifies
@@ -78,7 +84,15 @@ the file inventory and run identities before comparing arms. Pass
 `--legacy` only for a first-edition archive whose schedule was not recorded.
 
 After building the release driver, run the review regression checks with
-`python benchmarks/local-mip/test_pilot.py`.
+`python benchmarks/local-mip/test_pilot.py`. CI builds the driver and runs
+them, together with the native tests under the `local-mip-bench` feature.
+
+A dispatched search reports one of these stops: `feasible`, `stalled`
+(patience ran out), `no_admissible_move` (every sampled move was fixed or
+tabu), `effort_exhausted`, `local_timeout`, `global_stop` and
+`numerical_rejection`; metered FJ can also report `step_limit` and
+`fj_scoring_limit`. Records made before the review count
+`no_admissible_move` under `stalled`.
 
 To repeat the fixing and interval-propagation diagnostic, run
 `python benchmarks/local-mip/replay_fixing.py MODEL.json [MODEL.json ...]`.

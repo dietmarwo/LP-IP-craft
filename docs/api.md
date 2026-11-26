@@ -236,7 +236,9 @@ The Python bound API is unchanged.
 
 Set `NativeOptions::local_mip_effort` to a positive coefficient-visit budget
 to enable one tight-move feasibility attempt at the fractional root of the
-general serial MIP search with presolve enabled. The value defaults to zero.
+general serial MIP search with presolve enabled and `Options::threads == 1`.
+The value defaults to zero. Component, tree, packing and RENS child solves
+never start it. The setting is Rust only; the Python options do not have it.
 Set `NativeOptions::local_mip_seed` to replay the row sampling and tie breaks.
 Its default is zero. Wall-time limits can still interrupt a replay.
 The attempt uses the root LP point, runs after Feasibility Jump when both are
@@ -252,9 +254,18 @@ opportunity. A successful rounding or an accepted integral leaf ends this
 allowance. The global budgets also apply to these calls.
 
 When dispatched, `diagnostics.root_local_search.*` reports its work, wall
-time and stopping reason. Benchmark instrumentation is available via the
-native crate's `local-mip-bench` feature. See the [pilot
-recipe](../benchmarks/local-mip/README.md).
+time and stopping reason. `stop` is one of `feasible`, `stalled` (patience ran
+out), `no_admissible_move` (every sampled move was fixed or tabu),
+`effort_exhausted`, `local_timeout`, `global_stop` and `numerical_rejection`.
+The attempt ends at its first checked feasible point, also when that point is
+worse than the incumbent: `improved_incumbent` is 1 only if it became the new
+incumbent. `seconds` and `check_seconds` are wall times, so the metadata of two
+replays differs in them. If the root is fractional and the search was requested
+but did not start, `diagnostics.root_local_search.skip` gives the reason
+(`ineligible_path` or `global_stop_before_dispatch`). Benchmark instrumentation
+is available via the native crate's `local-mip-bench` feature. See the [pilot
+recipe](../benchmarks/local-mip/README.md) and the measured
+[results](local-mip-pilot/RESULTS.md) with their [review](local-mip-pilot/REVIEW.md).
 
 ## MIP search additions in 0.24
 
