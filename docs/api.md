@@ -232,6 +232,30 @@ throughout its lifetime. See [the proof and restrictions](safe-dual-bounds.md#pr
 The Python bound API is unchanged.
 
 
+## Experimental LocalMIP root search in Rust
+
+Set `NativeOptions::local_mip_effort` to a positive coefficient-visit budget
+to enable one tight-move feasibility attempt at the fractional root of the
+general serial MIP search with presolve enabled. The value defaults to zero.
+Set `NativeOptions::local_mip_seed` to replay the row sampling and tie breaks.
+Its default is zero. Wall-time limits can still interrupt a replay.
+The attempt uses the root LP point, runs after Feasibility Jump when both are
+enabled, and shares the solve deadline and cancellation token. Its local
+wall allowance is 250 ms including setup, subject to cooperative checks.
+After initialization, a drop of at least 10% in the violated row count renews
+patience, which is one quarter of the visit budget (a zero quotient disables
+the patience check). The attempt spends no simplex pivots or LP nodes.
+Candidate evaluation and any subsequent proof certification use the usual
+solver tolerances and proof path. If the search supplies the first checked
+incumbent, up to eight subsequent fractional nodes retain the usual rounding
+opportunity. A successful rounding or an accepted integral leaf ends this
+allowance. The global budgets also apply to these calls.
+
+When dispatched, `diagnostics.root_local_search.*` reports its work, wall
+time and stopping reason. Benchmark instrumentation is available via the
+native crate's `local-mip-bench` feature. See the [pilot
+recipe](../benchmarks/local-mip/README.md).
+
 ## MIP search additions in 0.24
 
 All flags exist in Rust `NativeOptions` and Python `NativeOptions`. Search remains serial inside each independent component.

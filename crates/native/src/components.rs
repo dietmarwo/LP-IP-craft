@@ -159,6 +159,7 @@ fn controls(settings: &NativeOptions, started: Instant) -> NativeOptions {
     // A child trace is not a global tree trace. The aggregate reports its
     // explicit scope instead of computing and silently discarding events.
     c.mip_diagnostics = false;
+    c.local_mip_effort = 0;
     c.decompose = false;
     c.packing_workers = 1;
     c.tree_threads = 1;

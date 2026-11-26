@@ -13,8 +13,15 @@ mod dense;
 mod diagnostics;
 mod dyadic;
 mod ft;
+mod heuristic_budget;
 mod incumbent;
 mod jump;
+mod local_mip;
+#[cfg(feature = "local-mip-bench")]
+#[doc(hidden)]
+pub mod local_mip_bench;
+#[cfg(not(feature = "local-mip-bench"))]
+mod local_mip_bench;
 mod lp;
 mod lu;
 mod mip_presolve;
@@ -139,6 +146,11 @@ pub struct NativeOptions {
     /// Bounded serial root Feasibility Jump prototype.
     pub feasibility_jump: bool,
     pub feasibility_jump_steps: u64,
+    /// Coefficient visits for an experimental tight-move search at the serial MIP root.
+    /// Zero disables it. The local wall limit is 250 ms, including setup.
+    pub local_mip_effort: u64,
+    /// Reproducible sampling and tie breaking for LocalMIP.
+    pub local_mip_seed: u64,
     /// Tighten conservative bounds to a verified integral objective lattice.
     pub objective_lattice: bool,
     /// Split independent restricted-row components before solving.
@@ -303,6 +315,8 @@ impl Default for NativeOptions {
             rational_certification: true,
             feasibility_jump: false,
             feasibility_jump_steps: 2000,
+            local_mip_effort: 0,
+            local_mip_seed: 0,
             objective_lattice: true,
             decompose: true,
             decomposition_min_variables: 32,
@@ -648,20 +662,23 @@ fn accepted(
         && r.duality_gap <= settings.dual_tolerance
 }
 
-struct Incumbents<'a> {
+struct Incumbents<'a, 't> {
     best: f64,
     upper: f64,
     certified: Option<(Vec<f64>, lp_ip_craft::Evaluation)>,
     trace: Option<diagnostics::SearchDiagnostics>,
     original_model: &'a Model,
     pivots: u64,
+    pilot: Option<&'a mut local_mip_bench::Trace<'t>>,
+    // A first feasible local-search point can otherwise suppress all tree rounding.
+    rounding_trials_left: u8,
 }
 fn consider(
     model: &Model,
     x: Vec<f64>,
     options: &Options,
     result: &mut SolveResult,
-    pool: &mut Incumbents<'_>,
+    pool: &mut Incumbents<'_, '_>,
     source: &'static str,
 ) -> Result<bool> {
     let e = check::evaluate(model, &x, &options.tolerances)?;
@@ -675,23 +692,36 @@ fn consider(
             pool.certified = Some((x.clone(), e.clone()));
         }
     }
-    if let Some(trace) = &mut pool.trace {
+    if pool.trace.is_some() || pool.pilot.is_some() {
         // Root reductions do not change columns. Check the user's model too;
         // a diagnostic must not confuse reduced-model and original acceptance.
-        if let Ok(original) = check::evaluate(pool.original_model, &x, &options.tolerances) {
-            if original.feasible_candidate {
-                trace.candidate(
-                    original.objective,
-                    (pool.upper < previous_upper).then(|| oriented(model, pool.upper)),
-                    source,
-                    result.nodes,
-                    pool.pivots,
-                );
+        let original = check::evaluate(pool.original_model, &x, &options.tolerances)
+            .ok()
+            .filter(|e| e.feasible_candidate);
+        let proof = (pool.upper < previous_upper).then(|| oriented(model, pool.upper));
+        if let Some(trace) = &mut pool.trace {
+            if let Some(e) = &original {
+                trace.candidate(e.objective, proof, source, result.nodes, pool.pivots);
             } else {
                 trace.original_check_rejections += 1;
             }
-        } else {
-            trace.original_check_rejections += 1;
+        }
+        if let Some(trace) = &mut pool.pilot {
+            let work = (result.nodes, pool.pivots);
+            if let Some(e) = &original {
+                trace.candidate(e.objective, source, work);
+                if proof.is_some() {
+                    trace.event(
+                        "certified_incumbent",
+                        source,
+                        work,
+                        Some(e.objective),
+                        proof,
+                    );
+                }
+            } else {
+                trace.event("original_check_rejection", source, work, None, None);
+            }
         }
     }
     let obj = oriented(model, e.objective);
@@ -729,7 +759,7 @@ fn certify(
     settings: &NativeOptions,
     keep: &[bool],
     certifier: &mut Certifier,
-    pool: &mut Incumbents<'_>,
+    pool: &mut Incumbents<'_, '_>,
     result: &mut SolveResult,
     budget: &mut Budget<'_>,
 ) -> Result<()> {
@@ -745,6 +775,8 @@ fn certify(
     }
     certifier.last = Some(x.clone());
     certifier.attempts += 1;
+    let started = pool.pilot.as_ref().map(|_| Instant::now());
+    let work_before = (result.nodes, budget.pivots);
     let remaining = WITNESS_WORK.saturating_sub(certifier.witness_work);
     let witness = if settings.rational_certification && remaining > 0 {
         certifier.witness_attempts += 1;
@@ -781,6 +813,19 @@ fn certify(
                     budget.pivots,
                 );
             }
+            if let Some((trace, started)) = pool.pilot.as_deref_mut().zip(started) {
+                let work = (result.nodes, budget.pivots);
+                let value = oriented(model, objective);
+                trace.candidate(value, "rational_witness", work);
+                trace.event(
+                    "certified_incumbent",
+                    "rational_witness",
+                    work,
+                    Some(value),
+                    Some(oriented(model, upper)),
+                );
+                trace.stage("certification", work, work_before, started);
+            }
             return Ok(());
         }
     }
@@ -801,7 +846,16 @@ fn certify(
         }
     };
     lp.fix_for_certification(&rounded, &integral, model.variables())?;
-    if lp.solve(budget, true)? != Status::Optimal {
+    let solved = lp.solve(budget, true)?;
+    if let Some((trace, started)) = pool.pilot.as_deref_mut().zip(started) {
+        trace.stage(
+            "certification",
+            (result.nodes, budget.pivots),
+            work_before,
+            started,
+        );
+    }
+    if solved != Status::Optimal {
         return Ok(());
     }
     let mut point = lp.point();
@@ -823,7 +877,7 @@ fn heuristic(
     x: &[f64],
     options: &Options,
     result: &mut SolveResult,
-    pool: &mut Incumbents<'_>,
+    pool: &mut Incumbents<'_, '_>,
     budget: &Budget<'_>,
 ) -> Result<u64> {
     let mut found = 0;
@@ -882,6 +936,153 @@ fn heuristic(
         }
     }
     Ok(found)
+}
+
+fn root_local_search(
+    model: &Model,
+    (bounds, point): (&Bounds, &[f64]),
+    options: &Options,
+    budget: &Budget<'_>,
+    result: &mut SolveResult,
+    pool: &mut Incumbents<'_, '_>,
+) -> Result<jump::Stats> {
+    use heuristic_budget::{Meter, Stop};
+
+    let settings = budget.settings;
+    let controls = pool
+        .pilot
+        .as_ref()
+        .map_or_else(local_mip_bench::Controls::default, |t| t.controls);
+    let mut jump_stats = jump::Stats::default();
+    if settings.feasibility_jump
+        && controls.matched_fj_effort == 0
+        && !controls.replace_root_fj
+        && budget.stop().is_none()
+    {
+        let started = pool.pilot.as_ref().map(|_| Instant::now());
+        let (proposal, stats) = jump::search(
+            model,
+            bounds,
+            point,
+            budget,
+            settings.feasibility_jump_steps,
+        );
+        jump_stats = stats;
+        if let Some(x) = proposal {
+            consider(model, x, options, result, pool, "feasibility_jump")?;
+        }
+        if let Some((trace, started)) = pool.pilot.as_deref_mut().zip(started) {
+            let work = (result.nodes, budget.pivots);
+            trace.stage("feasibility_jump", work, work, started);
+        }
+    }
+
+    let matched_fj = controls.matched_fj_effort != 0;
+    let effort = if matched_fj {
+        controls.matched_fj_effort
+    } else {
+        settings.local_mip_effort
+    };
+    let skip = if effort == 0 {
+        "disabled"
+    } else if options.threads != 1 || !settings.presolve {
+        "ineligible_path"
+    } else if budget.stop().is_some() || settings.node_limit.is_some_and(|n| result.nodes >= n) {
+        "global_stop_before_dispatch"
+    } else {
+        "dispatched"
+    };
+    if let Some(trace) = &mut pool.pilot {
+        trace.skip = skip;
+    }
+    if skip != "dispatched" {
+        return Ok(jump_stats);
+    }
+
+    let started = pool.pilot.as_ref().map(|_| Instant::now());
+    let mut meter = Meter::new(budget, effort, effort / 4);
+    let source = if matched_fj {
+        "feasibility_jump_metered"
+    } else {
+        "local_mip"
+    };
+    let mut local_stats = local_mip::Stats::default();
+    let proposal = if matched_fj {
+        let (proposal, stats) = jump::search_metered(
+            model,
+            bounds,
+            point,
+            budget,
+            settings.feasibility_jump_steps,
+            &mut meter,
+        );
+        jump_stats = stats;
+        proposal.and_then(|x| {
+            if meter.valid_point(model, pool.original_model, &x, &options.tolerances)? {
+                Ok(x)
+            } else {
+                Err(Stop::Numerical)
+            }
+        })
+    } else {
+        let (proposal, stats) = local_mip::search(
+            model,
+            pool.original_model,
+            bounds,
+            point,
+            &options.tolerances,
+            &mut meter,
+            settings.local_mip_seed,
+        );
+        local_stats = stats;
+        proposal
+    };
+    let stop = match proposal {
+        Ok(x) => {
+            let first = !pool.best.is_finite();
+            if consider(model, x, options, result, pool, source)? && first {
+                pool.rounding_trials_left = 8;
+            }
+            Stop::Feasible
+        }
+        Err(reason) => reason,
+    };
+    meter.report(
+        &mut result.backend.effective_options,
+        source,
+        stop,
+        &[
+            (
+                "proposals",
+                if matched_fj {
+                    jump_stats.proposals
+                } else {
+                    local_stats.proposals
+                },
+            ),
+            (
+                "moves",
+                if matched_fj {
+                    jump_stats.steps
+                } else {
+                    local_stats.moves
+                },
+            ),
+            (
+                "weight_bumps",
+                if matched_fj {
+                    jump_stats.bumps
+                } else {
+                    local_stats.weight_bumps
+                },
+            ),
+        ],
+    );
+    if let Some((trace, started)) = pool.pilot.as_deref_mut().zip(started) {
+        let work = (result.nodes, budget.pivots);
+        trace.stage(source, work, work, started);
+    }
+    Ok(jump_stats)
 }
 
 /// One bound change on the path from the root; shared by all descendants,
@@ -992,7 +1193,7 @@ fn diagnostic_frontier_bound(
 fn gap_reached(
     settings: &NativeOptions,
     model: &Model,
-    pool: &Incumbents<'_>,
+    pool: &Incumbents<'_, '_>,
     result: &SolveResult,
     bound: Option<f64>,
 ) -> bool {
@@ -1103,6 +1304,7 @@ impl NativeSolver {
         start: Option<&WarmStart>,
         cancel: &CancellationToken,
         diagnostic_original: &Model,
+        pilot: Option<&mut local_mip_bench::Trace<'_>>,
     ) -> Result<SolveResult> {
         options.validate()?;
         self.settings.validate()?;
@@ -1208,6 +1410,8 @@ impl NativeSolver {
             }),
             original_model: diagnostic_original,
             pivots: 0,
+            pilot,
+            rounding_trials_left: 0,
         };
         let lattice = settings.objective_lattice && incumbent::integer_lattice(model);
         let mut counters = Counters::default();
@@ -1448,6 +1652,16 @@ impl NativeSolver {
             }
             if model.is_mip() {
                 result.nodes += 1;
+                if node.depth == 0 {
+                    if let Some(trace) = &mut pool.pilot {
+                        trace.stage(
+                            "search_root_lp",
+                            (result.nodes, budget.pivots),
+                            (result.nodes - 1, before_pivots),
+                            solve,
+                        );
+                    }
+                }
             }
             if s == Status::Infeasible {
                 if model.is_mip() && result.nodes == 1 {
@@ -1517,6 +1731,9 @@ impl NativeSolver {
                 .map(|b| if lattice { b.ceil() } else { b });
             if !model.is_mip() {
                 result.evaluation = Some(check::evaluate(model, &x, &options.tolerances)?);
+                if let Some(trace) = &mut pool.pilot {
+                    trace.checked_point(&x, options, "lp_solution", (result.nodes, budget.pivots));
+                }
                 result.candidate = Some(x);
                 result.duals = Some(duals);
                 result.best_bound = bound.map(|b| oriented(model, b));
@@ -1559,9 +1776,9 @@ impl NativeSolver {
                 branching_variable(model, node_bounds, &x, options, &pseudocosts, settings);
             if branch.is_some()
                 && settings.incumbent_heuristic
-                && (result.nodes == 1 || !pool.upper.is_finite())
+                && (result.nodes == 1 || !pool.upper.is_finite() || pool.rounding_trials_left > 0)
             {
-                counters.heuristic_candidates += heuristic(
+                let found = heuristic(
                     model,
                     node_bounds,
                     &x,
@@ -1570,28 +1787,40 @@ impl NativeSolver {
                     &mut pool,
                     &budget,
                 )?;
+                counters.heuristic_candidates += found;
+                pool.rounding_trials_left = if found > 0 {
+                    0
+                } else {
+                    pool.rounding_trials_left.saturating_sub(1)
+                };
             }
-            if node.depth == 0
-                && branch.is_some()
-                && settings.feasibility_jump
-                && budget.stop().is_none()
-            {
-                let (proposal, stats) = jump::search(
-                    model,
-                    node_bounds,
-                    &x,
-                    &budget,
-                    settings.feasibility_jump_steps,
-                );
-                jump_stats = stats;
-                if let Some(point) = proposal {
-                    consider(
+            if node.depth == 0 {
+                if let Some(trace) = &mut pool.pilot {
+                    trace.skip = if branch.is_some() {
+                        "disabled"
+                    } else {
+                        "integral_root"
+                    };
+                    trace.event(
+                        "root_relaxation",
+                        "search_root_lp",
+                        (result.nodes, budget.pivots),
+                        Some(model.objective_offset() + oriented(model, objective)),
+                        bound.map(|b| oriented(model, b)),
+                    );
+                }
+                if branch.is_some()
+                    && (settings.feasibility_jump
+                        || settings.local_mip_effort != 0
+                        || pool.pilot.is_some())
+                {
+                    jump_stats = root_local_search(
                         model,
-                        point,
+                        (node_bounds, &x),
                         options,
+                        &budget,
                         &mut result,
                         &mut pool,
-                        "feasibility_jump",
                     )?;
                 }
             }
@@ -1605,13 +1834,22 @@ impl NativeSolver {
                 &mut result,
                 &mut budget,
             )?;
-            if gap_reached(
-                settings,
-                model,
-                &pool,
-                &result,
-                diagnostic_frontier_bound(closed_bound, all_bounds, &open, Some(bound)),
-            ) {
+            let mut stop_after_root = false;
+            if node.depth == 0 && branch.is_some() {
+                if let Some(trace) = &mut pool.pilot {
+                    trace.root_end((result.nodes, budget.pivots));
+                    stop_after_root = trace.controls.stop_at_root;
+                }
+            }
+            if stop_after_root
+                || gap_reached(
+                    settings,
+                    model,
+                    &pool,
+                    &result,
+                    diagnostic_frontier_bound(closed_bound, all_bounds, &open, Some(bound)),
+                )
+            {
                 node.bound = bound;
                 serial += 1;
                 open.push(Open {
@@ -1619,7 +1857,11 @@ impl NativeSolver {
                     serial,
                     node,
                 });
-                status = Status::GapLimit;
+                status = if stop_after_root {
+                    Status::Unknown
+                } else {
+                    Status::GapLimit
+                };
                 break;
             }
             if bound.is_some_and(|b| b >= pool.upper) {
@@ -1791,6 +2033,7 @@ impl NativeSolver {
                     all_bounds = false;
                     break;
                 }
+                pool.rounding_trials_left = 0;
                 certify(
                     model,
                     options,
@@ -2433,6 +2676,10 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
     }
     if let Some(value) = s.mip_absolute_gap {
         options.push(("mip_absolute_gap".into(), value.to_string()));
+    }
+    if s.local_mip_effort != 0 {
+        options.push(("local_mip_effort".into(), s.local_mip_effort.to_string()));
+        options.push(("local_mip_seed".into(), s.local_mip_seed.to_string()));
     }
     options
 }

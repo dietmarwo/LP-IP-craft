@@ -12,6 +12,13 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+### Added
+
+- Experimental Rust `NativeOptions::local_mip_effort` and `local_mip_seed` for one bounded
+  tight-move feasibility search at a fractional serial MIP root. The default
+  is zero. The native solver checks proposals before admitting them through
+  the existing incumbent and certification path.
+
 ### Changed
 
 - optimization-jobs pin `2bfa8e4` (the merge of the optimization-jobs 0.5.0

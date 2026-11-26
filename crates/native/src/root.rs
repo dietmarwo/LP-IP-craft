@@ -160,6 +160,17 @@ pub(crate) fn solve(
     start: Option<&WarmStart>,
     cancel: &CancellationToken,
 ) -> Result<SolveResult> {
+    solve_observed(solver, model, options, start, cancel, None)
+}
+
+pub(crate) fn solve_observed(
+    solver: &mut NativeSolver,
+    model: &Model,
+    options: &Options,
+    start: Option<&WarmStart>,
+    cancel: &CancellationToken,
+    mut pilot: Option<&mut local_mip_bench::Trace<'_>>,
+) -> Result<SolveResult> {
     options.validate()?;
     solver.settings.validate()?;
     if let Some(s) = start {
@@ -186,7 +197,7 @@ pub(crate) fn solve(
         || solver.settings.iteration_limit == Some(0)
         || solver.settings.node_limit == Some(0)
     {
-        return solver.solve_internal(model, options, start, cancel, model);
+        return solver.solve_internal(model, options, start, cancel, model, pilot);
     }
     let began = Instant::now();
     let reduction = if solver.settings.singleton_presolve {
@@ -195,7 +206,7 @@ pub(crate) fn solve(
         None
     };
     if reduction.is_none() && !model.is_mip() {
-        return original_after_preprocessing(solver, model, options, start, cancel, began);
+        return original_after_preprocessing(solver, model, options, start, cancel, began, pilot);
     }
     let mut reduced = reduction.unwrap_or_else(|| Reduction {
         model: model.clone(),
@@ -267,6 +278,7 @@ pub(crate) fn solve(
                 None,
                 cancel,
                 &relaxation,
+                None,
             )?;
             separation_pivots += probe.iterations;
             separation_nodes += 1;
@@ -302,6 +314,7 @@ pub(crate) fn solve(
             start,
             cancel,
             began,
+            pilot.as_deref_mut(),
         )?
     } else {
         rootcuts::Stats::default()
@@ -320,14 +333,16 @@ pub(crate) fn solve(
         && !solver.settings.coefficient_tightening
         && !solver.settings.dual_presolve
     {
-        return original_after_preprocessing(solver, model, options, start, cancel, began);
+        return original_after_preprocessing(solver, model, options, start, cancel, began, pilot);
     }
 
     if let Some(s) = start {
         if check::evaluate(model, &s.primal, &options.tolerances)?.feasible_candidate
             && !check::evaluate(&reduced.model, &s.primal, &options.tolerances)?.feasible_candidate
         {
-            return original_after_preprocessing(solver, model, options, start, cancel, began);
+            return original_after_preprocessing(
+                solver, model, options, start, cancel, began, pilot,
+            );
         }
     }
     let conversion = began.elapsed().as_secs_f64();
@@ -351,12 +366,16 @@ pub(crate) fn solve(
     if let Some(t) = &mut settings.time_limit_seconds {
         *t = (*t - conversion).max(0.);
     }
+    if let Some(trace) = &mut pilot {
+        trace.prefix = (separation_nodes, separation_pivots);
+    }
     let mut result = NativeSolver::new(settings).solve_internal(
         &reduced.model,
         options,
         child_start,
         cancel,
         model,
+        pilot,
     )?;
     // A checked root bound of the cut model also bounds every limited or
     // failed child search; it says nothing about an infeasible or unbounded one.
@@ -605,13 +624,15 @@ fn original_after_preprocessing(
     start: Option<&WarmStart>,
     cancel: &CancellationToken,
     began: Instant,
+    pilot: Option<&mut local_mip_bench::Trace<'_>>,
 ) -> Result<SolveResult> {
     let conversion = began.elapsed().as_secs_f64();
     let mut settings = solver.settings.clone();
     if let Some(t) = &mut settings.time_limit_seconds {
         *t = (*t - conversion).max(0.);
     }
-    let mut r = NativeSolver::new(settings).solve_internal(model, options, start, cancel, model)?;
+    let mut r =
+        NativeSolver::new(settings).solve_internal(model, options, start, cancel, model, pilot)?;
     if solver.settings.mip_diagnostics && model.is_mip() {
         r.backend.effective_options.push((
             "diagnostics.mip_search.preprocessing_seconds".into(),

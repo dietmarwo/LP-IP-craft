@@ -35,6 +35,7 @@ pub(crate) fn run(
     start: Option<&WarmStart>,
     cancel: &CancellationToken,
     began: Instant,
+    mut pilot: Option<&mut local_mip_bench::Trace<'_>>,
 ) -> Result<Stats> {
     let mut stats = Stats {
         seed: start.map(|s| s.primal.clone()),
@@ -68,11 +69,15 @@ pub(crate) fn run(
         if budget.stop().is_some() || settings.node_limit.is_some_and(|n| stats.nodes >= n) {
             break;
         }
+        let before = (stats.nodes, budget.pivots);
         stats.nodes += 1;
         let t = Instant::now();
         let status = lp
             .solve(&mut budget, round == 0)
             .unwrap_or(Status::NumericalFailure);
+        if let Some(trace) = &mut pilot {
+            trace.stage("presolve_root_lp", (stats.nodes, budget.pivots), before, t);
+        }
         if status != Status::Optimal {
             stats.stages.push(format!("{{\"round\":{round},\"status\":\"{}\",\"bound\":null,\"objective\":null,\"seconds\":{}}}",status.as_str(),t.elapsed().as_secs_f64()));
             break;
@@ -115,15 +120,26 @@ pub(crate) fn run(
                 &mut budget,
                 &mut stats.nodes,
                 &mut stats.seed,
+                pilot.as_deref_mut(),
             )?;
             if budget.stop().is_some() || settings.node_limit.is_some_and(|n| stats.nodes >= n) {
                 break;
             }
+            let before = (stats.nodes, budget.pivots);
+            let started = pilot.as_ref().map(|_| Instant::now());
             stats.nodes += 1;
-            if lp
+            let status = lp
                 .solve(&mut budget, false)
-                .unwrap_or(Status::NumericalFailure)
-                != Status::Optimal
+                .unwrap_or(Status::NumericalFailure);
+            if let Some((trace, started)) = pilot.as_deref_mut().zip(started) {
+                trace.stage(
+                    "root_lp_restore",
+                    (stats.nodes, budget.pivots),
+                    before,
+                    started,
+                );
+            }
+            if status != Status::Optimal
                 || !accepted(
                     model,
                     model.variables(),
@@ -181,7 +197,7 @@ pub(crate) fn run(
             stats.pruned = prune_slack(model, cuts_from, &x)?;
         }
         if settings.root_heuristics && budget.stop().is_none() {
-            rens(model, &x, options, &mut budget, began, &mut stats)?;
+            rens(model, &x, options, &mut budget, began, &mut stats, pilot)?;
         }
     }
     stats.pivots = budget.pivots;
@@ -201,8 +217,11 @@ fn rens(
     budget: &mut Budget<'_>,
     began: Instant,
     stats: &mut Stats,
+    mut pilot: Option<&mut local_mip_bench::Trace<'_>>,
 ) -> Result<()> {
     let settings = budget.settings;
+    let started = pilot.as_ref().map(|_| Instant::now());
+    let before = (stats.nodes, budget.pivots);
     let mut data = model.data().clone();
     let (mut open, mut fixed) = (0, 0);
     for (j, &v) in x.iter().enumerate() {
@@ -251,9 +270,20 @@ fn rens(
     stats.rens_nodes += r.nodes;
     budget.pivots += r.iterations;
     if let Some(c) = r.candidate {
-        if primal::candidate(model, c, options, &mut stats.seed)? {
+        if primal::candidate(
+            model,
+            c,
+            options,
+            &mut stats.seed,
+            pilot
+                .as_deref_mut()
+                .map(|p| (p, "rens", (stats.nodes, budget.pivots))),
+        )? {
             stats.rens_found += 1;
         }
+    }
+    if let Some((trace, started)) = pilot.zip(started) {
+        trace.stage("rens", (stats.nodes, budget.pivots), before, started);
     }
     Ok(())
 }
