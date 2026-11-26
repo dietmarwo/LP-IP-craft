@@ -18,6 +18,7 @@ exclude = ["tests/search_limits.rs"]
 parallel-bench = []
 kernel-profile = []
 basis-replay = ["kernel-profile"]
+local-mip-bench = []
 
 [dependencies]
 lp-ip-craft = { path = "../core", version = "0.30.0" }

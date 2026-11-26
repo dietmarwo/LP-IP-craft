@@ -13,6 +13,11 @@ pub(crate) fn candidate(
     x: Vec<f64>,
     options: &Options,
     best: &mut Option<Vec<f64>>,
+    observation: Option<(
+        &mut local_mip_bench::Trace<'_>,
+        &'static str,
+        local_mip_bench::Work,
+    )>,
 ) -> Result<bool> {
     if !check::evaluate(model, &x, &options.tolerances)?.feasible_candidate {
         return Ok(false);
@@ -30,6 +35,9 @@ pub(crate) fn candidate(
         )
     };
     if best.as_ref().is_none_or(|old| value(&x) < value(old)) {
+        if let Some((trace, source, work)) = observation {
+            trace.checked_point(&x, options, source, work);
+        }
         *best = Some(x);
         return Ok(true);
     }
@@ -45,6 +53,7 @@ pub(crate) fn run(
     budget: &mut Budget<'_>,
     nodes: &mut u64,
     best: &mut Option<Vec<f64>>,
+    mut pilot: Option<&mut local_mip_bench::Trace<'_>>,
 ) -> Result<Stats> {
     let mut stats = Stats::default();
     if (0..model.n()).any(|j| {
@@ -68,7 +77,15 @@ pub(crate) fn run(
             })
             .collect()
     };
-    if candidate(model, rounded(&initial), options, best)? {
+    if candidate(
+        model,
+        rounded(&initial),
+        options,
+        best,
+        pilot
+            .as_deref_mut()
+            .map(|p| (p, "root_rounding", (*nodes, budget.pivots))),
+    )? {
         stats.candidates += 1;
     }
     let cap = budget.settings.heuristic_lp_calls;
@@ -99,14 +116,27 @@ pub(crate) fn run(
         lower[j] = value;
         upper[j] = value;
         lp.set_bounds(&lower, &upper)?;
+        let before = (*nodes, budget.pivots);
+        let started = pilot.as_ref().map(|_| Instant::now());
         *nodes += 1;
         stats.calls += 1;
         let status = lp.solve(budget, false).unwrap_or(Status::NumericalFailure);
+        if let Some((trace, started)) = pilot.as_deref_mut().zip(started) {
+            trace.stage("root_diving", (*nodes, budget.pivots), before, started);
+        }
         if status != Status::Optimal {
             stats.failures += 1;
             break;
         }
-        if candidate(model, rounded(&lp.point()), options, best)? {
+        if candidate(
+            model,
+            rounded(&lp.point()),
+            options,
+            best,
+            pilot
+                .as_deref_mut()
+                .map(|p| (p, "root_diving", (*nodes, budget.pivots))),
+        )? {
             stats.candidates += 1;
         }
     }
@@ -150,7 +180,15 @@ pub(crate) fn run(
                 break;
             }
         }
-        if candidate(model, target.clone(), options, best)? {
+        if candidate(
+            model,
+            target.clone(),
+            options,
+            best,
+            pilot
+                .as_deref_mut()
+                .map(|p| (p, "l1_pump", (*nodes, budget.pivots))),
+        )? {
             stats.candidates += 1;
             break;
         }
@@ -205,17 +243,30 @@ pub(crate) fn run(
             }
         };
         let cold = stats.calls as usize == pump_from;
+        let before = (*nodes, budget.pivots);
+        let started = pilot.as_ref().map(|_| Instant::now());
         *nodes += 1;
         stats.calls += 1;
         let status = projection
             .solve(budget, cold)
             .unwrap_or(Status::NumericalFailure);
+        if let Some((trace, started)) = pilot.as_deref_mut().zip(started) {
+            trace.stage("l1_pump", (*nodes, budget.pivots), before, started);
+        }
         if status != Status::Optimal {
             stats.failures += 1;
             break;
         }
         point = projection.point()[..n].to_vec();
-        if candidate(model, rounded(&point), options, best)? {
+        if candidate(
+            model,
+            rounded(&point),
+            options,
+            best,
+            pilot
+                .as_deref_mut()
+                .map(|p| (p, "l1_pump", (*nodes, budget.pivots))),
+        )? {
             stats.candidates += 1;
             break;
         }

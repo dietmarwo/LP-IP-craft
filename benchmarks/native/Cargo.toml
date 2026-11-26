@@ -11,6 +11,7 @@ backend_native=[]
 backend_highs=[]
 kernel-profile=["lp-ip-craft-native/kernel-profile"]
 basis-replay=["kernel-profile", "lp-ip-craft-native/basis-replay"]
+local-mip-pilot=["lp-ip-craft-native/local-mip-bench"]
 [dependencies]
 lp-ip-craft={path="../../crates/core"}
 lp-ip-craft-native={path="../../crates/native"}
@@ -23,3 +24,7 @@ path="../shared/main.rs"
 name="basis-replay"
 path="../shared/replay.rs"
 required-features=["basis-replay"]
+
+[[bin]]
+name="local-mip-pilot"
+path="../local-mip/driver.rs"

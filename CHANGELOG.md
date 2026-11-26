@@ -12,6 +12,22 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+### Added
+
+- Experimental Rust `NativeOptions::local_mip_effort` and `local_mip_seed` for one bounded
+  tight-move feasibility search at a fractional serial MIP root. The default
+  is zero. The native solver checks proposals before admitting them through
+  the existing incumbent and certification path. When the search supplies
+  the first checked incumbent, up to eight later fractional nodes keep their
+  rounding call. `diagnostics.root_local_search.*` reports the work, the stop
+  reason, whether the point became the incumbent and, if the search was
+  requested but not started, why. With zero effort the solver's results and
+  metadata are those of 0.30.0. The pilot found no gain that would justify
+  enabling it: see the [results](docs/local-mip-pilot/RESULTS.md) and their
+  [review](docs/local-mip-pilot/REVIEW.md) (#52).
+- `benchmarks/local-mip`: the pilot's driver, runner, scorer and FPR fixing
+  replay, with a CI job that builds the driver and runs its regression tests.
+
 ### Changed
 
 - optimization-jobs pin `2bfa8e4` (the merge of the optimization-jobs 0.5.0

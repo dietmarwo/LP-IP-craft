@@ -159,6 +159,7 @@ fn controls(settings: &NativeOptions, started: Instant) -> NativeOptions {
     // A child trace is not a global tree trace. The aggregate reports its
     // explicit scope instead of computing and silently discarding events.
     c.mip_diagnostics = false;
+    c.local_mip_effort = 0;
     c.decompose = false;
     c.packing_workers = 1;
     c.tree_threads = 1;
@@ -492,6 +493,14 @@ pub(crate) fn solve_if_separable(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn component_solves_do_not_start_the_root_local_search() {
+        let settings = NativeOptions {
+            local_mip_effort: 1000,
+            ..NativeOptions::default()
+        };
+        assert_eq!(controls(&settings, Instant::now()).local_mip_effort, 0);
+    }
     #[test]
     fn reservations_never_exceed_the_global_budget() {
         for count in 1..=16 {
