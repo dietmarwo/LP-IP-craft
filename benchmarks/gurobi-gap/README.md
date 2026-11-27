@@ -4,12 +4,19 @@ This driver solves the same original-model coefficient arrays in LP-IP-craft
 and Gurobi. Gurobi is optional. The release extension provides headline
 timings. The same builds produce additional diagnostics in separate runs.
 
+The recorded campaign, its figures and their review are in
+[docs/gurobi-gap](../../docs/gurobi-gap/RESULTS.md); the raw records ship in
+the archive named in [docs/EVIDENCE.md](../../docs/EVIDENCE.md).
+
 ## Reproduction
 
-Start with the patch applied to LP-IP-craft at
-`bcc4af35c66c2afe00066f50d736b2a06da48c72`. Build the patched and stock
-Python packages into separate locations and use one Python environment to
-run the harness. The example assumes Linux and an available Rust toolchain.
+The harness compares two builds of the Python package: a baseline, called
+`stock`, and the build under test, called `candidate`. The campaign's
+baseline is `bcc4af35c66c2afe00066f50d736b2a06da48c72`, the last commit
+before `adaptive_root` and `integer_equality_presolve` existed (version
+0.30.0); only its default arm can run there. Build both packages into
+separate locations and use one Python environment to run the harness. The
+example assumes Linux and an available Rust toolchain.
 
 ```bash
 git worktree add --detach ../lp-gap-stock bcc4af35c66c2afe00066f50d736b2a06da48c72
@@ -71,6 +78,10 @@ python benchmarks/gurobi-gap/run.py --manifest ../equality-data/manifest.json \
   --arms stock:default candidate:lattice gurobi:default --repeats 3
 ```
 
+Without Gurobi, leave `gurobi:default` out of `--arms` and score with
+`--no-reference`: the summary then holds the native arms and their paired
+ratio and omits the Gurobi ratios.
+
 The existing comparison runner also accepts `--solvers gurobi`. Its
 default reference set does not require Gurobi. The Gurobi adapter reports
 license-size refusals directly. Native regression cases with unsupported
@@ -88,7 +99,7 @@ PYTHONPATH=../gap-builds/candidate python benchmarks/gurobi-gap/validate_profile
 PYTHONPATH=../gap-builds/candidate python benchmarks/gurobi-gap/validate_profiles.py scipy
 ```
 
-## Comparing two patched revisions
+## Comparing two revisions that both have the options
 
 Set `--stock` to the preceding build and `--candidate` to the revision under
 review. Use `--arms stock:adaptive+lattice candidate:adaptive+lattice gurobi:default`

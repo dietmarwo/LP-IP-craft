@@ -70,3 +70,40 @@ def test_comparison_rejects_mismatched_pairs(change):
         records[-1]["request"]["repetition"] = 0
     with pytest.raises(ValueError, match="unmatched|unpaired"):
         assess(records, "old:default", "new:default", None, "gurobi:default")
+
+
+def test_score_is_the_shifted_geometric_mean_of_penalized_medians():
+    import math
+    from summarize import assess
+
+    def record(solver, case, rep, seconds, status="optimal"):
+        return {"request": {"solver": solver, "case": case, "family": case, "profile": "default",
+                            "repetition": rep, "input_sha256": case, "settings": {"seconds": 10.}},
+                "seconds": seconds, "issues": [], "checked": {"feasible": status == "optimal"},
+                "result": {"status": status, "nodes": 1}}
+
+    times = {"old": {"a": (0.39, 0.39, 5.), "b": (11., 0.09, 0.09)},
+             "new": {"a": (0.19, 0.03, 0.19), "b": (0.09, 12., 12.)},
+             "gurobi": {"a": (0.09, 0.09, 0.09), "b": (0.19, 0.19, 0.19)}}
+    records = [record(solver, case, rep, t, "time_limit" if t > 10. else "optimal")
+               for solver, cases in times.items() for case, row in cases.items() for rep, t in enumerate(row)]
+    score = assess(records, "old:default", "new:default", None, "gurobi:default")
+    # Medians: old 0.39 and 0.09; new 0.19 and, with two of three runs over
+    # the cap, the penalty of twice the cap. Each gets the 10 ms shift.
+    old, new, ref = math.sqrt(0.4 * 0.1), math.sqrt(0.2 * 20.01), math.sqrt(0.1 * 0.2)
+    assert score["arms"]["old:default"]["shifted_par2_geomean"] == pytest.approx(old)
+    assert score["arms"]["new:default"]["shifted_par2_geomean"] == pytest.approx(new)
+    assert score["arms"]["old:default"]["solved_models"] == 2
+    assert score["arms"]["new:default"]["solved_models"] == 1
+    assert score["paired_native_ratio"] == pytest.approx(new / old)
+    assert score["gurobi_ratio_stock"] == pytest.approx(old / ref)
+    assert score["gurobi_ratio_candidate"] == pytest.approx(new / ref)
+    assert score["gurobi_log_gap_closure"] == pytest.approx(1 - math.log(new / ref) / math.log(old / ref))
+    assert [r["case"] for r in score["regressions"]] == ["b"]
+    # Gurobi is optional: the two native arms score without it.
+    native = [r for r in records if r["request"]["solver"] != "gurobi"]
+    alone = assess(native, "old:default", "new:default", None, None)
+    assert alone["paired_native_ratio"] == pytest.approx(new / old)
+    assert not any(key.startswith("gurobi") for key in alone)
+    with pytest.raises(ValueError, match="incomplete"):
+        assess(native, "old:default", "new:default", None, "gurobi:default")

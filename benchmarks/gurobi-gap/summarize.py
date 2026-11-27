@@ -76,20 +76,23 @@ def assess(records, baseline, candidate, static, reference):
                                   nodes=median([r["result"]["nodes"] for r in obs if r["result"].get("nodes") is not None]
                                                or [0]))
         result["model_results"][case] = summaries
-        a, b, g = (summaries[key]["par2"] for key in (baseline, candidate, reference))
+        a, b = (summaries[key]["par2"] for key in (baseline, candidate))
         d = math.log((b+SHIFT)/(a+SHIFT))
         paired.append(d)
         families[row[baseline][0]["request"]["family"]].append(d)
         if b > 1.25*a and b-a > .02:
             result["regressions"].append(dict(case=case, baseline=a, candidate=b))
         bad = {"license_limit", "unavailable", "worker_error"}
-        if not set(summaries[reference]["statuses"]).intersection(bad):
+        if reference is not None and not set(summaries[reference]["statuses"]).intersection(bad):
+            g = summaries[reference]["par2"]
             base_g.append((a+SHIFT)/(g+SHIFT))
             new_g.append((b+SHIFT)/(g+SHIFT))
     result["paired_native_ratio"] = math.exp(sum(paired)/len(paired))
     result["paired_native_ci95"] = interval(paired)
     if len(families) > 1:
         result["family_mean_ci95"] = interval([sum(v)/len(v) for v in families.values()])
+    if reference is None:
+        return result
     result["gurobi_coverage"] = len(base_g)
     if base_g:
         r0, r1 = geometric_mean(base_g), geometric_mean(new_g)
@@ -107,12 +110,15 @@ def main():
     p.add_argument("--candidate", default="candidate:adaptive+lattice")
     p.add_argument("--baseline", default="stock:default")
     p.add_argument("--no-static", action="store_true", help="compare two native builds with Gurobi")
+    p.add_argument("--no-reference", action="store_true",
+                   help="score a journal without a gurobi:default arm; the Gurobi ratios are omitted")
     a = p.parse_args()
     data = [json.loads(line) for line in a.journal.read_text().splitlines()]
     selected = [rec for rec in data if rec["request"]["group"] == a.group]
     if not selected:
         p.error("selected group has no results")
-    summary = assess(selected, a.baseline, a.candidate, None if a.no_static else "stock:gmi+mir", "gurobi:default")
+    summary = assess(selected, a.baseline, a.candidate, None if a.no_static else "stock:gmi+mir",
+                     None if a.no_reference else "gurobi:default")
     a.output.write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n")
     print(json.dumps({k: v for k, v in summary.items() if k != "model_results"}, indent=2))
 
