@@ -2,8 +2,9 @@
 
 All notable changes to LP-IP-craft are documented here. Versions are the
 workspace version in Cargo.toml (Rust crates, Python package lp-ip-craft and
-the job worker share it). No version has been published to a registry yet;
-dates are those of the commits that set each version.
+the job worker share it). A tag `vX.Y.Z` publishes that version to PyPI and
+crates.io ([RELEASING.md](RELEASING.md)); dates are those of the commits
+that set each version.
 
 Versions 0.4.0-0.15.0 and 0.21.0-0.23.0 were developed outside this
 repository and never set on its main branch. They arrived with the imports
@@ -11,6 +12,8 @@ that set 0.16.0 and 0.24.0 and are summarized in those sections. References
 such as (#5) are pull requests.
 
 ## [Unreleased]
+
+## [0.31.0] - 2026-11-27
 
 ### Added
 
