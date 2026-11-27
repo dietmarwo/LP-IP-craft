@@ -142,7 +142,9 @@ family took 9.09 and 8.77 ms, against 9.65 and 14.36 ms in the delivery.
    the objective bound with the tolerance removes all of these and leaves
    nodes and pivots on the 69 fixtures unchanged. It also reverses the
    policy that two Python tests and one Rust test pin, so it is offered
-   as a separate pull request for a decision.
+   as a separate pull request for a decision. *Decided 27 November 2026:
+   merged as #55 for 0.33.0, after the same checks were repeated on
+   0.32.0.*
 2. **Use the rounded bound in the mixed tree.** Pruning by the rounded bound
    while keeping node order would close the runs of finding 4 as `optimal`
    and save nodes. The report notes that rounding the priorities lost an

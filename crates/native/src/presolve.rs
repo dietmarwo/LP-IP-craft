@@ -109,7 +109,12 @@ mod tests {
 
 /// Integer-valued row activities permit exact inward rounding of bounds.
 /// This is a MIP-equivalent relaxation, not an LP-equivalent reduction.
-pub(crate) fn strengthen_integer_rows(model: &Model) -> lp_ip_craft::Result<Option<Model>> {
+/// Limits are widened by the accepted row violation `feasibility` first, so a
+/// limit of `-21.00000000000001` becomes `-21` and not `-22`.
+pub(crate) fn strengthen_integer_rows(
+    model: &Model,
+    feasibility: f64,
+) -> lp_ip_craft::Result<Option<Model>> {
     if !model.is_mip() {
         return Ok(None);
     }
@@ -126,7 +131,10 @@ pub(crate) fn strengthen_integer_rows(model: &Model) -> lp_ip_craft::Result<Opti
         if !integral {
             continue;
         }
-        let (l, u) = (model.rows().lower[i].ceil(), model.rows().upper[i].floor());
+        let (l, u) = (
+            (model.rows().lower[i] - feasibility).ceil(),
+            (model.rows().upper[i] + feasibility).floor(),
+        );
         if l <= u && (l != model.rows().lower[i] || u != model.rows().upper[i]) {
             let d = data.get_or_insert_with(|| model.data().clone());
             d.rows.lower[i] = l;
@@ -161,9 +169,34 @@ mod integer_tests {
             rows: Bounds::new(vec![-1.7, -1.7, -1.7, 0.2], vec![2.9, 2.9, 2.9, 0.8]),
         })
         .unwrap();
-        let r = strengthen_integer_rows(&m).unwrap().unwrap();
+        let r = strengthen_integer_rows(&m, 1e-7).unwrap().unwrap();
         assert_eq!(r.rows().lower, vec![-1., -1.7, -1.7, 0.2]);
         assert_eq!(r.rows().upper, vec![2., 2.9, 2.9, 0.8]);
         assert_eq!(m.rows().upper[0], 2.9);
+    }
+    #[test]
+    fn row_rounding_allows_the_feasibility_tolerance() {
+        // 3x - 2y with a limit computed a few units in the last place off 2.
+        for (limit, low, high) in [
+            (2.0000000000001, 2., 2.),
+            (1.9999999999999, 2., 2.),
+            (2.001, 3., 2.),
+        ] {
+            let m = Model::new(ModelData {
+                sense: Sense::Minimize,
+                objective: vec![0.; 2],
+                objective_offset: 0.,
+                variables: Bounds::new(vec![0.; 2], vec![9.; 2]),
+                kinds: vec![VariableKind::Integer; 2],
+                matrix: CsrMatrix::from_dense(1, 2, &[3., -2.]).unwrap(),
+                rows: Bounds::new(vec![limit], vec![limit]),
+            })
+            .unwrap();
+            match strengthen_integer_rows(&m, 1e-7).unwrap() {
+                Some(r) => assert_eq!((r.rows().lower[0], r.rows().upper[0]), (low, high)),
+                // An empty rounded range is left to the engine.
+                None => assert!(low > high),
+            }
+        }
     }
 }

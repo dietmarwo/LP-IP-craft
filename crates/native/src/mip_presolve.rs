@@ -145,9 +145,14 @@ const PROBES: usize = 2000;
 /// one of the two propagated boxes, so each column's bounds may shrink to
 /// the hull of its two propagated intervals. Returns the new bounds, or
 /// `None` when the model's own bounds conflict (left to the checked LP).
-fn probe(model: &Model, budget: &Budget<'_>, stats: &mut Stats) -> Option<Bounds> {
+fn probe(
+    model: &Model,
+    feasibility: f64,
+    budget: &Budget<'_>,
+    stats: &mut Stats,
+) -> Option<Bounds> {
     let mut base = model.variables().clone();
-    let mut domain = propagate::Domain::new(model, true);
+    let mut domain = propagate::Domain::new(model, true, feasibility);
     let mut changed = Vec::new();
     if !domain.apply(&mut base, &mut changed, budget) {
         return None;
@@ -279,11 +284,12 @@ pub(crate) fn run(
             let mut exact = propagate::Domain::with_equalities(
                 model,
                 true,
+                options.tolerances.feasibility,
                 settings
                     .integer_equality_presolve
                     .then_some(&options.tolerances),
             );
-            let mut mixed = mixed::Domain::new(model, true);
+            let mut mixed = mixed::Domain::new(model, true, options.tolerances.feasibility);
             for _ in 0..4 {
                 let prev = changed.len();
                 if !exact.apply(&mut b, &mut changed, &budget)
@@ -299,7 +305,12 @@ pub(crate) fn run(
             if stats.rounds == 1 && (0..model.n()).all(|j| b.lower[j] <= b.upper[j]) {
                 let mut d = model.data().clone();
                 d.variables = b.clone();
-                if let Some(p) = probe(&Model::new(d)?, &budget, &mut stats) {
+                if let Some(p) = probe(
+                    &Model::new(d)?,
+                    options.tolerances.feasibility,
+                    &budget,
+                    &mut stats,
+                ) {
                     b = p;
                 }
             }
@@ -610,7 +621,7 @@ mod tests {
                 pivots: 0,
             };
             let mut stats = Stats::default();
-            let b = probe(&m, &budget, &mut stats).unwrap();
+            let b = probe(&m, 1e-7, &budget, &mut stats).unwrap();
             assert_eq!((stats.probed, stats.probe_tightened), (2, k as u64));
             // x <= 5 + 3 b and x <= 7 - b: 5 at b = 0 and 6 at b = 1. The
             // second binary allows 6 at 0 and 5 at 1, which removes nothing.
@@ -659,7 +670,7 @@ mod tests {
                 pivots: 0,
             };
             let mut stats = Stats::default();
-            let Some(b) = probe(&m, &budget, &mut stats) else {
+            let Some(b) = probe(&m, 1e-7, &budget, &mut stats) else {
                 continue;
             };
             fixed += stats.probe_fixed;

@@ -218,6 +218,7 @@ pub(crate) fn solve_observed(
     let mut inferred = if solver.settings.root_propagation && model.is_mip() {
         infer_bounds(
             &mut reduced.model,
+            options.tolerances.feasibility,
             cancel,
             began,
             solver.settings.time_limit_seconds,
@@ -260,6 +261,7 @@ pub(crate) fn solve_observed(
                 if sides > 0 {
                     let extra = infer_bounds(
                         &mut bounded,
+                        options.tolerances.feasibility,
                         cancel,
                         began,
                         solver.settings.time_limit_seconds,
@@ -986,10 +988,14 @@ fn cutoff_bounds(model: &mut Model, upper: f64) -> Result<usize> {
 type RowTerms = Vec<(Option<(f64, f64)>, Option<(f64, f64)>)>;
 
 // Totals are from a wider snapshot of the row box, so subsequent tightenings
-// within one row cannot invalidate another inference.
+// within one row cannot invalidate another inference. Integer bounds are
+// rounded with the feasibility tolerance, as in `mixed`: with decimal
+// coefficients an integer point can satisfy a row only up to rounding of the
+// data, and the result check accepts it.
 fn infer_row(
     model: &Model,
     i: usize,
+    feasibility: f64,
     bounds: &mut Bounds,
     terms: &mut RowTerms,
     mut changed: impl FnMut(usize),
@@ -1096,8 +1102,9 @@ fn infer_row(
             }
         }
         if model.kinds()[j].is_integral() {
-            lo = lo.ceil();
-            hi = hi.floor();
+            let slack = feasibility / c.abs();
+            lo = bounds.lower[j].max((lo - slack).ceil());
+            hi = bounds.upper[j].min((hi + slack).floor());
         }
         if lo > hi {
             return false;
@@ -1116,6 +1123,7 @@ fn infer_row(
 
 fn infer_bounds(
     model: &mut Model,
+    feasibility: f64,
     cancel: &CancellationToken,
     began: Instant,
     limit: Option<f64>,
@@ -1153,7 +1161,7 @@ fn infer_bounds(
                 break;
             };
             pending[i] = false;
-            if !infer_row(model, i, &mut bounds, &mut terms, |j| {
+            if !infer_row(model, i, feasibility, &mut bounds, &mut terms, |j| {
                 changed += 1;
                 for &neighbor in &incident[j] {
                     if !pending[neighbor] {
@@ -1172,7 +1180,9 @@ fn infer_bounds(
                 if i % 128 == 0 && stopped() {
                     break 'sweeps;
                 }
-                if !infer_row(model, i, &mut bounds, &mut terms, |_| changed += 1) {
+                if !infer_row(model, i, feasibility, &mut bounds, &mut terms, |_| {
+                    changed += 1
+                }) {
                     return Ok(0);
                 }
             }
@@ -1194,6 +1204,37 @@ mod propagation_tests {
     use super::*;
     use lp_ip_craft::{ModelData, VariableKind};
     #[test]
+    fn decimal_rows_keep_the_integer_point_the_check_accepts() {
+        let m = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![0.; 2],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![-6., 0.], vec![-5., 4.]),
+            kinds: vec![VariableKind::Integer; 2],
+            matrix: CsrMatrix::from_dense(1, 2, &[15., -1.4]).unwrap(),
+            rows: Bounds::new(vec![-77.8], vec![-77.8]),
+        })
+        .unwrap();
+        let infer = |feasibility| {
+            let mut copy = m.clone();
+            let changed = infer_bounds(
+                &mut copy,
+                feasibility,
+                &CancellationToken::default(),
+                Instant::now(),
+                None,
+            )
+            .unwrap();
+            (changed, copy)
+        };
+        let (changed, inferred) = infer(1e-7);
+        assert!(changed > 0);
+        assert_eq!(inferred.variables().lower, vec![-5., 2.]);
+        assert_eq!(inferred.variables().upper, vec![-5., 2.]);
+        // Read exactly, the bounds cross and the inference gives up.
+        assert_eq!(infer(0.).0, 0);
+    }
+    #[test]
     fn mixed_infinite_root_domains_are_inferred_before_admission() {
         for sense in [Sense::Minimize, Sense::Maximize] {
             let m = Model::new(ModelData {
@@ -1213,6 +1254,7 @@ mod propagation_tests {
             assert!(
                 infer_bounds(
                     &mut inferred,
+                    1e-7,
                     &CancellationToken::default(),
                     Instant::now(),
                     None
@@ -1261,6 +1303,7 @@ mod propagation_tests {
             let mut inferred = m.clone();
             infer_bounds(
                 &mut inferred,
+                1e-7,
                 &CancellationToken::default(),
                 Instant::now(),
                 None,
@@ -1300,6 +1343,7 @@ mod propagation_tests {
         assert_eq!(
             infer_bounds(
                 &mut copy,
+                1e-7,
                 &CancellationToken::default(),
                 Instant::now(),
                 None
@@ -1368,6 +1412,7 @@ mod propagation_tests {
             let mut inferred = m.clone();
             let changes = infer_bounds(
                 &mut inferred,
+                1e-7,
                 &CancellationToken::default(),
                 Instant::now(),
                 None,
@@ -1411,13 +1456,14 @@ mod propagation_tests {
         cancel.cancel();
         let mut stopped = m.clone();
         assert_eq!(
-            infer_bounds(&mut stopped, &cancel, Instant::now(), None).unwrap(),
+            infer_bounds(&mut stopped, 1e-7, &cancel, Instant::now(), None).unwrap(),
             0
         );
         assert_eq!(stopped.variables(), m.variables());
         let mut timed = m.clone();
         infer_bounds(
             &mut timed,
+            1e-7,
             &CancellationToken::default(),
             Instant::now(),
             Some(0.),

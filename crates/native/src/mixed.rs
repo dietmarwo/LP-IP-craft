@@ -1,4 +1,13 @@
 //! Outward-rounded mixed-row propagation. No rounded activity proves infeasibility.
+//!
+//! Integer bounds are rounded with the caller's feasibility tolerance. The
+//! coefficients are doubles, so a decimal row such as `15x - 1.4y = -77.8`
+//! holds at its intended integer point only up to rounding of the data. The
+//! exact quotient for `y` is `1.999...98`; a plain floor would remove the
+//! point that the result check accepts. A row may be missed by the tolerance,
+//! which moves a bound derived through coefficient `c` by `tolerance / |c|`.
+//! Continuous bounds stay exact: widening them would turn fixings into
+//! intervals and loosen the relaxation for no gain.
 use crate::{Budget, incumbent, root};
 use lp_ip_craft::{Bounds, Model};
 use std::collections::VecDeque;
@@ -23,6 +32,8 @@ pub(crate) struct Domain {
     incident: Vec<Vec<usize>>,
     last: Vec<usize>,
     first: bool,
+    /// Accepted row violation, used when rounding integer bounds.
+    slack: f64,
     pub stats: Stats,
     pub reasons: Vec<Reason>,
     scratch: Scratch,
@@ -45,7 +56,7 @@ fn add(a: f64, b: f64, lower: bool) -> Option<f64> {
     incumbent::add(a, b).map(|v| if lower { v.0 } else { v.1 })
 }
 impl Domain {
-    pub fn new(model: &Model, enabled: bool) -> Self {
+    pub fn new(model: &Model, enabled: bool, feasibility: f64) -> Self {
         let mut rows = Vec::new();
         let mut incident = vec![Vec::new(); model.n()];
         let a = model.matrix();
@@ -94,6 +105,7 @@ impl Domain {
             incident,
             last: Vec::new(),
             first: true,
+            slack: feasibility,
             stats,
             reasons: Vec::new(),
             scratch,
@@ -223,7 +235,9 @@ impl Domain {
             if !valid {
                 continue;
             }
-            if pmin[n] > model.rows().upper[i] || pmax[n] < model.rows().lower[i] {
+            if pmin[n] > model.rows().upper[i] + self.slack
+                || pmax[n] < model.rows().lower[i] - self.slack
+            {
                 self.stats.infeasible += 1;
                 return false;
             }
@@ -264,8 +278,9 @@ impl Domain {
                     }
                 }
                 if model.kinds()[j].is_integral() {
-                    lo = lo.ceil();
-                    hi = hi.floor();
+                    let slack = self.slack / c.abs();
+                    lo = old.0.max((lo - slack).ceil());
+                    hi = old.1.min((hi + slack).floor());
                 }
                 if lo > hi {
                     self.stats.infeasible += 1;
@@ -310,6 +325,65 @@ mod tests {
     use super::*;
     use crate::NativeOptions;
     use lp_ip_craft::*;
+    fn decimal(rows: Bounds, kinds: Vec<VariableKind>, bounds: Bounds, a: &[f64]) -> Model {
+        Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![0.; 2],
+            objective_offset: 0.,
+            variables: bounds,
+            kinds,
+            matrix: CsrMatrix::from_dense(1, 2, a).unwrap(),
+            rows,
+        })
+        .unwrap()
+    }
+    #[test]
+    fn integer_bounds_are_rounded_with_the_feasibility_tolerance() {
+        let settings = NativeOptions::default();
+        let cancel = CancellationToken::default();
+        let budget = Budget {
+            start: std::time::Instant::now(),
+            settings: &settings,
+            cancel: &cancel,
+            pivots: 0,
+        };
+        // 15x - 1.4y = -77.8 holds at (-5, 2) up to rounding of 1.4 and 77.8.
+        let model = decimal(
+            Bounds::new(vec![-77.8], vec![-77.8]),
+            vec![VariableKind::Integer; 2],
+            Bounds::new(vec![-6., 0.], vec![-5., 4.]),
+            &[15., -1.4],
+        );
+        let mut b = model.variables().clone();
+        assert!(Domain::new(&model, true, 1e-7).apply(&model, &mut b, &mut Vec::new(), &budget));
+        assert_eq!(
+            (b.lower.clone(), b.upper.clone()),
+            (vec![-5., 2.], vec![-5., 2.])
+        );
+        // Read exactly, the doubles admit no integer point.
+        let mut exact = model.variables().clone();
+        assert!(!Domain::new(&model, true, 0.).apply(&model, &mut exact, &mut Vec::new(), &budget));
+        // A bound just inside an integer is still rounded away.
+        let model = decimal(
+            Bounds::new(vec![f64::NEG_INFINITY], vec![2.999]),
+            vec![VariableKind::Integer; 2],
+            Bounds::new(vec![0., 0.], vec![9., 0.]),
+            &[1., 0.5],
+        );
+        let mut b = model.variables().clone();
+        assert!(Domain::new(&model, true, 1e-7).apply(&model, &mut b, &mut Vec::new(), &budget));
+        assert_eq!(b.upper[0], 2.);
+        // Continuous bounds stay exact.
+        let model = decimal(
+            Bounds::new(vec![f64::NEG_INFINITY], vec![2.5]),
+            vec![VariableKind::Integer, VariableKind::Continuous],
+            Bounds::new(vec![0., 0.], vec![3., 10.]),
+            &[1., 0.5],
+        );
+        let mut b = model.variables().clone();
+        assert!(Domain::new(&model, true, 1e-7).apply(&model, &mut b, &mut Vec::new(), &budget));
+        assert_eq!((b.upper[0], b.upper[1]), (2., 5.));
+    }
     #[test]
     fn mixed_dyadic_feasible_grid_and_sibling_restoration() {
         let settings = NativeOptions::default();
@@ -336,7 +410,7 @@ mod tests {
                 rows: Bounds::new(vec![-0.25, -0.75], vec![1.5, 1.25]),
             })
             .unwrap();
-            let mut d = Domain::new(&model, true);
+            let mut d = Domain::new(&model, true, 1e-7);
             for value in [0., 2., 1., 0.] {
                 let mut b = model.variables().clone();
                 b.lower[0] = value;
@@ -389,7 +463,7 @@ mod tests {
             rows: Bounds::new(vec![f64::NEG_INFINITY; 2], vec![1., 10.]),
         })
         .unwrap();
-        let mut d = Domain::new(&model, true);
+        let mut d = Domain::new(&model, true, 1e-7);
         let fixed = |v: f64| {
             let mut b = model.variables().clone();
             b.lower[0] = v;
