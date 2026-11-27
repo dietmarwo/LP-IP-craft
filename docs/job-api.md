@@ -80,4 +80,4 @@ shows.
 The optional Boolean fields `adaptive_root` and `integer_equality_presolve` default to false. Set `presolve: true` to use them.
 The separate `objective_cutoff_bounds` field also defaults to false and uses
 the same master switch. It can admit additional MIPs under a checked
-incumbent cutoff. [Objective-implied MIP bounds](api.md#objective-implied-mip-bounds). See the [native option details](api.md#optional-root-cut-selection-and-integer-equalities-since-0310).
+incumbent cutoff. [Objective-implied MIP bounds](api.md#objective-implied-mip-bounds-since-0320). See the [native option details](api.md#optional-root-cut-selection-and-integer-equalities-since-0310).

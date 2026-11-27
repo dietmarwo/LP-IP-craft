@@ -217,7 +217,7 @@ section was first written (see the sections below and the option table in
 [ai-context.md](../ai-context.md)); all but MIP presolve are opt-in. MIPs require
 finite variable bounds of magnitude <=2^53-1, including continuous columns.
 The optional cutoff route can derive some missing bounds inside the root
-presolve. See [objective-implied MIP bounds](#objective-implied-mip-bounds).
+presolve. See [objective-implied MIP bounds](#objective-implied-mip-bounds-since-0320).
 Triangular solves use dense work vectors of the row dimension, and
 product-form updates store dense eta columns when
 `B⁻¹` is dense; bases with heavy LU fill are solve-bound. `max_factor_entries`
@@ -225,7 +225,7 @@ is an engineering guard, not a whole-process memory cap: matrix copies, work
 vectors, the open-node queue and basis snapshots need additional memory. No
 application-performance claim until the target card is supplied.
 
-## Objective-implied MIP bounds
+## Objective-implied MIP bounds (since 0.32.0)
 
 Set `objective_cutoff_bounds=true` in Rust, `objective_cutoff_bounds=True`
 in Python, or provide the Boolean job field. Enable root presolve and root

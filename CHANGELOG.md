@@ -13,12 +13,14 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-27
+
 - Add opt-in objective-implied bounds for MIP admission in Rust, Python and
   the job worker (`objective_cutoff_bounds`, default off). A certified start
   can cap improving points. Small eligible models can try a fixed-setup LP
   when no start is supplied, or when the supplied start fails the exact
   check; a start outside the capped model is then replaced and reported as
-  `rejected` ([details](docs/api.md#objective-implied-mip-bounds)).
+  `rejected` ([details](docs/api.md#objective-implied-mip-bounds-since-0320)).
 - Propagate missing MIP bounds with a bounded incident-row queue, including
   chains whose row order previously exhausted the sweep limit. Models that
   were `Unsupported` for a missing bound can now be solved by default. On
