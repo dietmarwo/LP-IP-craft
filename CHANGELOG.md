@@ -13,6 +13,10 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+### Changed
+
+- The optimization-jobs pin moves from `2bfa8e4` to `ded566f` (optimization-jobs main after #50) in `Cargo.toml` and `Cargo.lock`; only the optimization-jobs entries change. Between the two revisions only the guide behind `get_guide` changed: it names fcmaes-core 0.5, lp-ip-craft 0.33 and sqp-craft 0.21. The job crates are still 0.5.0, and the envelope, worker protocol and result contract are unchanged. `ai-context.md` name the new revision.
+
 ## [0.33.0] - 2026-11-27
 
 ### Changed
