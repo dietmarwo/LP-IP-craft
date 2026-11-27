@@ -62,7 +62,7 @@ crates.io with the same version. Check the registries for the latest
 version before relying on it ([RELEASING.md](RELEASING.md)); the worker
 stays source-only. For Rust, the
 job worker or changes after the latest release, use a checkout
-of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.32.0;
+of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.33.0;
 the shared job crates are 0.5.0. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
 
@@ -262,7 +262,7 @@ independent check. The README's 0.20–0.28 sections and
 [docs/api.md](docs/api.md) describe each mechanism and its measured gains and
 regressions. The "Deliberate limits" paragraph of docs/api.md predates several
 of these options (cuts, strong branching, MIP presolve, tree workers); its
-remaining limits, such as no basis import or export, still hold. Since 0.30.0 the general MIP search has optional gap stops. Since 0.31.0 two opt-in root mechanisms exist: `adaptive_root` and `integer_equality_presolve`. Since 0.32.0 root inference follows chains against the row order, and the opt-in `objective_cutoff_bounds` admits MIPs with missing bounds under a certified incumbent.
+remaining limits, such as no basis import or export, still hold. Since 0.30.0 the general MIP search has optional gap stops. Since 0.31.0 two opt-in root mechanisms exist: `adaptive_root` and `integer_equality_presolve`. Since 0.32.0 root inference follows chains against the row order, and the opt-in `objective_cutoff_bounds` admits MIPs with missing bounds under a certified incumbent. Since 0.33.0 presolve reads integer data to the feasibility tolerance, so decimal coefficients no longer remove an integer point that the result check accepts; the search still certifies incumbents against the stored rows.
 
 ### In process or as a job
 
@@ -790,7 +790,7 @@ optimization-jobs' CI does that with all three workers.
 
 ## Optional root cuts and integer equalities (since 0.31.0)
 
-`NativeOptions` and `lp-ip.solve/1` accept `adaptive_root` and `integer_equality_presolve`, both off by default and both under the master `presolve` switch. `adaptive_root` picks bounded GMI or GMI/MIR root separation from the row structure; it helped on lot sizing (binary capacity rows with short continuous balances) and generalized assignment and was neutral or slightly slower elsewhere. `integer_equality_presolve` propagates residues on short equalities over bounded integers; chains of such equalities that defaults cannot finish in ten seconds solve in well under a second. Try them when the model has that structure; do not expect a general speed-up. Defaults do the same work as 0.30.0. Presolve rounds integer bounds with the feasibility tolerance, so decimal data such as `15x + 0.1y = 29.8` keeps its intended integer point (up to 0.31.0 the default presolve read the stored doubles exactly and reported such a model `infeasible`). A MIP whose continuous columns all have zero cost now gets the integral-objective bound; a run that stops at a limit can then report a bound equal to its incumbent. See [the API](docs/api.md#optional-root-cut-selection-and-integer-equalities-since-0310) and [the measurements](docs/gurobi-gap/REVIEW.md).
+`NativeOptions` and `lp-ip.solve/1` accept `adaptive_root` and `integer_equality_presolve`, both off by default and both under the master `presolve` switch. `adaptive_root` picks bounded GMI or GMI/MIR root separation from the row structure; it helped on lot sizing (binary capacity rows with short continuous balances) and generalized assignment and was neutral or slightly slower elsewhere. `integer_equality_presolve` propagates residues on short equalities over bounded integers; chains of such equalities that defaults cannot finish in ten seconds solve in well under a second. Try them when the model has that structure; do not expect a general speed-up. Defaults do the same work as 0.30.0. Presolve rounds integer bounds with the feasibility tolerance, so decimal data such as `15x + 0.1y = 29.8` keeps its intended integer point (up to 0.32.0 the default presolve read the stored doubles exactly and reported such a model `infeasible`). A MIP whose continuous columns all have zero cost now gets the integral-objective bound; a run that stops at a limit can then report a bound equal to its incumbent. See [the API](docs/api.md#optional-root-cut-selection-and-integer-equalities-since-0310) and [the measurements](docs/gurobi-gap/REVIEW.md).
 
 ## Optional MIP gap stops (since 0.30.0)
 

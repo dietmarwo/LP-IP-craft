@@ -179,7 +179,7 @@ workers and component count with unique keys in both Rust and Python.
 violation <= feasibility tolerance; stationarity and dual signs <=
 `dual_tolerance*(1+max(abs(c)))`; normalized primal-dual gap <= dual_tolerance.
 A root LP infeasibility contradicting an accepted MIP start reports numerical_failure.
-Presolve rounds integer bounds and integer row limits after widening them by the
+Since 0.33.0, presolve rounds integer bounds and integer row limits after widening them by the
 feasibility tolerance, so a point that the result check accepts is not removed
 because decimal data or a computed right-hand side is off in the last place.
 Infeasibility and unboundedness are numerical findings, not exact
