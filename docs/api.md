@@ -340,7 +340,7 @@ The relative gap is the same quotient as `SolveResult.gap`: absolute objective-t
 An open positive gap within a supplied limit returns `gap_limit`. The candidate is independently checked and a job reports claim `feasible`, with `details.gap`; this status never asserts optimality. A fully closed frontier retains `optimal`. Separable MIPs are searched as one model, reporting `decompose=false` and `gap_limit_scope=whole_model`. Positive limits with specialized packing controls or `tree_threads>1` return `Unsupported`. Numerical parallel kernels remain available. See [evidence and commands](benchmarks/gap-limits/README.md).
 
 
-## Optional root cut selection and integer equalities
+## Optional root cut selection and integer equalities (since 0.31.0)
 
 Set either control on Rust or Python `NativeOptions`. Both require the
 master `presolve` switch. With `adaptive_root`, bounded sparse pure-integer

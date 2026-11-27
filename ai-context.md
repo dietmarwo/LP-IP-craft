@@ -62,8 +62,8 @@ crates.io with the same version. Check the registries for the latest
 version before relying on it ([RELEASING.md](RELEASING.md)); the worker
 stays source-only. For Rust, the
 job worker or changes after the latest release, use a checkout
-of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.30.0;
-the shared job crates are 0.4.1. Profile names such as `lp-ip.solve/1` are protocol
+of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.31.0;
+the shared job crates are 0.5.0. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
 
 Toolchains:
@@ -262,7 +262,7 @@ independent check. The README's 0.20–0.28 sections and
 [docs/api.md](docs/api.md) describe each mechanism and its measured gains and
 regressions. The "Deliberate limits" paragraph of docs/api.md predates several
 of these options (cuts, strong branching, MIP presolve, tree workers); its
-remaining limits, such as no basis import or export, still hold. Since 0.30.0 the general MIP search has optional gap stops.
+remaining limits, such as no basis import or export, still hold. Since 0.30.0 the general MIP search has optional gap stops. Since 0.31.0 two opt-in root mechanisms exist: `adaptive_root` and `integer_equality_presolve`.
 
 ### In process or as a job
 
@@ -783,6 +783,10 @@ optimization-jobs' CI does that with all three workers.
 ## Structured application tutorials
 
 [tutorials/README.md](tutorials/README.md) lists nine application chapters (LP1–LP9). Each builds its model with `tutorials/_support/linear_model.py`, solves it with `solve(..., backend="native")` and checks every candidate independently of the solver. LP4, LP5 and LP7 also check the solver's own LP duals: rationalized prices are verified exactly, and `safe_dual_bound` gives a binary64-safe bound. Run a chapter with `python tutorials/<chapter>/run.py --output DIR`. The cross-repository driver in optimization-jobs (`tutorials/structured/`) runs all twenty chapters of the series directly or as trusted command jobs; the chapters add no job profile or worker.
+
+## Optional root cuts and integer equalities (since 0.31.0)
+
+`NativeOptions` and `lp-ip.solve/1` accept `adaptive_root` and `integer_equality_presolve`, both off by default and both under the master `presolve` switch. `adaptive_root` picks bounded GMI or GMI/MIR root separation from the row structure; it helped on lot sizing (binary capacity rows with short continuous balances) and generalized assignment and was neutral or slightly slower elsewhere. `integer_equality_presolve` propagates residues on short equalities over bounded integers; chains of such equalities that defaults cannot finish in ten seconds solve in well under a second. Try them when the model has that structure; do not expect a general speed-up. Defaults do the same work as 0.30.0. The default presolve reads the stored doubles exactly, so a decimal equality over integers such as `15x + 0.1y = 29.8` is `infeasible` as stored and `optimal` with `integer_equality_presolve`: supply integer data (`150x + y = 298`) when the decimal reading is meant. A MIP whose continuous columns all have zero cost now gets the integral-objective bound; a run that stops at a limit can then report a bound equal to its incumbent. See [the API](docs/api.md#optional-root-cut-selection-and-integer-equalities-since-0310) and [the measurements](docs/gurobi-gap/REVIEW.md).
 
 ## Optional MIP gap stops (since 0.30.0)
 

@@ -73,7 +73,7 @@ and the other structured solver, then explains library, shell and MCP use.
 
 > Native 0.17 performance update: ten measured iterations add integral row strengthening, short-row integer propagation, a direct box-LP path, reachability-based sparse triangular solves, sparse eta work and adaptive refactorization. See [the iteration plans](docs/performance-ten/ITERATIONS.md) and [the complete results](docs/performance-ten/RESULTS.md). The core and native solver remain dependency-free Rust.
 
-Version **0.30.0** adds optional MIP gap stops (`mip_relative_gap`, `mip_absolute_gap`; see [the API](docs/api.md#mip-gap-stopping-since-0300)); with them off, results are unchanged since 0.28.0. It extends the 0.16 architecture, which replaced both 0.15
+Version **0.31.0** adds two opt-in root mechanisms, `adaptive_root` and `integer_equality_presolve` (see [the API](docs/api.md#optional-root-cut-selection-and-integer-equalities-since-0310) and [the comparison with Gurobi](docs/gurobi-gap/REVIEW.md)); with them off, nodes and pivots on the 69 benchmark fixtures are those of 0.30.0. 0.30.0 added optional MIP gap stops (`mip_relative_gap`, `mip_absolute_gap`; see [the API](docs/api.md#mip-gap-stopping-since-0300)). The solver extends the 0.16 architecture, which replaced both 0.15
 linear kernels (dense tableau and the sparse revised-simplex pilot) with one **bounded-variable dual revised
 simplex on a sparse LU factorization**, and replaces depth-first search with
 best-bound search, diving and pseudocost branching. The optimization engine
