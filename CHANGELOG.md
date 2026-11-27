@@ -13,6 +13,23 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+### Changed
+
+- Presolve rounds with the feasibility tolerance. Integer bounds derived
+  from rows with non-integer coefficients (MIP presolve and root bound
+  inference), the limits of integer rows (propagation and row strengthening)
+  and the integral-objective bound are rounded after allowing the accepted
+  row violation; continuous bounds stay exact. Up to 0.31.0 the stored
+  doubles were read exactly, so `15x + 0.1y = 29.8` over bounded integers
+  was `infeasible` with presolve and `optimal` without it. In 9,000 random
+  small integer programs with decimal coefficients the default answer was
+  wrong against enumeration under the tolerance 15 times, and 1,441 times
+  when the right-hand side was off in the last place; now 0 and 0. Nodes
+  and pivots on the 69 benchmark fixtures are unchanged. A start that
+  violates a stored row by less than the tolerance is now kept and can be
+  proven optimal, where the answer was the exact optimum or
+  `numerical_failure`; three tests that pinned the exact reading changed.
+
 ## [0.31.0] - 2026-11-27
 
 ### Added

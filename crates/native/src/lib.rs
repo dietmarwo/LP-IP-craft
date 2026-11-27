@@ -1356,7 +1356,7 @@ impl NativeSolver {
             && !cancel.is_cancelled()
             && self.settings.time_limit_seconds != Some(0.)
         {
-            presolve::strengthen_integer_rows(model)?
+            presolve::strengthen_integer_rows(model, options.tolerances.feasibility)?
         } else {
             None
         };
@@ -1455,10 +1455,15 @@ impl NativeSolver {
         let mut domain = propagate::Domain::with_equalities(
             model,
             settings.presolve,
+            options.tolerances.feasibility,
             (settings.integer_equality_presolve && presolve::supported_arithmetic())
                 .then_some(&options.tolerances),
         );
-        let mut mixed = mixed::Domain::new(model, settings.presolve && settings.mixed_propagation);
+        let mut mixed = mixed::Domain::new(
+            model,
+            settings.presolve && settings.mixed_propagation,
+            options.tolerances.feasibility,
+        );
         if pool.trace.is_some() && settings.presolve {
             domain.enable_statistics();
         }
@@ -1731,7 +1736,11 @@ impl NativeSolver {
                             safe_dual_bound_with_bounds(model, node_bounds, &duals.row_duals)?.bound
                         {
                             let b = oriented(model, value);
-                            let b = if tree_lattice { b.ceil() } else { b };
+                            let b = if tree_lattice {
+                                incumbent::lattice_ceil(b)
+                            } else {
+                                b
+                            };
                             node.bound = Some(node.bound.map_or(b, |old| old.max(b)));
                             if !model.is_mip() {
                                 result.best_bound = Some(oriented(model, b));
@@ -1773,7 +1782,13 @@ impl NativeSolver {
             let bound = safe_dual_bound_with_bounds(model, node_bounds, &duals.row_duals)?
                 .bound
                 .map(|b| oriented(model, b))
-                .map(|b| if tree_lattice { b.ceil() } else { b });
+                .map(|b| {
+                    if tree_lattice {
+                        incumbent::lattice_ceil(b)
+                    } else {
+                        b
+                    }
+                });
             if !model.is_mip() {
                 result.evaluation = Some(check::evaluate(model, &x, &options.tolerances)?);
                 if let Some(trace) = &mut pool.pilot {
@@ -2108,7 +2123,7 @@ impl NativeSolver {
             }
             if all_bounds && closed_bound.is_finite() {
                 let bound = if lattice {
-                    closed_bound.ceil()
+                    incumbent::lattice_ceil(closed_bound)
                 } else {
                     closed_bound
                 };

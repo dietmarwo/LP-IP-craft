@@ -87,13 +87,14 @@ def test_lattice_scope(c,kinds,offset,expected_lattice):
     assert r.status=="optimal"
     assert r.backend.effective_options["diagnostics.objective_lattice"]==expected_lattice
 
-def test_uncertified_start_cannot_prune():
+def test_start_within_the_feasibility_tolerance_is_the_optimum():
     m=make(c=[1.],a=[[1.]],ru=[0.99999995],up=[1.],kinds=["integer"])
     r=solve(m,backend="native",start=[1.])
-    # The start passes tolerance acceptance, but violates the exact stored row.
-    # It must not turn the conservative bound into an exact-search certificate.
-    assert r.status=="optimal" and r.best_bound>=0.
-    assert r.candidate==[0.] and r.evaluation.objective==0.
+    # The row limit is within the feasibility tolerance of 1, so integer row
+    # rounding keeps x = 1. Up to 0.31.0 the stored row was read exactly, the
+    # limit was rounded to 0 and the answer was x = 0.
+    assert r.status=="optimal" and r.best_bound>=1.
+    assert r.candidate==[1.] and r.evaluation.objective==1.
 
 def test_lp_primal_start_is_explicitly_rejected():
     r=solve(make(),backend="native",start=[0.,0.])
@@ -115,10 +116,13 @@ def test_redundant_rows(enabled):
     if enabled:assert int(r.backend.effective_options["diagnostics.presolve_removed_rows"])==3
 
 
-def test_infeasible_root_cannot_certify_tolerance_start_as_optimal():
+def test_rows_that_agree_within_the_feasibility_tolerance_keep_the_start():
+    # x <= 0.99999995 and x >= 1: read exactly the rows contradict each other
+    # (numerical_failure with the start up to 0.31.0); within the tolerance
+    # x = 1 satisfies both.
     m=make(c=[1.],a=[[1.],[1.]],up=[1.],rl=[-math.inf,1.],ru=[0.99999995,math.inf],kinds=["integer"])
     r=solve(m,backend="native",start=[1.])
-    assert r.status=="numerical_failure" and r.candidate==[1.]
+    assert r.status=="optimal" and r.candidate==[1.]
 
 
 def test_strengthened_integer_rows_do_not_block_continuous_certification():
@@ -290,20 +294,6 @@ def test_integer_equality_presolve_matches_enumeration():
     assert 50 < feasible < 250
 
 
-def test_decimal_equality_is_read_as_stored_unless_the_integer_form_is_used():
-    # 15x + 0.1y = 29.8 holds at (2, -2) only up to rounding of 0.1 and 29.8.
-    # Presolve reads the stored doubles exactly and finds no integer point;
-    # the integer form 150x + y = 298 and the plain tree keep the point, which
-    # passes the result check.
-    m = make(c=(4., 0.), a=((15., 0.1),), lo=(-4., -2.), up=(2., 0.), rl=(29.8,), ru=(29.8,),
-             kinds=["integer"] * 2, sense="minimize")
-    assert solve(m, backend="native").status == "infeasible"
-    for opts in (NativeOptions(integer_equality_presolve=True), NativeOptions(presolve=False)):
-        r = solve(m, backend="native", backend_options=opts)
-        assert r.status == "optimal" and r.candidate == [2., -2.]
-        assert r.evaluation.feasible_candidate and r.evaluation.primal_violation < 1e-12
-
-
 @pytest.mark.parametrize("sense,sign", [("maximize", 1.), ("minimize", -1.)])
 def test_limited_mixed_run_reports_the_rounded_bound_and_keeps_its_limit_status(sense, sign):
     # The tree stops at its node limit with the incumbent 1 and an open bound
@@ -317,3 +307,25 @@ def test_limited_mixed_run_reports_the_rounded_bound_and_keeps_its_limit_status(
     loose = solve(m, backend="native",
                   backend_options=NativeOptions(presolve=False, node_limit=1, objective_lattice=False))
     assert loose.status == "node_limit" and loose.best_bound == pytest.approx(1.5 * sign)
+# Each model is feasible only up to rounding of its decimal data or of a
+# computed right-hand side; the result check accepts the point by eight orders
+# of magnitude. 0.31.0 answered infeasible on the first, fourth and fifth, a
+# worse objective on the second and third and numerical_failure on the sixth.
+@pytest.mark.parametrize("c,a,lo,up,rl,ru,best", [
+    ((4., 0.), ((15., 0.1),), (-4., -2.), (2., 0.), (29.8,), (29.8,), 8.),
+    ((3., 1.), ((-5., -0.1),), (-2., -1.), (-2., 3.), (-math.inf,), (10.1,), -7.),
+    ((-1., 1.), ((-0.1, -7.),), (0., -6.), (4., -6.), (41.6,), (math.inf,), -10.),
+    ((2., -5., 3., -1.), ((5., 0., 0., 1.), (-0.9, 0., 0.3, 0.)), (0., 2., -1., 0.), (1., 4., 5., 1.),
+     (0., 0.3 * 3 - 0.9), (0., 0.3 * 3 - 0.9), -20.),
+    ((4., 0.), ((3., -2.),), (1., -1.), (7., 5.), (2.0000000000001,), (2.0000000000001,), 8.),
+    ((3., -1.), ((-0.2, -2.),), (2., -2.), (2., 1.), (-0.39999999999990005,), (-0.39999999999990005,), 6.),
+])
+def test_integer_points_within_the_feasibility_tolerance_survive_presolve(c, a, lo, up, rl, ru, best):
+    m = make(c=c, a=a, lo=lo, up=up, rl=rl, ru=ru, kinds=["integer"] * len(c), sense="minimize")
+    for opts in (NativeOptions(), NativeOptions(presolve=False),
+                 NativeOptions(adaptive_root=True, integer_equality_presolve=True)):
+        r = solve(m, backend="native", backend_options=opts)
+        assert r.status == "optimal"
+        assert r.evaluation.feasible_candidate
+        assert r.evaluation.objective == pytest.approx(best, abs=1e-9)
+        assert r.best_bound <= best + 1e-6

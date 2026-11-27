@@ -178,6 +178,9 @@ workers and component count with unique keys in both Rust and Python.
 violation <= feasibility tolerance; stationarity and dual signs <=
 `dual_tolerance*(1+max(abs(c)))`; normalized primal-dual gap <= dual_tolerance.
 A root LP infeasibility contradicting an accepted MIP start reports numerical_failure.
+Presolve rounds integer bounds and integer row limits after widening them by the
+feasibility tolerance, so a point that the result check accepts is not removed
+because decimal data or a computed right-hand side is off in the last place.
 Infeasibility and unboundedness are numerical findings, not exact
 certificates. An unbounded MIP relaxation returns `unknown`, not integer
 unboundedness. Limits retain the incumbent, when available.
@@ -365,15 +368,12 @@ coefficients, the variable box and feasibility and integrality tolerances.
 The original model retains its coefficient arrays and variable coordinates.
 Every returned point follows the usual original-model checks.
 
-The option can change a status. The default presolve reads the stored
-binary64 values exactly, so a decimal equality over integers can have no
-integer point as stored: `15x + 0.1y = 29.8` with `x` in [-4, 2] and `y` in
-[-2, 0] is reported `infeasible`, because 0.1 and 29.8 are not
-representable and (2, -2) misses the stored row by a few units in the last
-place. The integer form `150x + y = 298` keeps that point, the result check
-accepts it, and the answer with the option is `optimal`. `presolve=false`
-gives the same answer. A model whose decimal data should be read to the
-feasibility tolerance is best supplied in integer form.
+Integer bounds, integer row limits and the integral-objective bound are
+rounded with the feasibility tolerance. A decimal equality over integers
+such as `15x + 0.1y = 29.8` holds at (2, -2) only up to rounding of 0.1 and
+29.8; presolve keeps that point, which the result check accepts, with and
+without this option. Up to 0.31.0 the default presolve read the stored
+binary64 values exactly and reported such a model `infeasible`.
 
 The integral-objective bound also applies to a MIP with continuous columns
 when all their objective coefficients are exactly zero and the existing

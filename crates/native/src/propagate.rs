@@ -36,11 +36,20 @@ fn ceil_div(a: i128, b: i128) -> i128 {
     -floor_div(-a, b)
 }
 impl Domain {
-    pub fn new(model: &Model, enabled: bool) -> Self {
-        Self::with_equalities(model, enabled, None)
+    pub fn new(model: &Model, enabled: bool, feasibility: f64) -> Self {
+        Self::with_equalities(model, enabled, feasibility, None)
     }
 
-    pub fn with_equalities(model: &Model, enabled: bool, tolerances: Option<&Tolerances>) -> Self {
+    /// `feasibility` is the accepted row violation: an integer activity may
+    /// miss a row limit by that much, so limits are rounded after widening.
+    /// A right-hand side computed as `3.0000000000000004` then still admits
+    /// activity 3. `tolerances` enables the residue rule on short equalities.
+    pub fn with_equalities(
+        model: &Model,
+        enabled: bool,
+        feasibility: f64,
+        tolerances: Option<&Tolerances>,
+    ) -> Self {
         let n = if enabled && model.is_mip() {
             model.n()
         } else {
@@ -100,8 +109,8 @@ impl Domain {
             let endpoint =
                 |v: f64| (v.is_finite() && v.abs() <= 1_125_899_906_842_624.).then_some(v as i128);
             let (terms, lower, upper, residues) = if basic {
-                let lower = endpoint(model.rows().lower[i].ceil());
-                let upper = endpoint(model.rows().upper[i].floor());
+                let lower = endpoint((model.rows().lower[i] - feasibility).ceil());
+                let upper = endpoint((model.rows().upper[i] + feasibility).floor());
                 if lower.is_none() && upper.is_none() {
                     continue;
                 }
@@ -360,6 +369,37 @@ mod tests {
         domain.apply(bounds, changed, &budget)
     }
     #[test]
+    fn row_limits_are_rounded_with_the_feasibility_tolerance() {
+        // 3x - 2y = 2.0000000000001: (2, 2) misses the row by 1e-13.
+        let model = Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective: vec![4., 0.],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![1., -1.], vec![3., 2.]),
+            kinds: vec![VariableKind::Integer; 2],
+            matrix: CsrMatrix::from_dense(1, 2, &[3., -2.]).unwrap(),
+            rows: Bounds::new(vec![2.0000000000001], vec![2.0000000000001]),
+        })
+        .unwrap();
+        let mut b = model.variables().clone();
+        assert!(apply(
+            &mut Domain::new(&model, true, 1e-7),
+            &mut b,
+            &mut Vec::new()
+        ));
+        assert_eq!(
+            (b.lower.clone(), b.upper.clone()),
+            (vec![2., 2.], vec![2., 2.])
+        );
+        // Read exactly, the limits round to the empty range [3, 2].
+        let mut exact = model.variables().clone();
+        assert!(!apply(
+            &mut Domain::new(&model, true, 0.),
+            &mut exact,
+            &mut Vec::new()
+        ));
+    }
+    #[test]
     fn long_rows_root_implications_and_sibling_restoration() {
         let n = 40;
         let mut values = vec![0.; n * n];
@@ -386,7 +426,7 @@ mod tests {
             rows: Bounds::new(lo, hi),
         })
         .unwrap();
-        let mut d = Domain::new(&model, true);
+        let mut d = Domain::new(&model, true, 1e-7);
         let mut b = model.variables().clone();
         let mut c = vec![0];
         b.lower[0] = 1.;
@@ -431,7 +471,7 @@ mod tests {
                 ),
             })
             .unwrap();
-            let mut domain = Domain::new(&m, true);
+            let mut domain = Domain::new(&m, true, 1e-7);
             for branch in 0..5 {
                 let mut b = m.variables().clone();
                 let j = (trial + branch) % n;

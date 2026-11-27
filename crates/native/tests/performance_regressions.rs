@@ -149,7 +149,13 @@ fn integer_strengthening_preserves_original_tolerance_start() {
                 &CancellationToken::default(),
             )
             .unwrap();
-        assert_eq!(r.status, Status::NumericalFailure);
+        // The limit 0.99999995 is within the feasibility tolerance of 1, so
+        // the start is accepted and row rounding keeps it. Up to 0.31.0 the
+        // limit was rounded to 0 and the answer was a numerical failure that
+        // still carried the start.
+        assert_eq!(r.status, Status::Optimal);
+        assert!(r.evaluation.as_ref().unwrap().feasible_candidate);
+        assert_eq!(r.best_bound, Some(1.));
         assert_eq!(r.candidate, Some(x));
     }
 }

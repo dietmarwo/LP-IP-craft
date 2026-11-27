@@ -117,6 +117,18 @@ pub(crate) fn upper_with_bounds(
         .1,
     )
 }
+/// Rounds an oriented objective bound up to the integer lattice.
+///
+/// A bound within `1e-6` above an integer stays at that integer. The search
+/// reads the model's doubles exactly, while the result check accepts a point
+/// that misses a row by the feasibility tolerance. With a right-hand side
+/// such as `3.0000000000000004` the relaxation's value sits a few units in
+/// the last place above the objective of the accepted integer point; a plain
+/// `ceil` would then report a bound one above the optimum. The weaker
+/// rounding is valid whenever the plain one is.
+pub(crate) fn lattice_ceil(bound: f64) -> f64 {
+    (bound - 1e-6).ceil()
+}
 /// Sufficient conditions for an exactly representable integral objective.
 /// Continuous columns can participate in constraints when their cost is zero.
 pub(crate) fn integer_lattice(model: &Model) -> bool {
@@ -155,6 +167,24 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod lattice_tests {
+    use super::lattice_ceil;
+    #[test]
+    fn bounds_a_hair_above_an_integer_stay_at_it() {
+        for (bound, rounded) in [
+            (35.13479829452206, 36.),
+            (36., 36.),
+            (36.0000000000001, 36.),
+            (36.00001, 37.),
+            (-43.00000000000016, -43.),
+            (-42.9999, -42.),
+            (-0.4, 0.),
+        ] {
+            assert_eq!(lattice_ceil(bound), rounded, "{bound}");
+        }
+    }
+}
 #[cfg(test)]
 mod small_integer_tests {
     use super::{is_integer, small_integer};
