@@ -116,6 +116,12 @@ family took 9.09 and 8.77 ms, against 9.65 and 14.36 ms in the delivery.
    rewritten.
 5. A test for `settings.mip_presolve` inside a block that already requires
    it was removed.
+6. **The tutorial comparison failed in CI on the delivered tree.** The
+   recorded summaries of LP1 to LP8 list the effective options, and the
+   delivery adds `adaptive_root`, `integer_equality_presolve` and
+   `diagnostics.unweighted_node_retries`. The 16 recorded summaries gained
+   these keys with their default values. A fresh run of the eight chapters
+   differs from the old records in nothing else.
 
 ## Not verified
 
