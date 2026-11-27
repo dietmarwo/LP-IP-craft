@@ -251,3 +251,69 @@ def test_mixed_lattice_tightens_limited_bound_and_preserves_node_work(sense, sig
     assert base.candidate == tight.candidate
     assert base.best_bound == pytest.approx(sign * 1.5)
     assert tight.best_bound == pytest.approx(sign)
+
+
+def test_integer_equality_presolve_matches_enumeration():
+    import itertools
+    import random
+    rng = random.Random(20261127)
+    feasible = 0
+    for _ in range(300):
+        n = rng.randint(2, 5)
+        lo = [rng.randint(-6, 2) for _ in range(n)]
+        up = [l + rng.randint(0, 6) for l in lo]
+        rows, rhs = [], []
+        for _ in range(rng.randint(1, 3)):
+            row = [0] * n
+            for j in rng.sample(range(n), rng.randint(2, min(n, 4))):
+                row[j] = rng.choice((1, 2, 3, 4, 6, 10, 12, 15, 21)) * rng.choice((-1, 1))
+            point = [rng.randint(l, u) for l, u in zip(lo, up)]
+            rows.append(row)
+            rhs.append(sum(a * x for a, x in zip(row, point)) + rng.choice((0, 0, 0, 1, -2, 5)))
+        c = [rng.randint(-5, 5) for _ in range(n)]
+        values = [sum(a * b for a, b in zip(c, x))
+                  for x in itertools.product(*[range(l, u + 1) for l, u in zip(lo, up)])
+                  if all(sum(a * b for a, b in zip(row, x)) == r for row, r in zip(rows, rhs))]
+        m = make(c=[float(v) for v in c], a=[[float(v) for v in row] for row in rows],
+                 lo=[float(v) for v in lo], up=[float(v) for v in up],
+                 rl=[float(v) for v in rhs], ru=[float(v) for v in rhs],
+                 kinds=["integer"] * n, sense="minimize")
+        for opts in (NativeOptions(integer_equality_presolve=True),
+                     NativeOptions(integer_equality_presolve=True, adaptive_root=True)):
+            r = solve(m, backend="native", backend_options=opts)
+            if values:
+                assert r.status == "optimal" and r.evaluation.feasible_candidate
+                assert r.evaluation.objective == min(values)
+            else:
+                assert r.status == "infeasible"
+        feasible += bool(values)
+    assert 50 < feasible < 250
+
+
+def test_decimal_equality_is_read_as_stored_unless_the_integer_form_is_used():
+    # 15x + 0.1y = 29.8 holds at (2, -2) only up to rounding of 0.1 and 29.8.
+    # Presolve reads the stored doubles exactly and finds no integer point;
+    # the integer form 150x + y = 298 and the plain tree keep the point, which
+    # passes the result check.
+    m = make(c=(4., 0.), a=((15., 0.1),), lo=(-4., -2.), up=(2., 0.), rl=(29.8,), ru=(29.8,),
+             kinds=["integer"] * 2, sense="minimize")
+    assert solve(m, backend="native").status == "infeasible"
+    for opts in (NativeOptions(integer_equality_presolve=True), NativeOptions(presolve=False)):
+        r = solve(m, backend="native", backend_options=opts)
+        assert r.status == "optimal" and r.candidate == [2., -2.]
+        assert r.evaluation.feasible_candidate and r.evaluation.primal_violation < 1e-12
+
+
+@pytest.mark.parametrize("sense,sign", [("maximize", 1.), ("minimize", -1.)])
+def test_limited_mixed_run_reports_the_rounded_bound_and_keeps_its_limit_status(sense, sign):
+    # The tree stops at its node limit with the incumbent 1 and an open bound
+    # of 1.5. Rounding the returned bound closes the gap; the status still
+    # names the limit, as docs/api.md states.
+    m = make(c=[sign, 0.], a=[[1., 1.]], lo=[0., 0.25], up=[2., 1.],
+             ru=[1.75], kinds=["integer", "continuous"], sense=sense)
+    r = solve(m, backend="native", backend_options=NativeOptions(presolve=False, node_limit=1))
+    assert r.status == "node_limit" and r.candidate == [1., 0.25]
+    assert r.evaluation.objective == sign == r.best_bound
+    loose = solve(m, backend="native",
+                  backend_options=NativeOptions(presolve=False, node_limit=1, objective_lattice=False))
+    assert loose.status == "node_limit" and loose.best_bound == pytest.approx(1.5 * sign)

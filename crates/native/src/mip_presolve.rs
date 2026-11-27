@@ -274,10 +274,7 @@ pub(crate) fn run(
                     break;
                 }
             }
-            if settings.mip_presolve
-                && stats.rounds == 1
-                && (0..model.n()).all(|j| b.lower[j] <= b.upper[j])
-            {
+            if stats.rounds == 1 && (0..model.n()).all(|j| b.lower[j] <= b.upper[j]) {
                 let mut d = model.data().clone();
                 d.variables = b.clone();
                 if let Some(p) = probe(&Model::new(d)?, &budget, &mut stats) {

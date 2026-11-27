@@ -365,12 +365,25 @@ coefficients, the variable box and feasibility and integrality tolerances.
 The original model retains its coefficient arrays and variable coordinates.
 Every returned point follows the usual original-model checks.
 
+The option can change a status. The default presolve reads the stored
+binary64 values exactly, so a decimal equality over integers can have no
+integer point as stored: `15x + 0.1y = 29.8` with `x` in [-4, 2] and `y` in
+[-2, 0] is reported `infeasible`, because 0.1 and 29.8 are not
+representable and (2, -2) misses the stored row by a few units in the last
+place. The integer form `150x + y = 298` keeps that point, the result check
+accepts it, and the answer with the option is `optimal`. `presolve=false`
+gives the same answer. A model whose decimal data should be read to the
+feasibility tolerance is best supplied in integer form.
 
 The integral-objective bound also applies to a MIP with continuous columns
 when all their objective coefficients are exactly zero and the existing
 offset, coefficient and magnitude guards hold. The serial tree rounds its returned
 global bound in these mixed models and keeps the original priorities for node
-selection and reduced-cost fixing. Set `objective_lattice=false`
+selection and reduced-cost fixing. A run that stops at a limit can
+therefore report a bound equal to its incumbent's objective while the
+status stays `node_limit`, `time_limit` or `iteration_limit`: the tree did
+not close, and the rounded bound did. The gap is then zero and the
+incumbent is optimal for the stored model. Set `objective_lattice=false`
 to disable it. When a weighted MIP node LP exhausts its numerical recovery,
 one cold retry uses largest-infeasibility pricing, sharing the original
 time and iteration budgets. A recovered optimum passes the usual residual
