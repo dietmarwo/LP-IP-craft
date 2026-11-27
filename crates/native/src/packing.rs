@@ -1062,6 +1062,7 @@ pub(crate) fn child_settings(settings: &NativeOptions, began: Instant) -> Native
     let mut s = settings.clone();
     s.packing_root = false;
     s.mip_presolve = false;
+    s.adaptive_root = false;
     s.coefficient_tightening = false;
     s.dual_presolve = false;
     s.gmi_cuts = false;

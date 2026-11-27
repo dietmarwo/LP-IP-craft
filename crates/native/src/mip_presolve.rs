@@ -254,7 +254,13 @@ pub(crate) fn run(
         if settings.mip_presolve {
             let mut b = model.variables().clone();
             let mut changed = Vec::new();
-            let mut exact = propagate::Domain::new(model, true);
+            let mut exact = propagate::Domain::with_equalities(
+                model,
+                true,
+                settings
+                    .integer_equality_presolve
+                    .then_some(&options.tolerances),
+            );
             let mut mixed = mixed::Domain::new(model, true);
             for _ in 0..4 {
                 let prev = changed.len();

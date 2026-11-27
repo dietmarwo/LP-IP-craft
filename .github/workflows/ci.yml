@@ -105,3 +105,8 @@ jobs:
       - run: python examples/validate_random.py --seed 2 --refactor-interval 8 > random-oracle-2.json
       - run: python examples/validate_components.py 1 > components-serial.json
       - run: python examples/validate_components.py 4 > components-parallel.json
+      # Both opt-in root mechanisms against the same oracles, and the
+      # comparison harness's checks (the Gurobi case skips without a license).
+      - run: python benchmarks/gurobi-gap/validate_profiles.py exact > profiles-oracle.json
+      - run: python benchmarks/gurobi-gap/validate_profiles.py scipy > profiles-random-oracle.json
+      - run: python -m pytest -q benchmarks/gurobi-gap/test_reference.py

@@ -127,6 +127,10 @@ struct Payload {
     feasibility_tolerance: f64,
     integrality_tolerance: f64,
     presolve: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    adaptive_root: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    integer_equality_presolve: bool,
 }
 /// `lp-ip.evaluate/1`: points to check against the model, without solving.
 #[derive(Serialize, Deserialize)]
@@ -154,6 +158,8 @@ impl Payload {
             mip_absolute_gap: self.mip_absolute_gap,
             iteration_limit: Some(self.iteration_limit),
             presolve: self.presolve,
+            adaptive_root: self.presolve && self.adaptive_root,
+            integer_equality_presolve: self.presolve && self.integer_equality_presolve,
             singleton_presolve: self.presolve && defaults.singleton_presolve,
             root_propagation: self.presolve && defaults.root_propagation,
             mip_presolve: self.presolve && defaults.mip_presolve,
@@ -1284,6 +1290,16 @@ mod tests {
             (on.component_threads, on.packing_workers, on.tree_threads),
             (1, 1, 1)
         );
+    }
+    #[test]
+    fn experimental_root_options_follow_the_master_switch() {
+        let mut p: Payload = serde_json::from_value(job("0", 1).payload).unwrap();
+        assert!(!p.adaptive_root && !p.integer_equality_presolve);
+        p.adaptive_root = true;
+        p.integer_equality_presolve = true;
+        assert!(p.settings().adaptive_root && p.settings().integer_equality_presolve);
+        p.presolve = false;
+        assert!(!p.settings().adaptive_root && !p.settings().integer_equality_presolve);
     }
     #[test]
     fn mip_starts_are_candidates_and_lp_starts_are_rejected() {

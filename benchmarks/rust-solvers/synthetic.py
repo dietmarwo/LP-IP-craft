@@ -11,7 +11,6 @@ import hashlib, json, random
 from pathlib import Path
 
 base = Path(__file__).resolve().parent / 'synthetic'
-base.mkdir(exist_ok=True)
 
 
 def dense(rows, n):
@@ -144,14 +143,21 @@ def intcover(r):
 
 
 CLASSES = dict(mknap=mknap, setcover=setcover, cfl=cfl, gap=gap, lotsize=lotsize, intcover=intcover)
-records = []
-for group, seeds in [('development', range(1, 5)), ('test', range(101, 105))]:
-    for name, build in CLASSES.items():
-        for seed in seeds:
-            payload = dict(model=build(random.Random(f'{name}-{seed}')), expected=None,
-                           provenance=dict(family=name, seed=seed, group=group))
-            path = base / f'{group}-{name}-{seed}.json'
-            path.write_text(json.dumps(payload, indent=1) + '\n')
-            records.append(dict(file=path.name, group=group, sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
-(base / 'manifest.json').write_text(json.dumps(records, indent=2) + '\n')
-print(len(records), 'models')
+
+def main():
+    base.mkdir(exist_ok=True)
+    records = []
+    for group, seeds in [('development', range(1, 5)), ('test', range(101, 105))]:
+        for name, build in CLASSES.items():
+            for seed in seeds:
+                payload = dict(model=build(random.Random(f'{name}-{seed}')), expected=None,
+                               provenance=dict(family=name, seed=seed, group=group))
+                path = base / f'{group}-{name}-{seed}.json'
+                path.write_text(json.dumps(payload, indent=1) + '\n')
+                records.append(dict(file=path.name, group=group, sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
+    (base / 'manifest.json').write_text(json.dumps(records, indent=2) + '\n')
+    print(len(records), 'models')
+
+
+if __name__ == '__main__':
+    main()

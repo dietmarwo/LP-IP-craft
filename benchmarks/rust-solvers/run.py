@@ -24,6 +24,7 @@ def run_one(solver,path,seconds,policy,binary,baseline=None,off=None):
     if solver=='baseline':
         env['PYTHONPATH']=str(baseline)
         command=[sys.executable,str(BASE/'worker.py'),str(path),str(seconds),'baseline']
+    elif solver=='gurobi':command=[sys.executable,str(BASE/'worker.py'),str(path),str(seconds),'gurobi']
     elif solver=='highs':command=[sys.executable,str(BASE/'worker.py'),str(path),str(seconds),'highs']
     else:command=[str(binary),solver,str(path),str(seconds),policy]
     try:

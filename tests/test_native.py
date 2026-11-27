@@ -78,6 +78,8 @@ def test_optimization_switches(settings):
     ([2.,3.],["integer","integer"],0.,"true"),
     ([2.5,3.],["integer","integer"],0.,"false"),
     ([2.,3.],["integer","continuous"],0.,"false"),
+    ([2.,0.],["integer","continuous"],0.,"true"),
+    ([2.,1e-16],["integer","continuous"],0.,"false"),
     ([2.,3.],["integer","integer"],0.5,"false")])
 def test_lattice_scope(c,kinds,offset,expected_lattice):
     m=make(c=c,a=[[1.,1.]],ru=[1.5],up=[2.,2.],kinds=kinds,offset=offset)
@@ -156,3 +158,162 @@ def test_invalid_factor_pivot_search(search):
 def test_invalid_factor_ordering():
     with pytest.raises(ValueError, match="factor_ordering"):
         solve(make(), backend="native", backend_options=NativeOptions(factor_ordering="unknown"))
+
+
+def test_integer_equality_residue_with_a_checked_start():
+    model = make(c=(1., 0., 0.), a=((0.9, 1., -1.),), lo=(-13., -20., -20.),
+                 up=(16., 20., 20.), rl=(0.,), ru=(0.,), kinds=["integer"] * 3)
+    result = solve(model, backend="native", start=[0., 0., 0.],
+                   backend_options=NativeOptions(integer_equality_presolve=True))
+    assert result.status == "optimal"
+    assert result.candidate[0] == 10.
+    assert result.evaluation.feasible_candidate
+    assert result.backend.effective_options["integer_equality_presolve"] == "true"
+
+
+def test_adaptive_root_honors_small_limits_and_explicit_families():
+    n = 16
+    model = make(c=[1.] * n, a=[[1.] * n], up=[1.] * n, ru=(5.75,), kinds=["binary"] * n)
+    baseline = solve(model, backend="native", backend_options=NativeOptions(node_limit=1))
+    limited = solve(model, backend="native",
+                    backend_options=NativeOptions(adaptive_root=True, node_limit=1))
+    assert (limited.status, limited.nodes, limited.candidate) == (baseline.status, baseline.nodes, baseline.candidate)
+    explicit = solve(model, backend="native", backend_options=NativeOptions(adaptive_root=True, gmi_cuts=True))
+    assert "diagnostics.adaptive_root_family" not in explicit.backend.effective_options
+    assert explicit.status == "optimal"
+    assert explicit.evaluation.objective == 5.
+    stop = Cancellation()
+    stop.cancel()
+    stopped = solve(model, backend="native", cancellation=stop,
+                    backend_options=NativeOptions(adaptive_root=True, integer_equality_presolve=True))
+    assert stopped.status == "cancelled" and stopped.nodes == 0
+
+@pytest.mark.parametrize("sense,sign", [("maximize", 1.), ("minimize", -1.)])
+def test_mixed_integer_objective_keeps_bound_on_original_scale(sense, sign):
+    m = make(c=[sign, 0.], a=[[1., 1.]], lo=[0., 0.25], up=[2., 1.],
+             ru=[1.75], kinds=["integer", "continuous"], sense=sense)
+    for enabled in (False, True):
+        result = solve(m, backend="native", backend_options=NativeOptions(objective_lattice=enabled))
+        assert result.status == "optimal"
+        assert result.evaluation.feasible_candidate
+        assert result.evaluation.objective == pytest.approx(sign)
+        assert result.best_bound == pytest.approx(sign)
+
+
+@pytest.mark.parametrize("shape,sign,expected", [
+    ("cover", 1., None), ("cover", -1., None),
+    ("packing", 1., None), ("packing", -1., None),
+    ("weighted_cover", 1., "gmi_mir"),
+    ("sparse_packing", 1., "gmi_mir"),
+    ("balance", 1., "gmi"), ("balance", -1., "gmi"),
+    ("unlinked", 1., None),
+])
+def test_adaptive_cut_selection_uses_row_structure(shape, sign, expected):
+    if shape in ("balance", "unlinked"):
+        rows = [[-3., 1., 0.], [0., 1., -1.]]
+        lo, hi = [-math.inf, 1.], [0., 1.]
+        if shape == "unlinked":
+            rows[0][0] = 3.
+        cost, upper, kinds = [1., 0., 1.], [1., 3., 2.], ["binary", "continuous", "continuous"]
+    else:
+        cost, upper, kinds = [1.] * 16, [1.] * 16, ["binary"] * 16
+        rows = [[1.] * 16]
+        if "cover" in shape:
+            lo, hi = [2.], [math.inf]
+            if shape == "weighted_cover":
+                rows[0][0] = 2.
+        else:
+            lo, hi = [-math.inf], [2.5]
+            if shape == "sparse_packing":
+                rows[0][7:] = [0.] * 9
+    if sign < 0:
+        rows = [[-v for v in row] for row in rows]
+        lo, hi = [-v for v in hi], [-v for v in lo]
+    m = make(c=cost, a=rows, up=upper, rl=lo, ru=hi, kinds=kinds, sense="minimize")
+    opts = NativeOptions(adaptive_root=True, mip_presolve=False, coefficient_tightening=False,
+                         root_propagation=False, singleton_presolve=False, decompose=False)
+    r = solve(m, backend="native", backend_options=opts)
+    assert r.backend.effective_options.get("diagnostics.adaptive_root_family") == expected
+    assert r.status == ("infeasible" if shape == "unlinked" else "optimal")
+
+@pytest.mark.parametrize("sense,sign", [("maximize", 1.), ("minimize", -1.)])
+def test_mixed_lattice_tightens_limited_bound_and_preserves_node_work(sense, sign):
+    from dataclasses import replace
+
+    m = make(c=[sign, 0.], a=[[1., 1.]], lo=[0., 0.25], up=[2., 1.],
+             ru=[1.75], kinds=["integer", "continuous"], sense=sense)
+    opts = NativeOptions(presolve=False, node_limit=1, incumbent_heuristic=False,
+                         rational_certification=False)
+    base, tight = [solve(m, backend="native", backend_options=replace(opts, objective_lattice=v))
+                   for v in (False, True)]
+    assert base.status == tight.status == "node_limit"
+    assert base.nodes == tight.nodes and base.iterations == tight.iterations
+    assert base.candidate == tight.candidate
+    assert base.best_bound == pytest.approx(sign * 1.5)
+    assert tight.best_bound == pytest.approx(sign)
+
+
+def test_integer_equality_presolve_matches_enumeration():
+    import itertools
+    import random
+    rng = random.Random(20261127)
+    feasible = 0
+    for _ in range(300):
+        n = rng.randint(2, 5)
+        lo = [rng.randint(-6, 2) for _ in range(n)]
+        up = [l + rng.randint(0, 6) for l in lo]
+        rows, rhs = [], []
+        for _ in range(rng.randint(1, 3)):
+            row = [0] * n
+            for j in rng.sample(range(n), rng.randint(2, min(n, 4))):
+                row[j] = rng.choice((1, 2, 3, 4, 6, 10, 12, 15, 21)) * rng.choice((-1, 1))
+            point = [rng.randint(l, u) for l, u in zip(lo, up)]
+            rows.append(row)
+            rhs.append(sum(a * x for a, x in zip(row, point)) + rng.choice((0, 0, 0, 1, -2, 5)))
+        c = [rng.randint(-5, 5) for _ in range(n)]
+        values = [sum(a * b for a, b in zip(c, x))
+                  for x in itertools.product(*[range(l, u + 1) for l, u in zip(lo, up)])
+                  if all(sum(a * b for a, b in zip(row, x)) == r for row, r in zip(rows, rhs))]
+        m = make(c=[float(v) for v in c], a=[[float(v) for v in row] for row in rows],
+                 lo=[float(v) for v in lo], up=[float(v) for v in up],
+                 rl=[float(v) for v in rhs], ru=[float(v) for v in rhs],
+                 kinds=["integer"] * n, sense="minimize")
+        for opts in (NativeOptions(integer_equality_presolve=True),
+                     NativeOptions(integer_equality_presolve=True, adaptive_root=True)):
+            r = solve(m, backend="native", backend_options=opts)
+            if values:
+                assert r.status == "optimal" and r.evaluation.feasible_candidate
+                assert r.evaluation.objective == min(values)
+            else:
+                assert r.status == "infeasible"
+        feasible += bool(values)
+    assert 50 < feasible < 250
+
+
+def test_decimal_equality_is_read_as_stored_unless_the_integer_form_is_used():
+    # 15x + 0.1y = 29.8 holds at (2, -2) only up to rounding of 0.1 and 29.8.
+    # Presolve reads the stored doubles exactly and finds no integer point;
+    # the integer form 150x + y = 298 and the plain tree keep the point, which
+    # passes the result check.
+    m = make(c=(4., 0.), a=((15., 0.1),), lo=(-4., -2.), up=(2., 0.), rl=(29.8,), ru=(29.8,),
+             kinds=["integer"] * 2, sense="minimize")
+    assert solve(m, backend="native").status == "infeasible"
+    for opts in (NativeOptions(integer_equality_presolve=True), NativeOptions(presolve=False)):
+        r = solve(m, backend="native", backend_options=opts)
+        assert r.status == "optimal" and r.candidate == [2., -2.]
+        assert r.evaluation.feasible_candidate and r.evaluation.primal_violation < 1e-12
+
+
+@pytest.mark.parametrize("sense,sign", [("maximize", 1.), ("minimize", -1.)])
+def test_limited_mixed_run_reports_the_rounded_bound_and_keeps_its_limit_status(sense, sign):
+    # The tree stops at its node limit with the incumbent 1 and an open bound
+    # of 1.5. Rounding the returned bound closes the gap; the status still
+    # names the limit, as docs/api.md states.
+    m = make(c=[sign, 0.], a=[[1., 1.]], lo=[0., 0.25], up=[2., 1.],
+             ru=[1.75], kinds=["integer", "continuous"], sense=sense)
+    r = solve(m, backend="native", backend_options=NativeOptions(presolve=False, node_limit=1))
+    assert r.status == "node_limit" and r.candidate == [1., 0.25]
+    assert r.evaluation.objective == sign == r.best_bound
+    loose = solve(m, backend="native",
+                  backend_options=NativeOptions(presolve=False, node_limit=1, objective_lattice=False))
+    assert loose.status == "node_limit" and loose.best_bound == pytest.approx(1.5 * sign)

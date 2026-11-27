@@ -158,3 +158,36 @@ The archive's full patch (`LP-IP-craft-LocalMIP-v2.patch`, applied to
 first edition's log and `input-manifest.json` are committed under
 `docs/local-mip-pilot/`. `python benchmarks/local-mip/analyze.py
 /path/to/evidence/campaign` reproduces the values of `evidence/scored.json`.
+
+## Gurobi-gap evidence
+
+The raw records of the [comparison with Gurobi](gurobi-gap/RESULTS.md) are
+not committed. They ship in the delivery archive:
+
+- `LP-IP-craft-Gurobi-gap-v2-patch.zip`, 744,447 bytes,
+  SHA-256 `040d18fc1d60db32f858dc782cbdcd09d2fbb51d1a4c8288d568b7b60aec37e6`
+
+[`evidence-gurobi-gap.sha256`](evidence-gurobi-gap.sha256) is the archive's
+own `SHA256SUMS` and lists its 171 other files; check a copy with
+`sha256sum -c` from the extracted directory. All entries matched at import.
+
+| Directory | Files | Contents |
+| --- | ---: | --- |
+| evidence/input | 70 | the 69 frozen models (35 blind, 11 regression, 8 development, 8 relaxation, 7 LP) and their manifest |
+| evidence/transfer | 25 | the 24 fresh generator cases and their manifest |
+| evidence/public | 7 | the six public MIPLIB cases and the selection manifest |
+| evidence/equality-input | 7 | the six signed equality chains and their manifest |
+| evidence (top level) | 58 | journals, audits and scores of the comparisons, the `noswot` diagnosis, the SpOC4 records, build and test logs |
+| top level | 4 | the report, the full patch, the patch from the preceding revision and the README |
+
+The archive's full patch (`LP-IP-craft-Gurobi-gap-v2.patch`, applied to
+`bcc4af3`, tree `c289160`) is the first commit of #53. The plan and the
+delivered report are committed under `docs/gurobi-gap/`. With the models of
+`evidence/input` and `evidence/transfer`,
+`python benchmarks/gurobi-gap/audit.py MANIFEST JOURNAL --verified-journal OUT`
+and `summarize.py OUT --group GROUP --baseline stock:adaptive+lattice
+--no-static --output SCORE.json` reproduce `delivery-roster-score.json`
+(group `blind`) and `delivery-transfer-score.json` (group `transfer`).
+`delivery-default.jsonl` compares the preceding patch with revision 2, not
+the unpatched solver; the [review](gurobi-gap/REVIEW.md) has the comparison
+with the unpatched solver.

@@ -1,0 +1,9 @@
+{
+  "b66b858856ca625a801782aa2a68584d9e6000fb95d6db20785c3bcc04273b29": {
+    "case": "noswot",
+    "original_expected": -43,
+    "expected": -41,
+    "reference": "https://miplib2010.zib.de/download/miplib2010_all.solu",
+    "observation": "The MIPLIB 2010 optimum is -41. The pinned original arrays returned and independently checked -41 in Gurobi 14.0.0 at the 60 second cap."
+  }
+}

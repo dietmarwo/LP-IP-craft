@@ -4,6 +4,14 @@ from pathlib import Path
 import numpy as np
 import lp_ip_craft as lp
 payload=json.loads(Path(sys.argv[1]).read_text());spec=payload['model'];seconds=float(sys.argv[2]);solver=sys.argv[3]
+if solver == 'gurobi':
+ from gurobi_reference import solve
+ try:
+  record = solve(spec, dict(seconds=seconds, nodes=int(os.environ['LPIP_COMPARE_NODES']) if 'LPIP_COMPARE_NODES' in os.environ else None))
+ except ImportError:
+  record = dict(seconds=0, result=dict(status='unavailable', error='install gurobipy to run this reference'))
+ print(json.dumps(dict(solver=solver, policy='default', **record), allow_nan=False))
+ sys.exit(0)
 clean=dict(spec)
 for key in ['lower','upper','row_lower','row_upper']:
  clean[key]=[(-float('inf')if key in ['lower','row_lower']else float('inf'))if v is None else v for v in spec[key]]

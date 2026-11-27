@@ -482,6 +482,19 @@ impl Lp {
         }
     }
 
+    /// A different leaving-row order can escape a cycling MIP node. The retry
+    /// starts from the slack basis and uses the parent pivot and time budget.
+    pub(crate) fn retry_unweighted(&mut self, budget: &mut Budget<'_>) -> Result<Status> {
+        self.unperturb();
+        let weighted = std::mem::replace(&mut self.controls.steepest_edge, false);
+        self.reset_to_slack();
+        let result = self.solve(budget, true);
+        self.controls.steepest_edge = weighted;
+        self.weight.fill(1.0);
+        self.price_dirty.fill(true);
+        result
+    }
+
     /// Returns to the logical basis `−I` with unit steepest-edge weights.
     pub fn reset_to_slack(&mut self) {
         let (n, m) = (self.n, self.m);
@@ -2049,6 +2062,57 @@ mod tests {
             assert!((a - b).abs() < 1e-9, "{duals:?}");
         }
         assert!(check::lp_residuals(&model, &x, &duals).unwrap().max() < 1e-9);
+    }
+
+    #[test]
+    fn alternate_pricing_recovers_a_guarded_lp_and_shares_its_pivot_budget() {
+        // This basis takes five weighted pivots or three unweighted ones.
+        let model = Model::new(ModelData {
+            sense: Sense::Maximize,
+            objective: vec![3., 16., 10., 3.],
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; 4], vec![2.; 4]),
+            kinds: vec![VariableKind::Continuous; 4],
+            matrix: CsrMatrix::from_dense(
+                3,
+                4,
+                &[19., 2., 12., 18., 1., 9., 5., 19., 4., 11., 14., 12.],
+            )
+            .unwrap(),
+            rows: Bounds::new(vec![f64::NEG_INFINITY; 3], vec![25., 14., 21.]),
+        })
+        .unwrap();
+        for (limit, expected) in [(None, Status::Optimal), (Some(5), Status::IterationLimit)] {
+            let options = NativeOptions {
+                iteration_limit: limit,
+                ..Default::default()
+            };
+            let cancel = CancellationToken::default();
+            let mut budget = Budget {
+                settings: &options,
+                cancel: &cancel,
+                start: std::time::Instant::now(),
+                pivots: 0,
+            };
+            let mut lp = Lp::new(&model, &[true; 3], &[true; 4], controls()).unwrap();
+            lp.iteration_guard = 3;
+            assert_eq!(
+                lp.solve(&mut budget, true).unwrap(),
+                Status::NumericalFailure
+            );
+            assert_eq!(budget.pivots, 4);
+            assert_eq!(lp.retry_unweighted(&mut budget).unwrap(), expected);
+            assert!(lp.controls.steepest_edge);
+            assert_eq!(budget.pivots, limit.unwrap_or(7));
+            if expected == Status::Optimal {
+                assert!(
+                    check::lp_residuals(&model, &lp.point(), &lp.duals(&model))
+                        .unwrap()
+                        .max()
+                        < 1e-7
+                );
+            }
+        }
     }
 
     #[test]
