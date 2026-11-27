@@ -215,7 +215,7 @@ pub(crate) fn solve_observed(
         rows: (0..model.m()).collect(),
         owners: Vec::new(),
     });
-    let inferred = if solver.settings.root_propagation && model.is_mip() {
+    let mut inferred = if solver.settings.root_propagation && model.is_mip() {
         infer_bounds(
             &mut reduced.model,
             options.tolerances.feasibility,
@@ -226,7 +226,72 @@ pub(crate) fn solve_observed(
     } else {
         0
     };
-    let presolve_stats = if model.is_mip()
+    let cutoff_attempt = solver.settings.objective_cutoff_bounds
+        && solver.settings.root_propagation
+        && model.is_mip()
+        && needs_finite_bounds(&reduced.model)
+        && !cancel.is_cancelled()
+        && !solver
+            .settings
+            .time_limit_seconds
+            .is_some_and(|t| began.elapsed().as_secs_f64() >= t);
+    // Only a point that passes the exact check can supply the caps. A caller
+    // start that fails it does not block the fixed-setup LP.
+    let certified =
+        start.filter(|s| cutoff_attempt && incumbent::upper(model, &s.primal).is_some());
+    let admission = if cutoff_attempt && certified.is_none() {
+        admission_start(&reduced.model, options, &solver.settings, cancel, began)?
+    } else {
+        None
+    };
+    let admission_work = admission.as_ref().map_or((0, 0), |r| (1, r.iterations));
+    let generated = admission
+        .and_then(|r| r.candidate)
+        .map(WarmStart::from_primal);
+    let caller_supplied_start = start.is_some();
+    let caps_from = certified.or(generated.as_ref());
+    let mut start = start.or(generated.as_ref());
+    let mut replaced_start = false;
+    let mut cutoff_sides = 0;
+    if cutoff_attempt {
+        if let Some(s) = caps_from {
+            if let Some(upper) = incumbent::upper(model, &s.primal) {
+                let mut bounded = reduced.model.clone();
+                let sides = cutoff_bounds(&mut bounded, upper)?;
+                if sides > 0 {
+                    let extra = infer_bounds(
+                        &mut bounded,
+                        options.tolerances.feasibility,
+                        cancel,
+                        began,
+                        solver.settings.time_limit_seconds,
+                    )?;
+                    if !needs_finite_bounds(&bounded)
+                        && check::evaluate(&bounded, &s.primal, &options.tolerances)?
+                            .feasible_candidate
+                    {
+                        // The caller's point stays the start while it lies
+                        // in the capped model. Otherwise the certified point
+                        // replaces it, so a limited run keeps an incumbent.
+                        if let Some(given) = start {
+                            if !std::ptr::eq(given, s)
+                                && !check::evaluate(&bounded, &given.primal, &options.tolerances)?
+                                    .feasible_candidate
+                            {
+                                start = Some(s);
+                                replaced_start = true;
+                            }
+                        }
+                        reduced.model = bounded;
+                        cutoff_sides = sides;
+                        inferred += extra;
+                    }
+                }
+            }
+        }
+    }
+    let capped = (cutoff_sides > 0).then(|| reduced.model.clone());
+    let mut presolve_stats = if model.is_mip()
         && (solver.settings.mip_presolve
             || solver.settings.coefficient_tightening
             || solver.settings.dual_presolve)
@@ -235,6 +300,13 @@ pub(crate) fn solve_observed(
     } else {
         mip_presolve::Stats::default()
     };
+    if let (Some(capped), Some(start)) = (&capped, start) {
+        if !check::evaluate(&reduced.model, &start.primal, &options.tolerances)?.feasible_candidate
+        {
+            reduced.model = capped.clone();
+            presolve_stats = mip_presolve::Stats::default();
+        }
+    }
     let removed_rows = model.m() - reduced.model.m();
     let policy = root_policy::Policy::choose(&reduced.model, &solver.settings);
     let advanced = policy.is_some()
@@ -261,8 +333,7 @@ pub(crate) fn solve_observed(
     } else {
         0
     };
-    let mut separation_pivots = 0u64;
-    let mut separation_nodes = 0u64;
+    let (mut separation_nodes, mut separation_pivots) = admission_work;
     let mut directed_cuts = 0usize;
     let mut lifted_cuts = 0usize;
     let mut cut_work = 0usize;
@@ -339,12 +410,27 @@ pub(crate) fn solve_observed(
             }
         }
     }
-    let before_adaptive = (policy.is_some() && start.is_some()).then(|| reduced.model.clone());
+    let before_cuts =
+        ((policy.is_some() || capped.is_some()) && start.is_some()).then(|| reduced.model.clone());
     let mut advanced_stats = if advanced && model.is_mip() {
+        let remaining;
+        let cut_settings = if admission_work.0 > 0 {
+            let mut controls = solver.settings.clone();
+            controls.node_limit = controls
+                .node_limit
+                .map(|n| n.saturating_sub(admission_work.0));
+            controls.iteration_limit = controls
+                .iteration_limit
+                .map(|n| n.saturating_sub(admission_work.1));
+            remaining = controls;
+            &remaining
+        } else {
+            &solver.settings
+        };
         rootcuts::run(
             &mut reduced.model,
             options,
-            &solver.settings,
+            cut_settings,
             start,
             cancel,
             began,
@@ -375,10 +461,13 @@ pub(crate) fn solve_observed(
         if check::evaluate(model, &s.primal, &options.tolerances)?.feasible_candidate
             && !check::evaluate(&reduced.model, &s.primal, &options.tolerances)?.feasible_candidate
         {
-            if let Some(before) = before_adaptive.filter(|before| {
-                check::evaluate(before, &s.primal, &options.tolerances)
-                    .is_ok_and(|e| e.feasible_candidate)
-            }) {
+            if let Some(before) = before_cuts
+                .filter(|before| {
+                    check::evaluate(before, &s.primal, &options.tolerances)
+                        .is_ok_and(|e| e.feasible_candidate)
+                })
+                .or(capped)
+            {
                 reduced.model = before;
                 advanced_stats.bound = None;
                 advanced_stats.stop = "preserve_start";
@@ -538,6 +627,24 @@ pub(crate) fn solve_observed(
         .backend
         .effective_options
         .push(("root_inferred_bounds".into(), inferred.to_string()));
+    if generated.is_some() && !caller_supplied_start {
+        result.backend.start_status = StartStatus::NotProvided;
+    }
+    if replaced_start {
+        result.backend.start_status = StartStatus::Rejected;
+    }
+    if admission_work.0 > 0 {
+        result.backend.effective_options.push((
+            "diagnostics.objective_cutoff_start_pivots".into(),
+            admission_work.1.to_string(),
+        ));
+    }
+    if cutoff_sides > 0 {
+        result.backend.effective_options.push((
+            "diagnostics.objective_cutoff_sides".into(),
+            cutoff_sides.to_string(),
+        ));
+    }
     if let Some(x) = &result.candidate {
         result.evaluation = Some(check::evaluate(model, x, &options.tolerances)?);
         let mut valid = result.evaluation.as_ref().unwrap().feasible_candidate;
@@ -747,11 +854,273 @@ pub(crate) fn quotient(a: f64, b: f64, lower: bool) -> Option<f64> {
     };
     v.is_finite().then_some(v)
 }
-// At most four sweeps. Totals are from a wider snapshot of the row box, so
-// subsequent tightenings within the sweep cannot invalidate another inference.
-// Integer bounds are rounded with the feasibility tolerance, as in `mixed`:
-// with decimal coefficients an integer point can satisfy a row only up to
-// rounding of the data, and the result check accepts it.
+fn needs_finite_bounds(model: &Model) -> bool {
+    model
+        .variables()
+        .lower
+        .iter()
+        .chain(&model.variables().upper)
+        .any(|v| !v.is_finite() || v.abs() > 9_007_199_254_740_991.)
+}
+
+/// Try one fixed-setup LP on small nonnegative-cost on/off models.
+fn admission_start(
+    model: &Model,
+    options: &Options,
+    settings: &NativeOptions,
+    cancel: &CancellationToken,
+    began: Instant,
+) -> Result<Option<SolveResult>> {
+    let bounds = model.variables();
+    if model.n() > 1_024
+        || model.m() > 8_192
+        || model.nnz() > 65_536
+        || !(0..model.n()).any(|j| {
+            !model.kinds()[j].is_integral()
+                && !bounds.upper[j].is_finite()
+                && oriented(model, model.objective()[j]) > 0.
+        })
+        || (0..model.n()).any(|j| {
+            !bounds.lower[j].is_finite()
+                || bounds.lower[j] < 0.
+                || oriented(model, model.objective()[j]) < 0.
+                || (model.kinds()[j].is_integral()
+                    && !(bounds.lower[j] == bounds.upper[j]
+                        && incumbent::is_integer(bounds.lower[j]))
+                    && (bounds.lower[j] != 0. || bounds.upper[j] != 1.))
+        })
+    {
+        return Ok(None);
+    }
+
+    let mut data = model.data().clone();
+    for (j, kind) in data.kinds.iter_mut().enumerate() {
+        if kind.is_integral() {
+            data.variables.lower[j] = data.variables.upper[j];
+            *kind = lp_ip_craft::VariableKind::Continuous;
+        }
+    }
+    let lp = Model::new(data)?;
+    let mut remaining = settings.clone();
+    remaining.iteration_limit = Some(settings.iteration_limit.unwrap_or(512).min(512));
+    remaining.time_limit_seconds = settings
+        .time_limit_seconds
+        .map(|t| (t - began.elapsed().as_secs_f64()).max(0.));
+    remaining.decompose = false;
+    // Only an original-model certified candidate can be used for admission.
+    NativeSolver::new(remaining)
+        .solve_internal(&lp, options, None, cancel, &lp, None)
+        .map(Some)
+}
+
+/// Derive missing sides for the sublevel set of a certified objective.
+fn cutoff_bounds(model: &mut Model, upper: f64) -> Result<usize> {
+    let mut bounds = model.variables().clone();
+    let sign = oriented(model, 1.);
+    let costs = model.objective().iter().map(|&c| c * sign);
+    let mut activity = oriented(model, model.objective_offset());
+    let mut contributions = Vec::with_capacity(model.n());
+    let mut infinite = None;
+    for (j, c) in costs.clone().enumerate() {
+        let bound = if c < 0. {
+            bounds.upper[j]
+        } else {
+            bounds.lower[j]
+        };
+        let term = if c == 0. {
+            0.
+        } else if !bound.is_finite() {
+            if infinite.replace(j).is_some() {
+                return Ok(0);
+            }
+            0.
+        } else if let Some((lo, _)) = incumbent::product(c, bound) {
+            lo
+        } else {
+            return Ok(0);
+        };
+        let Some((lo, _)) = incumbent::add(activity, term) else {
+            return Ok(0);
+        };
+        activity = lo;
+        contributions.push(term);
+    }
+    let mut sides = 0;
+    for (j, c) in costs.enumerate() {
+        if infinite.is_some_and(|k| k != j) {
+            continue;
+        }
+        let lower = c < 0.;
+        let target = if lower {
+            &mut bounds.lower[j]
+        } else {
+            &mut bounds.upper[j]
+        };
+        if c == 0. || target.is_finite() {
+            continue;
+        }
+        let Some((rest, _)) = incumbent::add(activity, -contributions[j]) else {
+            continue;
+        };
+        let Some((_, rhs)) = incumbent::add(upper, -rest) else {
+            continue;
+        };
+        let Some(mut cap) = quotient(c, rhs, lower) else {
+            continue;
+        };
+        if model.kinds()[j].is_integral() {
+            cap = if lower { cap.ceil() } else { cap.floor() };
+        }
+        *target = cap;
+        sides += 1;
+    }
+    if sides > 0 {
+        if bounds.lower.iter().zip(&bounds.upper).any(|(l, u)| l > u) {
+            return Ok(0);
+        }
+        let mut data = model.data().clone();
+        data.variables = bounds;
+        *model = Model::new(data)?;
+    }
+    Ok(sides)
+}
+
+type RowTerms = Vec<(Option<(f64, f64)>, Option<(f64, f64)>)>;
+
+// Totals are from a wider snapshot of the row box, so subsequent tightenings
+// within one row cannot invalidate another inference. Integer bounds are
+// rounded with the feasibility tolerance, as in `mixed`: with decimal
+// coefficients an integer point can satisfy a row only up to rounding of the
+// data, and the result check accepts it.
+fn infer_row(
+    model: &Model,
+    i: usize,
+    feasibility: f64,
+    bounds: &mut Bounds,
+    terms: &mut RowTerms,
+    mut changed: impl FnMut(usize),
+) -> bool {
+    let a = model.matrix();
+    let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
+    // Existing exact node propagation already covers finite pure integer rows.
+    if range.clone().all(|k| {
+        let j = a.pattern.indices[k];
+        model.kinds()[j].is_integral()
+            && a.values[k].fract() == 0.
+            && bounds.lower[j].is_finite()
+            && bounds.upper[j].is_finite()
+    }) {
+        return true;
+    }
+    terms.clear();
+    let (mut ni, mut xi) = (0, 0);
+    let mut unsafe_row = false;
+    for k in range.clone() {
+        let j = a.pattern.indices[k];
+        let c = a.values[k];
+        if c == 0. {
+            terms.push((Some((0., 0.)), Some((0., 0.))));
+            continue;
+        }
+        let (l, u) = if c > 0. {
+            (bounds.lower[j], bounds.upper[j])
+        } else {
+            (bounds.upper[j], bounds.lower[j])
+        };
+        let min = if l.is_finite() {
+            incumbent::dot(std::iter::once((c, l)), 0.)
+        } else {
+            ni += 1;
+            None
+        };
+        let max = if u.is_finite() {
+            incumbent::dot(std::iter::once((c, u)), 0.)
+        } else {
+            xi += 1;
+            None
+        };
+        unsafe_row |= (l.is_finite() && min.is_none()) || (u.is_finite() && max.is_none());
+        terms.push((min, max));
+    }
+    if unsafe_row {
+        return true;
+    }
+    let totalmin = incumbent::dot(terms.iter().filter_map(|t| t.0.map(|v| (1., v.0))), 0.);
+    let totalmax = incumbent::dot(terms.iter().filter_map(|t| t.1.map(|v| (1., v.1))), 0.);
+    let (Some(totalmin), Some(totalmax)) = (totalmin, totalmax) else {
+        return true;
+    };
+    for (pos, k) in range.enumerate() {
+        let c = a.values[k];
+        if c == 0. {
+            continue;
+        }
+        let j = a.pattern.indices[k];
+        let (mn, mx) = terms[pos];
+        let restmin = if ni == 1 && mn.is_none() {
+            Some(totalmin.0)
+        } else if ni == 0 {
+            incumbent::dot(std::iter::once((-1., mn.unwrap().1)), totalmin.0).map(|v| v.0)
+        } else {
+            None
+        };
+        let restmax = if xi == 1 && mx.is_none() {
+            Some(totalmax.1)
+        } else if xi == 0 {
+            incumbent::dot(std::iter::once((-1., mx.unwrap().0)), totalmax.1).map(|v| v.1)
+        } else {
+            None
+        };
+        let mut lo = bounds.lower[j];
+        let mut hi = bounds.upper[j];
+        if let Some(rest) = restmin {
+            let b = model.rows().upper[i];
+            if b.is_finite() {
+                if let Some((_, rhs)) = incumbent::dot(std::iter::once((-1., rest)), b) {
+                    if let Some(v) = quotient(c, rhs, c < 0.) {
+                        if c > 0. {
+                            hi = hi.min(v);
+                        } else {
+                            lo = lo.max(v);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(rest) = restmax {
+            let b = model.rows().lower[i];
+            if b.is_finite() {
+                if let Some((rhs, _)) = incumbent::dot(std::iter::once((-1., rest)), b) {
+                    if let Some(v) = quotient(c, rhs, c > 0.) {
+                        if c > 0. {
+                            lo = lo.max(v);
+                        } else {
+                            hi = hi.min(v);
+                        }
+                    }
+                }
+            }
+        }
+        if model.kinds()[j].is_integral() {
+            let slack = feasibility / c.abs();
+            lo = bounds.lower[j].max((lo - slack).ceil());
+            hi = bounds.upper[j].min((hi + slack).floor());
+        }
+        if lo > hi {
+            return false;
+        } // leave infeasibility classification to the engine
+        if lo > bounds.lower[j] {
+            bounds.lower[j] = lo;
+            changed(j);
+        }
+        if hi < bounds.upper[j] {
+            bounds.upper[j] = hi;
+            changed(j);
+        }
+    }
+    true
+}
+
 fn infer_bounds(
     model: &mut Model,
     feasibility: f64,
@@ -761,142 +1130,71 @@ fn infer_bounds(
 ) -> Result<usize> {
     let mut bounds = model.variables().clone();
     let mut changed = 0usize;
-    let a = model.matrix();
-    for _ in 0..4 {
-        let before = changed;
+    let mut terms = RowTerms::new();
+    let stopped =
+        || cancel.is_cancelled() || limit.is_some_and(|t| began.elapsed().as_secs_f64() >= t);
+    if bounds
+        .lower
+        .iter()
+        .chain(&bounds.upper)
+        .any(|v| !v.is_finite())
+    {
+        let a = model.matrix();
+        let mut incident = vec![Vec::new(); model.n()];
         for i in 0..model.m() {
-            if i % 128 == 0
-                && (cancel.is_cancelled()
-                    || limit.is_some_and(|t| began.elapsed().as_secs_f64() >= t))
-            {
-                break;
+            if i % 128 == 0 && stopped() {
+                return Ok(0);
             }
-            let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
-            // Existing exact node propagation already covers finite pure integer rows.
-            if range.clone().all(|k| {
-                let j = a.pattern.indices[k];
-                model.kinds()[j].is_integral()
-                    && a.values[k].fract() == 0.
-                    && bounds.lower[j].is_finite()
-                    && bounds.upper[j].is_finite()
-            }) {
-                continue;
-            }
-            let mut terms = Vec::with_capacity(range.len());
-            let (mut ni, mut xi) = (0, 0);
-            let mut unsafe_row = false;
-            for k in range.clone() {
-                let j = a.pattern.indices[k];
-                let c = a.values[k];
-                if c == 0. {
-                    terms.push((Some((0., 0.)), Some((0., 0.))));
-                    continue;
-                }
-                let (l, u) = if c > 0. {
-                    (bounds.lower[j], bounds.upper[j])
-                } else {
-                    (bounds.upper[j], bounds.lower[j])
-                };
-                let min = if l.is_finite() {
-                    incumbent::dot(std::iter::once((c, l)), 0.)
-                } else {
-                    ni += 1;
-                    None
-                };
-                let max = if u.is_finite() {
-                    incumbent::dot(std::iter::once((c, u)), 0.)
-                } else {
-                    xi += 1;
-                    None
-                };
-                unsafe_row |= (l.is_finite() && min.is_none()) || (u.is_finite() && max.is_none());
-                terms.push((min, max));
-            }
-            if unsafe_row {
-                continue;
-            }
-            let totalmin = incumbent::dot(terms.iter().filter_map(|t| t.0.map(|v| (1., v.0))), 0.);
-            let totalmax = incumbent::dot(terms.iter().filter_map(|t| t.1.map(|v| (1., v.1))), 0.);
-            let (Some(totalmin), Some(totalmax)) = (totalmin, totalmax) else {
-                continue;
-            };
-            for (pos, k) in range.enumerate() {
-                let c = a.values[k];
-                if c == 0. {
-                    continue;
-                }
-                let j = a.pattern.indices[k];
-                let (mn, mx) = terms[pos];
-                let restmin = if ni == 1 && mn.is_none() {
-                    Some(totalmin.0)
-                } else if ni == 0 {
-                    incumbent::dot(std::iter::once((-1., mn.unwrap().1)), totalmin.0).map(|v| v.0)
-                } else {
-                    None
-                };
-                let restmax = if xi == 1 && mx.is_none() {
-                    Some(totalmax.1)
-                } else if xi == 0 {
-                    incumbent::dot(std::iter::once((-1., mx.unwrap().0)), totalmax.1).map(|v| v.1)
-                } else {
-                    None
-                };
-                let mut lo = bounds.lower[j];
-                let mut hi = bounds.upper[j];
-                if let Some(rest) = restmin {
-                    let b = model.rows().upper[i];
-                    if b.is_finite() {
-                        if let Some((_, rhs)) = incumbent::dot(std::iter::once((-1., rest)), b) {
-                            if let Some(v) = quotient(c, rhs, c < 0.) {
-                                if c > 0. {
-                                    hi = hi.min(v);
-                                } else {
-                                    lo = lo.max(v);
-                                }
-                            }
-                        }
-                    }
-                }
-                if let Some(rest) = restmax {
-                    let b = model.rows().lower[i];
-                    if b.is_finite() {
-                        if let Some((rhs, _)) = incumbent::dot(std::iter::once((-1., rest)), b) {
-                            if let Some(v) = quotient(c, rhs, c > 0.) {
-                                if c > 0. {
-                                    lo = lo.max(v);
-                                } else {
-                                    hi = hi.min(v);
-                                }
-                            }
-                        }
-                    }
-                }
-                if model.kinds()[j].is_integral() {
-                    let slack = feasibility / c.abs();
-                    lo = bounds.lower[j].max((lo - slack).ceil());
-                    hi = bounds.upper[j].min((hi + slack).floor());
-                }
-                if lo > hi {
-                    return Ok(0);
-                } // leave infeasibility classification to the engine
-                if lo > bounds.lower[j] {
-                    bounds.lower[j] = lo;
-                    changed += 1;
-                }
-                if hi < bounds.upper[j] {
-                    bounds.upper[j] = hi;
-                    changed += 1;
+            for k in a.pattern.indptr[i]..a.pattern.indptr[i + 1] {
+                if a.values[k] != 0. {
+                    incident[a.pattern.indices[k]].push(i);
                 }
             }
         }
-        if changed == before {
-            break;
+        let mut pending = vec![true; model.m()];
+        let mut queue: std::collections::VecDeque<_> = (0..model.m()).collect();
+        for visit in 0..model.m().saturating_mul(4) {
+            if visit % 128 == 0 && stopped() {
+                break;
+            }
+            let Some(i) = queue.pop_front() else {
+                break;
+            };
+            pending[i] = false;
+            if !infer_row(model, i, feasibility, &mut bounds, &mut terms, |j| {
+                changed += 1;
+                for &neighbor in &incident[j] {
+                    if !pending[neighbor] {
+                        pending[neighbor] = true;
+                        queue.push_back(neighbor);
+                    }
+                }
+            }) {
+                return Ok(0);
+            }
+        }
+    } else {
+        'sweeps: for _ in 0..4 {
+            let before = changed;
+            for i in 0..model.m() {
+                if i % 128 == 0 && stopped() {
+                    break 'sweeps;
+                }
+                if !infer_row(model, i, feasibility, &mut bounds, &mut terms, |_| {
+                    changed += 1
+                }) {
+                    return Ok(0);
+                }
+            }
+            if changed == before {
+                break;
+            }
         }
     }
     if changed > 0 {
-        let mut d = model.data().clone();
-        d.variables = bounds;
-        *model = Model::new(d)?;
+        let mut data = model.data().clone();
+        data.variables = bounds;
+        *model = Model::new(data)?;
     }
     Ok(changed)
 }
@@ -1055,6 +1353,172 @@ mod propagation_tests {
         );
         assert_eq!(m, copy);
         assert!(quotient(1e-300, 1e300, true).is_none());
+    }
+
+    fn chain(rows: Vec<(Vec<(usize, f64)>, f64)>, n: usize, upper: Vec<f64>) -> Model {
+        let mut dense = Vec::new();
+        for (terms, _) in &rows {
+            let mut row = vec![0.; n];
+            for &(j, v) in terms {
+                row[j] = v;
+            }
+            dense.extend(row);
+        }
+        let mut kinds = vec![VariableKind::Continuous; n];
+        kinds[0] = VariableKind::Integer;
+        let mut objective = vec![0.; n];
+        objective[0] = -1.;
+        Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective,
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; n], upper),
+            kinds,
+            matrix: CsrMatrix::from_dense(rows.len(), n, &dense).unwrap(),
+            rows: Bounds::new(
+                vec![f64::NEG_INFINITY; rows.len()],
+                rows.iter().map(|r| r.1).collect(),
+            ),
+        })
+        .unwrap()
+    }
+
+    // Row i needs the bound that row i + 1 infers, so one pass in row order
+    // resolves one column. The queue follows the dependency instead. The
+    // ladder needs a second wave: x waits for y, and y for its own chain.
+    #[test]
+    fn bounds_follow_chains_against_the_row_order() {
+        let k = 96;
+        let mut upper = vec![f64::INFINITY; k + 1];
+        upper[k] = 3.;
+        let reversed = chain(
+            (0..k).map(|i| (vec![(i, 1.), (i + 1, -1.)], 1.)).collect(),
+            k + 1,
+            upper,
+        );
+        let n = 2 * (k + 1);
+        let mut upper = vec![f64::INFINITY; n];
+        upper[k] = 3.;
+        upper[n - 1] = 2.;
+        let ladder = chain(
+            (0..k)
+                .map(|i| (vec![(i, 1.), (i + 1, -1.), (k + 1 + i, -1.)], 0.))
+                .chain((0..k).map(|i| (vec![(k + 1 + i, 1.), (k + 2 + i, -1.)], 1.)))
+                .collect(),
+            n,
+            upper,
+        );
+        for (m, first) in [(&reversed, 3. + k as f64), (&ladder, f64::NAN)] {
+            let mut inferred = m.clone();
+            let changes = infer_bounds(
+                &mut inferred,
+                1e-7,
+                &CancellationToken::default(),
+                Instant::now(),
+                None,
+            )
+            .unwrap();
+            assert!(changes >= m.n() - 2 && !needs_finite_bounds(&inferred));
+            if first.is_finite() {
+                // x_i <= x_k + (k - i), exactly, in small integers.
+                for i in 0..=k {
+                    assert_eq!(inferred.variables().upper[i], 3. + (k - i) as f64);
+                }
+            }
+            let r = NativeSolver::default()
+                .solve(m, &Options::default(), None, &CancellationToken::default())
+                .unwrap();
+            assert_eq!(r.status, Status::Optimal, "{:?}", r.status);
+            let x = r.candidate.unwrap();
+            if first.is_finite() {
+                assert_eq!(x[0], first);
+            } else {
+                // y_i <= 2 + (k - i) and x_0 <= 3 + the sum of all y_i.
+                let total: f64 = (0..k).map(|i| 2. + (k - i) as f64).sum();
+                assert_eq!(x[0], 3. + total);
+            }
+        }
+    }
+
+    // A stopped clock leaves the model as it was. The run that follows
+    // reports the limit, or the missing bounds, through the usual path.
+    #[test]
+    fn stopped_inference_changes_nothing() {
+        let k = 300;
+        let mut upper = vec![f64::INFINITY; k + 1];
+        upper[k] = 3.;
+        let m = chain(
+            (0..k).map(|i| (vec![(i, 1.), (i + 1, -1.)], 1.)).collect(),
+            k + 1,
+            upper,
+        );
+        let cancel = CancellationToken::default();
+        cancel.cancel();
+        let mut stopped = m.clone();
+        assert_eq!(
+            infer_bounds(&mut stopped, 1e-7, &cancel, Instant::now(), None).unwrap(),
+            0
+        );
+        assert_eq!(stopped.variables(), m.variables());
+        let mut timed = m.clone();
+        infer_bounds(
+            &mut timed,
+            1e-7,
+            &CancellationToken::default(),
+            Instant::now(),
+            Some(0.),
+        )
+        .unwrap();
+        for j in 0..=k {
+            assert!(timed.variables().upper[j] >= 3. + (k - j) as f64);
+        }
+    }
+
+    // The cap of a column is the certified objective less the least value of
+    // every other term, divided by its cost and rounded away from the box.
+    #[test]
+    fn objective_caps_keep_every_point_that_is_no_worse() {
+        for sense in [Sense::Minimize, Sense::Maximize] {
+            let sign = if sense == Sense::Minimize { 1. } else { -1. };
+            let build = |lower: Vec<f64>, upper: Vec<f64>| {
+                Model::new(ModelData {
+                    sense,
+                    objective: vec![3. * sign, 2. * sign, -0.7 * sign],
+                    objective_offset: sign,
+                    variables: Bounds::new(lower, upper),
+                    kinds: vec![
+                        VariableKind::Continuous,
+                        VariableKind::Integer,
+                        VariableKind::Continuous,
+                    ],
+                    matrix: CsrMatrix::from_dense(1, 3, &[1., 1., 1.]).unwrap(),
+                    rows: Bounds::new(vec![1.], vec![f64::INFINITY]),
+                })
+                .unwrap()
+            };
+            let inf = f64::INFINITY;
+            let mut m = build(vec![0., 1., 0.], vec![inf, inf, 2.]);
+            // 3 x + 2 y - 0.7 z + 1 <= 10 with y >= 1 and z <= 2.
+            assert_eq!(cutoff_bounds(&mut m, 10.).unwrap(), 2);
+            let up = &m.variables().upper;
+            let exact = (10. - 1. - 2. + 1.4) / 3.;
+            assert!(up[0] >= exact && up[0] <= exact * (1. + 1e-15), "{up:?}");
+            assert_eq!(up[1], 5.); // floor of (10 - 1 + 1.4) / 2
+            // Any point of the old box with a value of at most 10 is kept.
+            for (x, y, z) in [(exact, 1., 2.), (0., 5., 2.), (2., 1., 0.3)] {
+                if 3. * x + 2. * y - 0.7 * z + 1. <= 10. {
+                    assert!(x <= up[0] && y <= up[1]);
+                }
+            }
+            // A column that can improve without limit leaves the others open.
+            let mut open = build(vec![0., 1., 0.], vec![inf, inf, inf]);
+            assert_eq!(cutoff_bounds(&mut open, 10.).unwrap(), 0);
+            assert_eq!(open.variables().upper, vec![inf, inf, inf]);
+            // A cap below a lower bound means the value was not attainable.
+            let mut empty = build(vec![0., 1., 0.], vec![inf, inf, 2.]);
+            assert_eq!(cutoff_bounds(&mut empty, 1.).unwrap(), 0);
+            assert_eq!(empty.variables().upper[0], inf);
+        }
     }
 }
 

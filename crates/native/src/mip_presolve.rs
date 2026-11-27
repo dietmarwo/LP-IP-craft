@@ -165,6 +165,9 @@ fn probe(
     // `base` between probes, over the columns they changed only; a probe
     // costs its propagation, not a copy of every bound.
     let mut kept = base.clone();
+    // Reuse the direct index when two probe trails are large enough to make
+    // repeated scans expensive. Each probed binary is visited once.
+    let mut last = Vec::<[(usize, f64, f64); 2]>::new();
     for j in binaries {
         if budget.stop().is_some() {
             break;
@@ -205,16 +208,35 @@ fn probe(
             }
             [Some(zero), Some(one)] => {
                 // A column one trial did not change keeps its bounds there.
-                let at = |trial: &[(usize, f64, f64)], k: usize| {
-                    trial
-                        .iter()
-                        .rev()
-                        .find(|t| t.0 == k)
-                        .map_or((kept.lower[k], kept.upper[k]), |t| (t.1, t.2))
+                let indexed = zero.len() + one.len() >= 32;
+                let stamp = j + 1;
+                if indexed {
+                    last.resize(model.n(), [(0, 0., 0.); 2]);
+                    for (side, trial) in [&zero, &one].into_iter().enumerate() {
+                        for &(k, lo, hi) in trial {
+                            last[k][side] = (stamp, lo, hi);
+                        }
+                    }
+                }
+                let at = |trial: &[(usize, f64, f64)], side: usize, k: usize| {
+                    if indexed {
+                        let (seen, lo, hi) = last[k][side];
+                        if seen == stamp {
+                            (lo, hi)
+                        } else {
+                            (kept.lower[k], kept.upper[k])
+                        }
+                    } else {
+                        trial
+                            .iter()
+                            .rev()
+                            .find(|t| t.0 == k)
+                            .map_or((kept.lower[k], kept.upper[k]), |t| (t.1, t.2))
+                    }
                 };
                 for &(k, _, _) in zero.iter().chain(&one) {
-                    let (l0, u0) = at(&zero, k);
-                    let (l1, u1) = at(&one, k);
+                    let (l0, u0) = at(&zero, 0, k);
+                    let (l1, u1) = at(&one, 1, k);
                     let (lo, hi) = (l0.min(l1), u0.max(u1));
                     if lo > base.lower[k] || hi < base.upper[k] {
                         base.lower[k] = base.lower[k].max(lo);
@@ -556,6 +578,60 @@ mod tests {
                     assert_eq!(f(&m), f(&reduced), "{x:?}");
                 }
             }
+        }
+    }
+    // One probe trail holds a binary and the columns it moves. Two trails of
+    // at least 32 entries use the stamped index, shorter ones the scan. The
+    // second binary moves half of the columns on one side only, so its other
+    // side must read the kept bound and not the entry of the first probe.
+    #[test]
+    fn long_probe_trails_give_the_bounds_of_short_ones() {
+        for k in [8usize, 64] {
+            let n = k + 2;
+            let (mut a, mut ru) = (Vec::new(), Vec::new());
+            let mut row = |terms: &[(usize, f64)], upper: f64| {
+                let mut dense = vec![0.; n];
+                for &(j, v) in terms {
+                    dense[j] = v;
+                }
+                a.extend(dense);
+                ru.push(upper);
+            };
+            for i in 0..k {
+                row(&[(2 + i, 1.), (0, -3.)], 5.);
+                row(&[(2 + i, 1.), (0, 1.)], 7.);
+                if i % 2 == 0 {
+                    row(&[(2 + i, 1.), (1, 2.)], 7.);
+                }
+            }
+            let mut kinds = vec![VariableKind::Integer; n];
+            kinds[0] = VariableKind::Binary;
+            kinds[1] = VariableKind::Binary;
+            let mut up = vec![8.; n];
+            up[0] = 1.;
+            up[1] = 1.;
+            let rl = vec![f64::NEG_INFINITY; ru.len()];
+            let m = model(vec![1.; n], kinds, vec![0.; n], up, a, rl, ru);
+            let s = NativeOptions::default();
+            let cancel = CancellationToken::default();
+            let budget = Budget {
+                start: Instant::now(),
+                settings: &s,
+                cancel: &cancel,
+                pivots: 0,
+            };
+            let mut stats = Stats::default();
+            let b = probe(&m, 1e-7, &budget, &mut stats).unwrap();
+            assert_eq!((stats.probed, stats.probe_tightened), (2, k as u64));
+            // x <= 5 + 3 b and x <= 7 - b: 5 at b = 0 and 6 at b = 1. The
+            // second binary allows 6 at 0 and 5 at 1, which removes nothing.
+            for j in 2..n {
+                assert_eq!((b.lower[j], b.upper[j]), (0., 6.), "k = {k}, column {j}");
+            }
+            assert_eq!(
+                (&b.lower[..2], &b.upper[..2]),
+                (&[0., 0.][..], &[1., 1.][..])
+            );
         }
     }
     #[test]

@@ -446,6 +446,7 @@ fn native_settings(
             "mip_presolve_rounds" => settings.mip_presolve_rounds = field(&value, &key)?,
             "gmi_cuts" => settings.gmi_cuts = field(&value, &key)?,
             "adaptive_root" => settings.adaptive_root = field(&value, &key)?,
+            "objective_cutoff_bounds" => settings.objective_cutoff_bounds = field(&value, &key)?,
             "integer_equality_presolve" => {
                 settings.integer_equality_presolve = field(&value, &key)?
             }

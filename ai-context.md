@@ -62,7 +62,7 @@ crates.io with the same version. Check the registries for the latest
 version before relying on it ([RELEASING.md](RELEASING.md)); the worker
 stays source-only. For Rust, the
 job worker or changes after the latest release, use a checkout
-of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.31.0;
+of https://github.com/dietmarwo/LP-IP-craft. The workspace version is 0.32.0;
 the shared job crates are 0.5.0. Profile names such as `lp-ip.solve/1` are protocol
 identifiers, independent of either.
 
@@ -94,7 +94,7 @@ would change the solution.
 |---|---|
 | Are the objective and every constraint linear in the decision variables? | This solver accepts only `objective_offset + cᵀx` and linear row intervals. |
 | How many variables, rows and nonzeros? Which variables are integer or binary? | Size and integrality decide LP versus MIP effort and the parallel layout. |
-| Does every variable have a finite lower and upper bound? | A MIP requires finite bounds on **all** variables, continuous ones included, of magnitude at most 2^53−1 after root inference, which runs only with `presolve` on. |
+| Does every variable have a finite lower and upper bound? | A MIP requires finite bounds on **all** variables, continuous ones included, of magnitude at most 2^53−1 after root inference, which runs only with `presolve` on. The opt-in `objective_cutoff_bounds` can supply sides implied by a certified incumbent. |
 | Minimize or maximize? Is there a constant term? | Both senses are native; results keep the original sense and include the offset. |
 | What are the units and coefficient ranges? | Badly scaled rows weaken numerical acceptance; tolerances are absolute in original units. |
 | Which tolerances does the application accept? | Defaults are 1e-7 for feasibility and integrality. Freeze them before tuning. |
@@ -262,7 +262,7 @@ independent check. The README's 0.20–0.28 sections and
 [docs/api.md](docs/api.md) describe each mechanism and its measured gains and
 regressions. The "Deliberate limits" paragraph of docs/api.md predates several
 of these options (cuts, strong branching, MIP presolve, tree workers); its
-remaining limits, such as no basis import or export, still hold. Since 0.30.0 the general MIP search has optional gap stops. Since 0.31.0 two opt-in root mechanisms exist: `adaptive_root` and `integer_equality_presolve`.
+remaining limits, such as no basis import or export, still hold. Since 0.30.0 the general MIP search has optional gap stops. Since 0.31.0 two opt-in root mechanisms exist: `adaptive_root` and `integer_equality_presolve`. Since 0.32.0 root inference follows chains against the row order, and the opt-in `objective_cutoff_bounds` admits MIPs with missing bounds under a certified incumbent.
 
 ### In process or as a job
 
@@ -783,6 +783,10 @@ optimization-jobs' CI does that with all three workers.
 ## Structured application tutorials
 
 [tutorials/README.md](tutorials/README.md) lists nine application chapters (LP1–LP9). Each builds its model with `tutorials/_support/linear_model.py`, solves it with `solve(..., backend="native")` and checks every candidate independently of the solver. LP4, LP5 and LP7 also check the solver's own LP duals: rationalized prices are verified exactly, and `safe_dual_bound` gives a binary64-safe bound. Run a chapter with `python tutorials/<chapter>/run.py --output DIR`. The cross-repository driver in optimization-jobs (`tutorials/structured/`) runs all twenty chapters of the series directly or as trusted command jobs; the chapters add no job profile or worker.
+
+## Objective-implied MIP bounds (since 0.32.0)
+
+`NativeOptions` and `lp-ip.solve/1` accept `objective_cutoff_bounds`, off by default and under the master `presolve` switch. A MIP whose variables lack finite bounds after root inference is normally `Unsupported`. With the option, a start that passes the exact feasibility check caps every costly column from the objective value it certifies; the capped model keeps that point and every point at least as good, so optimum and bound are those of the original model. Without such a start, small models with nonnegative oriented costs, nonnegative lower bounds and binary or fixed integer columns get the point from one LP with every binary at its upper bound (at most 512 pivots, counted against the limits). A start that fails the exact check does not block that LP; if it lies outside the capped model it is replaced and `start_status` is `rejected`. Read `diagnostics.objective_cutoff_sides` and `diagnostics.objective_cutoff_start_pivots`. A model with a zero-cost column that stays unbounded remains `Unsupported`. Default behavior also changed in 0.32.0: root inference uses a queue, so chains against the row order resolve; on models with missing bounds, reported values can differ from 0.31.0 in the last digits. Details: [docs/api.md](docs/api.md#objective-implied-mip-bounds-since-0320), [the review](docs/performance-thirty/REVIEW.md).
 
 ## Optional root cuts and integer equalities (since 0.31.0)
 

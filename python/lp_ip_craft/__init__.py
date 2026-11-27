@@ -30,7 +30,7 @@ from ._native import safe_dual_bound as _safe_dual_bound
 from ._native import solve_native as _solve_native
 from ._native import solve_batch_native as _solve_batch_native
 
-__version__ = "0.31.0"
+__version__ = "0.32.0"
 
 __all__ = [
     "BACKENDS",
@@ -132,6 +132,7 @@ class NativeOptions:
     mir_cuts: bool = False
     adaptive_root: bool = False
     integer_equality_presolve: bool = False
+    objective_cutoff_bounds: bool = False
     mip_cut_rounds: int = 8
     mip_cut_limit: int = 16
     cut_exact_work: int = 4_000_000

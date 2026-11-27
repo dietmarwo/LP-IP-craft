@@ -174,6 +174,9 @@ pub struct NativeOptions {
     pub mip_presolve: bool,
     /// Bounded residue propagation on certified short integer equalities.
     pub integer_equality_presolve: bool,
+    /// Allow a certified incumbent to supply finite bounds for MIP admission.
+    /// Requires presolve and root propagation.
+    pub objective_cutoff_bounds: bool,
     /// Choose bounded root separation for general MIPs.
     pub adaptive_root: bool,
     /// Exact big-M coefficient tightening on unfixed binary columns of
@@ -332,6 +335,7 @@ impl Default for NativeOptions {
             root_separation: false,
             mip_presolve: true,
             integer_equality_presolve: false,
+            objective_cutoff_bounds: false,
             adaptive_root: false,
             coefficient_tightening: true,
             dual_presolve: false,
@@ -2742,6 +2746,9 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
     .collect();
+    if s.objective_cutoff_bounds {
+        options.push(("objective_cutoff_bounds".into(), "true".into()));
+    }
     if let Some(value) = s.mip_relative_gap {
         options.push(("mip_relative_gap".into(), value.to_string()));
     }

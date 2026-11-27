@@ -118,6 +118,8 @@ def profile_options(profile):
             options.setdefault("mip_cut_rounds", 16)
         elif token.startswith("r") and token[1:].isdigit():
             options["mip_cut_rounds"] = int(token[1:])
+        elif token == "cutoff":
+            options["objective_cutoff_bounds"] = True
         elif token == "adaptive":
             options["adaptive_root"] = True
         elif token == "no_obj_lattice":
