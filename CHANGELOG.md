@@ -13,6 +13,8 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-27
+
 ### Changed
 
 - Presolve rounds with the feasibility tolerance. Integer bounds derived
