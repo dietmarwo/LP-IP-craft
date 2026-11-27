@@ -91,7 +91,7 @@ def test_start_within_the_feasibility_tolerance_is_the_optimum():
     m=make(c=[1.],a=[[1.]],ru=[0.99999995],up=[1.],kinds=["integer"])
     r=solve(m,backend="native",start=[1.])
     # The row limit is within the feasibility tolerance of 1, so integer row
-    # rounding keeps x = 1. Up to 0.31.0 the stored row was read exactly, the
+    # rounding keeps x = 1. Up to 0.32.0 the stored row was read exactly, the
     # limit was rounded to 0 and the answer was x = 0.
     assert r.status=="optimal" and r.best_bound>=1.
     assert r.candidate==[1.] and r.evaluation.objective==1.
@@ -118,7 +118,7 @@ def test_redundant_rows(enabled):
 
 def test_rows_that_agree_within_the_feasibility_tolerance_keep_the_start():
     # x <= 0.99999995 and x >= 1: read exactly the rows contradict each other
-    # (numerical_failure with the start up to 0.31.0); within the tolerance
+    # (numerical_failure with the start up to 0.32.0); within the tolerance
     # x = 1 satisfies both.
     m=make(c=[1.],a=[[1.],[1.]],up=[1.],rl=[-math.inf,1.],ru=[0.99999995,math.inf],kinds=["integer"])
     r=solve(m,backend="native",start=[1.])
@@ -309,7 +309,7 @@ def test_limited_mixed_run_reports_the_rounded_bound_and_keeps_its_limit_status(
     assert loose.status == "node_limit" and loose.best_bound == pytest.approx(1.5 * sign)
 # Each model is feasible only up to rounding of its decimal data or of a
 # computed right-hand side; the result check accepts the point by eight orders
-# of magnitude. 0.31.0 answered infeasible on the first, fourth and fifth, a
+# of magnitude. 0.32.0 answered infeasible on the first, fourth and fifth, a
 # worse objective on the second and third and numerical_failure on the sixth.
 @pytest.mark.parametrize("c,a,lo,up,rl,ru,best", [
     ((4., 0.), ((15., 0.1),), (-4., -2.), (2., 0.), (29.8,), (29.8,), 8.),

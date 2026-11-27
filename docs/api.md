@@ -403,7 +403,7 @@ Integer bounds, integer row limits and the integral-objective bound are
 rounded with the feasibility tolerance. A decimal equality over integers
 such as `15x + 0.1y = 29.8` holds at (2, -2) only up to rounding of 0.1 and
 29.8; presolve keeps that point, which the result check accepts, with and
-without this option. Up to 0.31.0 the default presolve read the stored
+without this option. Up to 0.32.0 the default presolve read the stored
 binary64 values exactly and reported such a model `infeasible`.
 
 The integral-objective bound also applies to a MIP with continuous columns
