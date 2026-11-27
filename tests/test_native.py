@@ -349,9 +349,26 @@ def test_missing_mip_bounds_require_certification_and_keep_limited_incumbent():
                  sense="minimize")
     settings = NativeOptions(objective_cutoff_bounds=True, node_limit=1)
     # The point is within feasibility tolerance of the original lower row.
-    # The exact stored row rules out using it to cap the improving search.
-    with pytest.raises(NotImplementedError):
-        solve(model, backend="native", backend_options=settings, start=[2. - 2**-30, 1.])
+    # The exact stored row rules out using it to cap the improving search, so
+    # the fixed-setup LP supplies the cap, as it does without a start. The
+    # point lies in the capped model and remains the start of the search.
+    near = [2. - 2**-30, 1.]
+    result = solve(model, backend="native", backend_options=settings, start=near)
+    assert result.status == "node_limit"
+    assert result.candidate == near
+    assert result.backend.start_status == "evaluated"
+    assert result.backend.effective_options["diagnostics.objective_cutoff_sides"] == "1"
+    assert "diagnostics.objective_cutoff_start_pivots" in result.backend.effective_options
+    # Without the fixed-setup LP nothing certifies a cap. A negative cost
+    # makes the model ineligible for it.
+    rewarded = make(c=[1., -1.], a=[[1., -1.]], up=[math.inf, 1.],
+                    rl=[1.], ru=[math.inf], kinds=["continuous", "binary"],
+                    sense="minimize")
+    for start in (near, None):
+        with pytest.raises(NotImplementedError):
+            solve(rewarded, backend="native", backend_options=settings, start=start)
+    assert solve(rewarded, backend="native", backend_options=settings,
+                 start=[2., 1.]).status == "optimal"
     result = solve(model, backend="native", backend_options=settings)
     assert result.status == "node_limit"
     assert result.nodes == 1
@@ -363,6 +380,25 @@ def test_missing_mip_bounds_require_certification_and_keep_limited_incumbent():
                    backend_options=NativeOptions(objective_cutoff_bounds=True))
     assert result.status == "optimal"
     assert result.candidate == [1., 0.]
+
+
+def test_start_outside_the_objective_caps_is_replaced_by_the_certified_point():
+    model = make(c=[1., 1.], a=[[1., -1.]], up=[math.inf, 1.],
+                 rl=[1.], ru=[math.inf], kinds=["continuous", "binary"],
+                 sense="minimize")
+    for limit, status, point in ((1, "node_limit", [2., 1.]), (None, "optimal", [1., 0.])):
+        settings = NativeOptions(objective_cutoff_bounds=True, node_limit=limit)
+        result = solve(model, backend="native", backend_options=settings, start=[0., 1.])
+        assert (result.status, result.candidate) == (status, point)
+        assert result.evaluation.feasible_candidate
+        assert result.backend.start_status == "rejected"
+        assert result.backend.effective_options["diagnostics.objective_cutoff_start_pivots"] == "1"
+    # A certified start supplies the cap itself; no LP runs.
+    result = solve(model, backend="native",
+                   backend_options=NativeOptions(objective_cutoff_bounds=True), start=[9., 1.])
+    assert result.status == "optimal" and result.candidate == [1., 0.]
+    assert result.backend.start_status == "evaluated"
+    assert "diagnostics.objective_cutoff_start_pivots" not in result.backend.effective_options
 
 
 def test_missing_zero_cost_mip_domain_cannot_be_capped():

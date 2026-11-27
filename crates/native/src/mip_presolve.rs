@@ -569,6 +569,60 @@ mod tests {
             }
         }
     }
+    // One probe trail holds a binary and the columns it moves. Two trails of
+    // at least 32 entries use the stamped index, shorter ones the scan. The
+    // second binary moves half of the columns on one side only, so its other
+    // side must read the kept bound and not the entry of the first probe.
+    #[test]
+    fn long_probe_trails_give_the_bounds_of_short_ones() {
+        for k in [8usize, 64] {
+            let n = k + 2;
+            let (mut a, mut ru) = (Vec::new(), Vec::new());
+            let mut row = |terms: &[(usize, f64)], upper: f64| {
+                let mut dense = vec![0.; n];
+                for &(j, v) in terms {
+                    dense[j] = v;
+                }
+                a.extend(dense);
+                ru.push(upper);
+            };
+            for i in 0..k {
+                row(&[(2 + i, 1.), (0, -3.)], 5.);
+                row(&[(2 + i, 1.), (0, 1.)], 7.);
+                if i % 2 == 0 {
+                    row(&[(2 + i, 1.), (1, 2.)], 7.);
+                }
+            }
+            let mut kinds = vec![VariableKind::Integer; n];
+            kinds[0] = VariableKind::Binary;
+            kinds[1] = VariableKind::Binary;
+            let mut up = vec![8.; n];
+            up[0] = 1.;
+            up[1] = 1.;
+            let rl = vec![f64::NEG_INFINITY; ru.len()];
+            let m = model(vec![1.; n], kinds, vec![0.; n], up, a, rl, ru);
+            let s = NativeOptions::default();
+            let cancel = CancellationToken::default();
+            let budget = Budget {
+                start: Instant::now(),
+                settings: &s,
+                cancel: &cancel,
+                pivots: 0,
+            };
+            let mut stats = Stats::default();
+            let b = probe(&m, &budget, &mut stats).unwrap();
+            assert_eq!((stats.probed, stats.probe_tightened), (2, k as u64));
+            // x <= 5 + 3 b and x <= 7 - b: 5 at b = 0 and 6 at b = 1. The
+            // second binary allows 6 at 0 and 5 at 1, which removes nothing.
+            for j in 2..n {
+                assert_eq!((b.lower[j], b.upper[j]), (0., 6.), "k = {k}, column {j}");
+            }
+            assert_eq!(
+                (&b.lower[..2], &b.upper[..2]),
+                (&[0., 0.][..], &[1., 1.][..])
+            );
+        }
+    }
     #[test]
     fn probing_keeps_every_feasible_binary_point_and_finds_fixings() {
         let mut rng = 0x2545_F491_4F6C_DD1Du64;

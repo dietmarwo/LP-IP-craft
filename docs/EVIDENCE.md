@@ -191,3 +191,36 @@ and `summarize.py OUT --group GROUP --baseline stock:adaptive+lattice
 `delivery-default.jsonl` compares the preceding patch with revision 2, not
 the unpatched solver; the [review](gurobi-gap/REVIEW.md) has the comparison
 with the unpatched solver.
+
+## 30-iteration performance evidence
+
+The raw records of the [30-iteration campaign](performance-thirty/RESULTS.md)
+are not committed. They ship in the delivery archive:
+
+- `LP-IP-craft-30-iteration-performance-patch.zip`, 8,563,930 bytes,
+  SHA-256 `3862e4c1ce2e33b9415755b67c22dd413bb2e16632bf86d9b77339030d3706f9`
+
+[`evidence-performance-thirty.sha256`](evidence-performance-thirty.sha256)
+is the archive's own `SHA256SUMS` and lists its 644 other files; check a
+copy with `sha256sum -c` from the extracted directory. All entries matched
+at import.
+
+| Directory | Files | Contents |
+| --- | ---: | --- |
+| evidence/inputs | 148 | the development and confirmation manifests with their models, the four 128-step chains, the 1,024-column probe chain, the certified start and the budgets |
+| evidence/results | 467 | one directory per trial (01 to 30), the integrated comparisons and the validation logs |
+| evidence/scripts | 25 | the build, comparison and trial-edit scripts of the campaign |
+| top level | 4 | the report, the plan, the patch and the README |
+
+The archive's patch (`LP-IP-craft-30-iteration-performance.patch`, SHA-256
+`50c26b29f87cedcabf7d5bf49432b37fbdcde1f6471b22bd76cfef3fbc5da276`, applied
+to `2d6c431`, tree `129566e`) is the first commit of the pull request. The
+plan and the delivered report are committed under `docs/performance-thirty/`.
+With the models of `evidence/inputs`,
+`python benchmarks/gurobi-gap/run.py --manifest evidence/inputs/development.json
+--group blind development lp regression public transfer chain probe
+--stock BASE --candidate PATCHED --arms stock:default candidate:default
+--nodes 250 --pivots 10000 --seconds 20 --output OUT.jsonl` reproduces
+`results/integrated/fixed-work.jsonl`; the
+[review](performance-thirty/REVIEW.md) has the same comparison at four times
+the node budget.

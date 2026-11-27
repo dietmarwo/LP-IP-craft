@@ -234,7 +234,11 @@ pub(crate) fn solve_observed(
             .settings
             .time_limit_seconds
             .is_some_and(|t| began.elapsed().as_secs_f64() >= t);
-    let admission = if cutoff_attempt && start.is_none() {
+    // Only a point that passes the exact check can supply the caps. A caller
+    // start that fails it does not block the fixed-setup LP.
+    let certified =
+        start.filter(|s| cutoff_attempt && incumbent::upper(model, &s.primal).is_some());
+    let admission = if cutoff_attempt && certified.is_none() {
         admission_start(&reduced.model, options, &solver.settings, cancel, began)?
     } else {
         None
@@ -244,10 +248,12 @@ pub(crate) fn solve_observed(
         .and_then(|r| r.candidate)
         .map(WarmStart::from_primal);
     let caller_supplied_start = start.is_some();
-    let start = start.or(generated.as_ref());
+    let caps_from = certified.or(generated.as_ref());
+    let mut start = start.or(generated.as_ref());
+    let mut replaced_start = false;
     let mut cutoff_sides = 0;
     if cutoff_attempt {
-        if let Some(s) = start {
+        if let Some(s) = caps_from {
             if let Some(upper) = incumbent::upper(model, &s.primal) {
                 let mut bounded = reduced.model.clone();
                 let sides = cutoff_bounds(&mut bounded, upper)?;
@@ -262,6 +268,18 @@ pub(crate) fn solve_observed(
                         && check::evaluate(&bounded, &s.primal, &options.tolerances)?
                             .feasible_candidate
                     {
+                        // The caller's point stays the start while it lies
+                        // in the capped model. Otherwise the certified point
+                        // replaces it, so a limited run keeps an incumbent.
+                        if let Some(given) = start {
+                            if !std::ptr::eq(given, s)
+                                && !check::evaluate(&bounded, &given.primal, &options.tolerances)?
+                                    .feasible_candidate
+                            {
+                                start = Some(s);
+                                replaced_start = true;
+                            }
+                        }
                         reduced.model = bounded;
                         cutoff_sides = sides;
                         inferred += extra;
@@ -609,6 +627,9 @@ pub(crate) fn solve_observed(
         .push(("root_inferred_bounds".into(), inferred.to_string()));
     if generated.is_some() && !caller_supplied_start {
         result.backend.start_status = StartStatus::NotProvided;
+    }
+    if replaced_start {
+        result.backend.start_status = StartStatus::Rejected;
     }
     if admission_work.0 > 0 {
         result.backend.effective_options.push((
@@ -1288,6 +1309,170 @@ mod propagation_tests {
         );
         assert_eq!(m, copy);
         assert!(quotient(1e-300, 1e300, true).is_none());
+    }
+
+    fn chain(rows: Vec<(Vec<(usize, f64)>, f64)>, n: usize, upper: Vec<f64>) -> Model {
+        let mut dense = Vec::new();
+        for (terms, _) in &rows {
+            let mut row = vec![0.; n];
+            for &(j, v) in terms {
+                row[j] = v;
+            }
+            dense.extend(row);
+        }
+        let mut kinds = vec![VariableKind::Continuous; n];
+        kinds[0] = VariableKind::Integer;
+        let mut objective = vec![0.; n];
+        objective[0] = -1.;
+        Model::new(ModelData {
+            sense: Sense::Minimize,
+            objective,
+            objective_offset: 0.,
+            variables: Bounds::new(vec![0.; n], upper),
+            kinds,
+            matrix: CsrMatrix::from_dense(rows.len(), n, &dense).unwrap(),
+            rows: Bounds::new(
+                vec![f64::NEG_INFINITY; rows.len()],
+                rows.iter().map(|r| r.1).collect(),
+            ),
+        })
+        .unwrap()
+    }
+
+    // Row i needs the bound that row i + 1 infers, so one pass in row order
+    // resolves one column. The queue follows the dependency instead. The
+    // ladder needs a second wave: x waits for y, and y for its own chain.
+    #[test]
+    fn bounds_follow_chains_against_the_row_order() {
+        let k = 96;
+        let mut upper = vec![f64::INFINITY; k + 1];
+        upper[k] = 3.;
+        let reversed = chain(
+            (0..k).map(|i| (vec![(i, 1.), (i + 1, -1.)], 1.)).collect(),
+            k + 1,
+            upper,
+        );
+        let n = 2 * (k + 1);
+        let mut upper = vec![f64::INFINITY; n];
+        upper[k] = 3.;
+        upper[n - 1] = 2.;
+        let ladder = chain(
+            (0..k)
+                .map(|i| (vec![(i, 1.), (i + 1, -1.), (k + 1 + i, -1.)], 0.))
+                .chain((0..k).map(|i| (vec![(k + 1 + i, 1.), (k + 2 + i, -1.)], 1.)))
+                .collect(),
+            n,
+            upper,
+        );
+        for (m, first) in [(&reversed, 3. + k as f64), (&ladder, f64::NAN)] {
+            let mut inferred = m.clone();
+            let changes = infer_bounds(
+                &mut inferred,
+                &CancellationToken::default(),
+                Instant::now(),
+                None,
+            )
+            .unwrap();
+            assert!(changes >= m.n() - 2 && !needs_finite_bounds(&inferred));
+            if first.is_finite() {
+                // x_i <= x_k + (k - i), exactly, in small integers.
+                for i in 0..=k {
+                    assert_eq!(inferred.variables().upper[i], 3. + (k - i) as f64);
+                }
+            }
+            let r = NativeSolver::default()
+                .solve(m, &Options::default(), None, &CancellationToken::default())
+                .unwrap();
+            assert_eq!(r.status, Status::Optimal, "{:?}", r.status);
+            let x = r.candidate.unwrap();
+            if first.is_finite() {
+                assert_eq!(x[0], first);
+            } else {
+                // y_i <= 2 + (k - i) and x_0 <= 3 + the sum of all y_i.
+                let total: f64 = (0..k).map(|i| 2. + (k - i) as f64).sum();
+                assert_eq!(x[0], 3. + total);
+            }
+        }
+    }
+
+    // A stopped clock leaves the model as it was. The run that follows
+    // reports the limit, or the missing bounds, through the usual path.
+    #[test]
+    fn stopped_inference_changes_nothing() {
+        let k = 300;
+        let mut upper = vec![f64::INFINITY; k + 1];
+        upper[k] = 3.;
+        let m = chain(
+            (0..k).map(|i| (vec![(i, 1.), (i + 1, -1.)], 1.)).collect(),
+            k + 1,
+            upper,
+        );
+        let cancel = CancellationToken::default();
+        cancel.cancel();
+        let mut stopped = m.clone();
+        assert_eq!(
+            infer_bounds(&mut stopped, &cancel, Instant::now(), None).unwrap(),
+            0
+        );
+        assert_eq!(stopped.variables(), m.variables());
+        let mut timed = m.clone();
+        infer_bounds(
+            &mut timed,
+            &CancellationToken::default(),
+            Instant::now(),
+            Some(0.),
+        )
+        .unwrap();
+        for j in 0..=k {
+            assert!(timed.variables().upper[j] >= 3. + (k - j) as f64);
+        }
+    }
+
+    // The cap of a column is the certified objective less the least value of
+    // every other term, divided by its cost and rounded away from the box.
+    #[test]
+    fn objective_caps_keep_every_point_that_is_no_worse() {
+        for sense in [Sense::Minimize, Sense::Maximize] {
+            let sign = if sense == Sense::Minimize { 1. } else { -1. };
+            let build = |lower: Vec<f64>, upper: Vec<f64>| {
+                Model::new(ModelData {
+                    sense,
+                    objective: vec![3. * sign, 2. * sign, -0.7 * sign],
+                    objective_offset: sign,
+                    variables: Bounds::new(lower, upper),
+                    kinds: vec![
+                        VariableKind::Continuous,
+                        VariableKind::Integer,
+                        VariableKind::Continuous,
+                    ],
+                    matrix: CsrMatrix::from_dense(1, 3, &[1., 1., 1.]).unwrap(),
+                    rows: Bounds::new(vec![1.], vec![f64::INFINITY]),
+                })
+                .unwrap()
+            };
+            let inf = f64::INFINITY;
+            let mut m = build(vec![0., 1., 0.], vec![inf, inf, 2.]);
+            // 3 x + 2 y - 0.7 z + 1 <= 10 with y >= 1 and z <= 2.
+            assert_eq!(cutoff_bounds(&mut m, 10.).unwrap(), 2);
+            let up = &m.variables().upper;
+            let exact = (10. - 1. - 2. + 1.4) / 3.;
+            assert!(up[0] >= exact && up[0] <= exact * (1. + 1e-15), "{up:?}");
+            assert_eq!(up[1], 5.); // floor of (10 - 1 + 1.4) / 2
+            // Any point of the old box with a value of at most 10 is kept.
+            for (x, y, z) in [(exact, 1., 2.), (0., 5., 2.), (2., 1., 0.3)] {
+                if 3. * x + 2. * y - 0.7 * z + 1. <= 10. {
+                    assert!(x <= up[0] && y <= up[1]);
+                }
+            }
+            // A column that can improve without limit leaves the others open.
+            let mut open = build(vec![0., 1., 0.], vec![inf, inf, inf]);
+            assert_eq!(cutoff_bounds(&mut open, 10.).unwrap(), 0);
+            assert_eq!(open.variables().upper, vec![inf, inf, inf]);
+            // A cap below a lower bound means the value was not attainable.
+            let mut empty = build(vec![0., 1., 0.], vec![inf, inf, 2.]);
+            assert_eq!(cutoff_bounds(&mut empty, 1.).unwrap(), 0);
+            assert_eq!(empty.variables().upper[0], inf);
+        }
     }
 }
 

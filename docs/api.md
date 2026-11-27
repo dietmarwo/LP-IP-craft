@@ -236,14 +236,22 @@ column. The implied domain keeps the point and every point with an objective
 at least as good. It is internal to that solve. Candidate and bound reporting
 remain in original coordinates and objective sense.
 
-If there is no caller start, small mixed models with nonnegative oriented
-costs, nonnegative lower bounds and binary or fixed integer columns can try
-one continuous LP with all binary setup columns enabled. It shares the
-solve's limits and uses at most 512 pivots. Every starter must pass the
-original-model conservative incumbent check. A zero-cost missing side may
-require row inference. Models with unresolved sides still return
-`Unsupported`. Inspect `diagnostics.objective_cutoff_sides` and
+If there is no caller start, or the caller's start fails the exact check,
+small mixed models with nonnegative oriented costs, nonnegative lower bounds
+and binary or fixed integer columns can try one continuous LP with all
+binary setup columns enabled. It shares the solve's limits and uses at most
+512 pivots. Every starter must pass the original-model conservative
+incumbent check. A zero-cost missing side may require row inference. Models
+with unresolved sides still return `Unsupported`. Inspect
+`diagnostics.objective_cutoff_sides` and
 `diagnostics.objective_cutoff_start_pivots` for completed work.
+
+Only a point that passes the exact check supplies a cap. A caller's start
+that fails it, by a rounding error or because it is infeasible, remains the
+start of the search while it lies in the capped model within the
+tolerances. Otherwise the LP's point replaces it and `start_status` is
+`rejected`, so a run that stops at a limit still returns a checked
+incumbent.
 
 ## Reusable conservative bounds (Rust, 0.21)
 
