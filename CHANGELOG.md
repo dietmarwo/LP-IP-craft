@@ -14,14 +14,32 @@ such as (#5) are pull requests.
 
 ### Added
 
-- Native, Python and worker options for bounded adaptive root cuts and
-  certified integer equality propagation. Both are opt-in. The benchmark
-  harness can use Gurobi as an optional external reference. Adaptive cuts
-  recognize short linked balances and avoid generic cuts on uniform binary
-  covering and dense binary packing systems.
-- The native tree tightens its reported integral objective bound with zero-cost
-  continuous columns while preserving mixed-node priorities. A numerically failed weighted MIP node LP gets one bounded retry
-  with largest-infeasibility pricing and a checked outcome.
+- `NativeOptions::adaptive_root` (Rust, Python, job payload field
+  `adaptive_root`), off by default: the root chooses bounded GMI or GMI/MIR
+  separation from the row structure. It adds GMI passes on binary on/off
+  capacity rows coupled with short continuous balances, skips generic cuts on
+  uniform binary covering and dense binary packing systems, and spends at
+  most half of the node and iteration limits and a quarter of the time.
+  `diagnostics.adaptive_root_family` and `diagnostics.adaptive_root_stop`
+  report what ran. Explicit cut settings take precedence.
+- `NativeOptions::integer_equality_presolve` (same three surfaces), off by
+  default: residue propagation on short equalities over bounded integers,
+  before and during the tree. Decimal coefficients are scaled by 10 or 100
+  when an outward error bound over the box allows it. The option can turn
+  an `infeasible` into an `optimal` on decimal data that the default
+  presolve reads exactly as stored; [docs/api.md](docs/api.md) has the
+  example.
+- `benchmarks/gurobi-gap`: a comparison harness for two builds of the Python
+  package with Gurobi as an optional reference (frozen inputs, a runner with
+  one fresh process per observation, an audit against the original arrays,
+  a paired scorer). With both options on, the reviewed build scored 0.73
+  times the preceding patch's shifted ten-second solve time on 35 cases and
+  0.77 on 24 fresh generator cases; against Gurobi 14 the ratio went from
+  2.76 to 2.00 and from 0.85 to 0.65. Unchanged defaults take the same
+  nodes and pivots as 0.30.0 on all 69 fixtures. See the
+  [results](docs/gurobi-gap/RESULTS.md) and their
+  [review](docs/gurobi-gap/REVIEW.md) (#53). CI runs both options against
+  the existing oracles and the harness's tests.
 
 - Experimental Rust `NativeOptions::local_mip_effort` and `local_mip_seed` for one bounded
   tight-move feasibility search at a fractional serial MIP root. The default
@@ -39,6 +57,21 @@ such as (#5) are pull requests.
 
 ### Changed
 
+- The integral-objective bound now also applies to a MIP whose continuous
+  columns all have objective coefficient exactly zero. Only the returned
+  bound is rounded in these models; node order and reduced-cost fixing are
+  as before. On `sp150x300d` the bound after 250 nodes is 36 instead of
+  35.13, with the same nodes, pivots and incumbent. A run that stops at a
+  limit can report a bound equal to its incumbent while keeping the limit
+  status.
+- A MIP node LP that fails numerically under steepest-edge pricing gets one
+  more cold solve with largest-infeasibility pricing inside the same
+  budgets; an infeasibility found there counts only with a verified Farkas
+  row. `diagnostics.unweighted_node_retries` counts the retries. With both
+  new options on, a 150,000-node run of `noswot` used one retry and reached
+  its node limit; the preceding patch stopped there with
+  `numerical_failure` at 122,185 nodes. With default options the retry did
+  not fire on any fixture.
 - optimization-jobs pin `2bfa8e4` (the merge of the optimization-jobs 0.5.0
   release; was `41d5f00`, main after 0.4.1; the job crates are 0.5.0). It
   adds an optional progress file to command jobs (`jobs progress`), which
