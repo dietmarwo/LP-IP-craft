@@ -131,6 +131,8 @@ struct Payload {
     adaptive_root: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     integer_equality_presolve: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    objective_cutoff_bounds: bool,
 }
 /// `lp-ip.evaluate/1`: points to check against the model, without solving.
 #[derive(Serialize, Deserialize)]
@@ -160,6 +162,7 @@ impl Payload {
             presolve: self.presolve,
             adaptive_root: self.presolve && self.adaptive_root,
             integer_equality_presolve: self.presolve && self.integer_equality_presolve,
+            objective_cutoff_bounds: self.presolve && self.objective_cutoff_bounds,
             singleton_presolve: self.presolve && defaults.singleton_presolve,
             root_propagation: self.presolve && defaults.root_propagation,
             mip_presolve: self.presolve && defaults.mip_presolve,

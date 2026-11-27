@@ -13,6 +13,22 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+- Add opt-in objective-implied bounds for MIP admission in Rust, Python and
+  the job worker (`objective_cutoff_bounds`, default off). A certified start
+  can cap improving points. Small eligible models can try a fixed-setup LP
+  when no start is supplied, or when the supplied start fails the exact
+  check; a start outside the capped model is then replaced and reported as
+  `rejected` ([details](docs/api.md#objective-implied-mip-bounds)).
+- Propagate missing MIP bounds with a bounded incident-row queue, including
+  chains whose row order previously exhausted the sweep limit. Models that
+  were `Unsupported` for a missing bound can now be solved by default. On
+  models with missing bounds the inferred values, and with them a reported
+  bound or objective, can differ from 0.31.0 in the last digits.
+- Index long binary probe trails in the MIP presolve. The result is the
+  same; a 1,024-column implication chain presolves 2.4 times faster.
+- Review of the delivery, with the measurements behind these entries:
+  [docs/performance-thirty/REVIEW.md](docs/performance-thirty/REVIEW.md).
+
 ## [0.31.0] - 2026-11-27
 
 ### Added

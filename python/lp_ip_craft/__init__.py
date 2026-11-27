@@ -132,6 +132,7 @@ class NativeOptions:
     mir_cuts: bool = False
     adaptive_root: bool = False
     integer_equality_presolve: bool = False
+    objective_cutoff_bounds: bool = False
     mip_cut_rounds: int = 8
     mip_cut_limit: int = 16
     cut_exact_work: int = 4_000_000
