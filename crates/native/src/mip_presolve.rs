@@ -160,6 +160,9 @@ fn probe(model: &Model, budget: &Budget<'_>, stats: &mut Stats) -> Option<Bounds
     // `base` between probes, over the columns they changed only; a probe
     // costs its propagation, not a copy of every bound.
     let mut kept = base.clone();
+    // Reuse the direct index when two probe trails are large enough to make
+    // repeated scans expensive. Each probed binary is visited once.
+    let mut last = Vec::<[(usize, f64, f64); 2]>::new();
     for j in binaries {
         if budget.stop().is_some() {
             break;
@@ -200,16 +203,35 @@ fn probe(model: &Model, budget: &Budget<'_>, stats: &mut Stats) -> Option<Bounds
             }
             [Some(zero), Some(one)] => {
                 // A column one trial did not change keeps its bounds there.
-                let at = |trial: &[(usize, f64, f64)], k: usize| {
-                    trial
-                        .iter()
-                        .rev()
-                        .find(|t| t.0 == k)
-                        .map_or((kept.lower[k], kept.upper[k]), |t| (t.1, t.2))
+                let indexed = zero.len() + one.len() >= 32;
+                let stamp = j + 1;
+                if indexed {
+                    last.resize(model.n(), [(0, 0., 0.); 2]);
+                    for (side, trial) in [&zero, &one].into_iter().enumerate() {
+                        for &(k, lo, hi) in trial {
+                            last[k][side] = (stamp, lo, hi);
+                        }
+                    }
+                }
+                let at = |trial: &[(usize, f64, f64)], side: usize, k: usize| {
+                    if indexed {
+                        let (seen, lo, hi) = last[k][side];
+                        if seen == stamp {
+                            (lo, hi)
+                        } else {
+                            (kept.lower[k], kept.upper[k])
+                        }
+                    } else {
+                        trial
+                            .iter()
+                            .rev()
+                            .find(|t| t.0 == k)
+                            .map_or((kept.lower[k], kept.upper[k]), |t| (t.1, t.2))
+                    }
                 };
                 for &(k, _, _) in zero.iter().chain(&one) {
-                    let (l0, u0) = at(&zero, k);
-                    let (l1, u1) = at(&one, k);
+                    let (l0, u0) = at(&zero, 0, k);
+                    let (l1, u1) = at(&one, 1, k);
                     let (lo, hi) = (l0.min(l1), u0.max(u1));
                     if lo > base.lower[k] || hi < base.upper[k] {
                         base.lower[k] = base.lower[k].max(lo);

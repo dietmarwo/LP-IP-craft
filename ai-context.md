@@ -94,7 +94,7 @@ would change the solution.
 |---|---|
 | Are the objective and every constraint linear in the decision variables? | This solver accepts only `objective_offset + cᵀx` and linear row intervals. |
 | How many variables, rows and nonzeros? Which variables are integer or binary? | Size and integrality decide LP versus MIP effort and the parallel layout. |
-| Does every variable have a finite lower and upper bound? | A MIP requires finite bounds on **all** variables, continuous ones included, of magnitude at most 2^53−1 after root inference, which runs only with `presolve` on. |
+| Does every variable have a finite lower and upper bound? | A MIP requires finite bounds on **all** variables, continuous ones included, of magnitude at most 2^53−1 after root inference, which runs only with `presolve` on. The opt-in `objective_cutoff_bounds` can supply sides implied by a certified incumbent. |
 | Minimize or maximize? Is there a constant term? | Both senses are native; results keep the original sense and include the offset. |
 | What are the units and coefficient ranges? | Badly scaled rows weaken numerical acceptance; tolerances are absolute in original units. |
 | Which tolerances does the application accept? | Defaults are 1e-7 for feasibility and integrality. Freeze them before tuning. |

@@ -13,6 +13,12 @@ such as (#5) are pull requests.
 
 ## [Unreleased]
 
+- Add opt-in objective-implied bounds for MIP admission in Rust, Python and
+  the job worker. A certified start can cap improving points. Small eligible
+  models can try a fixed-setup LP when no start is supplied.
+- Propagate missing MIP bounds with a bounded incident-row queue, including
+  chains whose row order previously exhausted the sweep limit.
+
 ## [0.31.0] - 2026-11-27
 
 ### Added

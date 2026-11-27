@@ -22,6 +22,7 @@ call Python during optimization.
 | mip_relative_gap, mip_absolute_gap | None | Opt-in positive MIP gap stops; zero requests full search; see below |
 | adaptive_root | false | Select bounded GMI/MIR separation for eligible general MIPs |
 | integer_equality_presolve | false | Propagate integer residues certified on short equality rows |
+| objective_cutoff_bounds | false | Use a certified MIP incumbent to infer missing finite sides |
 | iteration_limit | 1000000 | Simplex iterations across phase 1/2, all nodes, certification LPs and retries |
 | pivot_tolerance | 1e-9 | Smallest pivot-row entry accepted by the scaled dual ratio test |
 | dual_tolerance | 1e-7 | Independent LP dual acceptance threshold |
@@ -215,12 +216,34 @@ parallel search within a connected tree and MIP presolve were added after this
 section was first written (see the sections below and the option table in
 [ai-context.md](../ai-context.md)); all but MIP presolve are opt-in. MIPs require
 finite variable bounds of magnitude <=2^53-1, including continuous columns.
+The optional cutoff route can derive some missing bounds inside the root
+presolve. See [objective-implied MIP bounds](#objective-implied-mip-bounds).
 Triangular solves use dense work vectors of the row dimension, and
 product-form updates store dense eta columns when
 `B⁻¹` is dense; bases with heavy LU fill are solve-bound. `max_factor_entries`
 is an engineering guard, not a whole-process memory cap: matrix copies, work
 vectors, the open-node queue and basis snapshots need additional memory. No
 application-performance claim until the target card is supplied.
+
+## Objective-implied MIP bounds
+
+Set `objective_cutoff_bounds=true` in Rust, `objective_cutoff_bounds=True`
+in Python, or provide the Boolean job field. Enable root presolve and root
+propagation. A certified feasible point gives an outward upper endpoint of
+the objective in minimization orientation. The solver subtracts an outward
+lower bound on the other objective terms to derive a finite side for a costly
+column. The implied domain keeps the point and every point with an objective
+at least as good. It is internal to that solve. Candidate and bound reporting
+remain in original coordinates and objective sense.
+
+If there is no caller start, small mixed models with nonnegative oriented
+costs, nonnegative lower bounds and binary or fixed integer columns can try
+one continuous LP with all binary setup columns enabled. It shares the
+solve's limits and uses at most 512 pivots. Every starter must pass the
+original-model conservative incumbent check. A zero-cost missing side may
+require row inference. Models with unresolved sides still return
+`Unsupported`. Inspect `diagnostics.objective_cutoff_sides` and
+`diagnostics.objective_cutoff_start_pivots` for completed work.
 
 ## Reusable conservative bounds (Rust, 0.21)
 

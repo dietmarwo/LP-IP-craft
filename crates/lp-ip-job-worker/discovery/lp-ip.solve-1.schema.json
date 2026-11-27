@@ -62,6 +62,11 @@
       "description": "Native master switch; false skips the whole root stage, so a MIP then needs finite bounds as given.",
       "type": "boolean"
     },
+    "objective_cutoff_bounds": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow a certified incumbent to imply finite bounds for MIP admission."
+    },
     "adaptive_root": {
       "description": "Opt in to work-bounded root cut selection on eligible general MIPs. Requires presolve.",
       "type": "boolean",
