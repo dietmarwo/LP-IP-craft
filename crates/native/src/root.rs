@@ -187,6 +187,8 @@ pub(crate) fn solve_observed(
             && !solver.settings.root_cuts
             && !solver.settings.root_separation
             && !solver.settings.mip_presolve
+            && !solver.settings.integer_equality_presolve
+            && !solver.settings.adaptive_root
             && !solver.settings.coefficient_tightening
             && !solver.settings.dual_presolve
             && !solver.settings.gmi_cuts
@@ -223,8 +225,6 @@ pub(crate) fn solve_observed(
     } else {
         0
     };
-    let advanced =
-        solver.settings.gmi_cuts || solver.settings.mir_cuts || solver.settings.root_heuristics;
     let presolve_stats = if model.is_mip()
         && (solver.settings.mip_presolve
             || solver.settings.coefficient_tightening
@@ -235,6 +235,26 @@ pub(crate) fn solve_observed(
         mip_presolve::Stats::default()
     };
     let removed_rows = model.m() - reduced.model.m();
+    let policy = root_policy::Policy::choose(&reduced.model, &solver.settings);
+    let advanced = policy.is_some()
+        || solver.settings.gmi_cuts
+        || solver.settings.mir_cuts
+        || solver.settings.root_heuristics;
+    let presolved_dimensions = solver.settings.mip_diagnostics.then(|| {
+        [
+            reduced.model.m(),
+            reduced.model.n(),
+            reduced.model.nnz(),
+            reduced
+                .model
+                .variables()
+                .lower
+                .iter()
+                .zip(&reduced.model.variables().upper)
+                .filter(|(l, u)| l == u)
+                .count(),
+        ]
+    });
     let cuts = if solver.settings.root_cuts && model.is_mip() {
         cover_cuts(&mut reduced.model)?
     } else {
@@ -306,7 +326,20 @@ pub(crate) fn solve_observed(
             }
         }
     }
-    let advanced_stats = if advanced && model.is_mip() {
+    if policy.is_some() {
+        if let Some(s) = start {
+            if check::evaluate(model, &s.primal, &options.tolerances)?.feasible_candidate
+                && !check::evaluate(&reduced.model, &s.primal, &options.tolerances)?
+                    .feasible_candidate
+            {
+                return original_after_preprocessing(
+                    solver, model, options, start, cancel, began, pilot,
+                );
+            }
+        }
+    }
+    let before_adaptive = (policy.is_some() && start.is_some()).then(|| reduced.model.clone());
+    let mut advanced_stats = if advanced && model.is_mip() {
         rootcuts::run(
             &mut reduced.model,
             options,
@@ -314,6 +347,7 @@ pub(crate) fn solve_observed(
             start,
             cancel,
             began,
+            policy.as_ref(),
             pilot.as_deref_mut(),
         )?
     } else {
@@ -340,9 +374,18 @@ pub(crate) fn solve_observed(
         if check::evaluate(model, &s.primal, &options.tolerances)?.feasible_candidate
             && !check::evaluate(&reduced.model, &s.primal, &options.tolerances)?.feasible_candidate
         {
-            return original_after_preprocessing(
-                solver, model, options, start, cancel, began, pilot,
-            );
+            if let Some(before) = before_adaptive.filter(|before| {
+                check::evaluate(before, &s.primal, &options.tolerances)
+                    .is_ok_and(|e| e.feasible_candidate)
+            }) {
+                reduced.model = before;
+                advanced_stats.bound = None;
+                advanced_stats.stop = "preserve_start";
+            } else {
+                return original_after_preprocessing(
+                    solver, model, options, start, cancel, began, pilot,
+                );
+            }
         }
     }
     let conversion = began.elapsed().as_secs_f64();
@@ -352,6 +395,7 @@ pub(crate) fn solve_observed(
     settings.root_cuts = false;
     settings.root_separation = false;
     settings.mip_presolve = false;
+    settings.adaptive_root = false;
     settings.coefficient_tightening = false;
     settings.dual_presolve = false;
     settings.gmi_cuts = false;
@@ -455,7 +499,30 @@ pub(crate) fn solve_observed(
             .effective_options
             .push((format!("diagnostics.{key}"), value));
     }
-    if solver.settings.mip_diagnostics && model.is_mip() {
+    if let Some(policy) = policy {
+        result.backend.effective_options.push((
+            "diagnostics.adaptive_root_family".into(),
+            policy.family.into(),
+        ));
+        result.backend.effective_options.push((
+            "diagnostics.adaptive_root_stop".into(),
+            advanced_stats.stop.into(),
+        ));
+    }
+    if let Some([rows, columns, nnz, fixed]) = presolved_dimensions.filter(|_| model.is_mip()) {
+        for (family, work) in [
+            ("gmi", advanced_stats.gmi_work),
+            ("mir", advanced_stats.exact_work - advanced_stats.gmi_work),
+        ] {
+            result
+                .backend
+                .effective_options
+                .push((format!("diagnostics.{family}_exact_work"), work.to_string()));
+        }
+        result.backend.effective_options.push((
+            "diagnostics.presolved_dimensions".into(),
+            format!("[{rows},{columns},{nnz},{fixed}]"),
+        ));
         result.backend.effective_options.push((
             "diagnostics.mip_search.preprocessing_seconds".into(),
             conversion.to_string(),

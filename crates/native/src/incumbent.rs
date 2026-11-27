@@ -118,9 +118,15 @@ pub(crate) fn upper_with_bounds(
     )
 }
 /// Sufficient conditions for an exactly representable integral objective.
+/// Continuous columns can participate in constraints when their cost is zero.
 pub(crate) fn integer_lattice(model: &Model) -> bool {
     model.objective_offset() == 0.0
-        && model.kinds().iter().all(|k| k.is_integral())
+        && model.is_mip()
+        && model
+            .objective()
+            .iter()
+            .zip(model.kinds())
+            .all(|(&c, k)| c == 0. || k.is_integral())
         && model.objective().iter().all(|&v| small_integer(v))
         && model
             .objective()

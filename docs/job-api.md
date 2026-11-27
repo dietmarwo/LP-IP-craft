@@ -76,3 +76,5 @@ shows.
 ## Optional MIP gap controls
 
 `lp-ip.solve/1` accepts optional nonnegative `mip_relative_gap` and `mip_absolute_gap`. Absent/null leaves each off; zero preserves complete search. The resolved payload retains supplied values. `gap_limit` maps to claim `feasible`, never `numerical_optimum`, and reports the incumbent's `details.gap`. LPs ignore MIP-only stops. See [native gap semantics](api.md#mip-gap-stopping-since-0300).
+
+The optional Boolean fields `adaptive_root` and `integer_equality_presolve` default to false. Set `presolve: true` to use either. See the [native option details](api.md#optional-root-cut-selection-and-integer-equalities).

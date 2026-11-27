@@ -14,6 +14,15 @@ such as (#5) are pull requests.
 
 ### Added
 
+- Native, Python and worker options for bounded adaptive root cuts and
+  certified integer equality propagation. Both are opt-in. The benchmark
+  harness can use Gurobi as an optional external reference. Adaptive cuts
+  recognize short linked balances and avoid generic cuts on uniform binary
+  covering and dense binary packing systems.
+- The native tree tightens its reported integral objective bound with zero-cost
+  continuous columns while preserving mixed-node priorities. A numerically failed weighted MIP node LP gets one bounded retry
+  with largest-infeasibility pricing and a checked outcome.
+
 - Experimental Rust `NativeOptions::local_mip_effort` and `local_mip_seed` for one bounded
   tight-move feasibility search at a fractional serial MIP root. The default
   is zero. The native solver checks proposals before admitting them through

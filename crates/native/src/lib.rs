@@ -15,6 +15,7 @@ mod dyadic;
 mod ft;
 mod heuristic_budget;
 mod incumbent;
+mod integer_equality;
 mod jump;
 mod local_mip;
 #[cfg(feature = "local-mip-bench")]
@@ -41,6 +42,7 @@ mod rational;
 #[cfg(feature = "basis-replay")]
 pub mod replay;
 mod root;
+mod root_policy;
 mod rootcuts;
 mod tree;
 mod witness;
@@ -170,6 +172,10 @@ pub struct NativeOptions {
     /// on binaries, and removal of rows the box proves redundant (rows are
     /// freed, not renumbered). Keeps every feasible point. On by default.
     pub mip_presolve: bool,
+    /// Bounded residue propagation on certified short integer equalities.
+    pub integer_equality_presolve: bool,
+    /// Choose bounded root separation for general MIPs.
+    pub adaptive_root: bool,
     /// Exact big-M coefficient tightening on unfixed binary columns of
     /// one-sided rows; keeps every integer-feasible point. On by default.
     pub coefficient_tightening: bool,
@@ -325,6 +331,8 @@ impl Default for NativeOptions {
             root_cuts: false,
             root_separation: false,
             mip_presolve: true,
+            integer_equality_presolve: false,
+            adaptive_root: false,
             coefficient_tightening: true,
             dual_presolve: false,
             mip_presolve_rounds: 8,
@@ -1294,6 +1302,7 @@ struct Counters {
     warm_nodes: u64,
     cold_solves: u64,
     fallbacks: u64,
+    unweighted_retries: u64,
     unverified_infeasible: u64,
     heuristic_candidates: u64,
     pruned_nodes: u64,
@@ -1425,6 +1434,10 @@ impl NativeSolver {
             rounding_trials_left: 0,
         };
         let lattice = settings.objective_lattice && incumbent::integer_lattice(model);
+        // Rounding mixed-node priorities creates ties in the open queue and
+        // can delay the first incumbent. Strengthen only the returned bound
+        // on these models, preserving the original branching and fixing.
+        let tree_lattice = lattice && model.kinds().iter().all(|k| k.is_integral());
         let mut counters = Counters::default();
         let mut jump_stats = jump::Stats::default();
         if model.is_mip() {
@@ -1439,7 +1452,12 @@ impl NativeSolver {
                 )?;
             }
         }
-        let mut domain = propagate::Domain::new(model, settings.presolve);
+        let mut domain = propagate::Domain::with_equalities(
+            model,
+            settings.presolve,
+            (settings.integer_equality_presolve && presolve::supported_arithmetic())
+                .then_some(&options.tolerances),
+        );
         let mut mixed = mixed::Domain::new(model, settings.presolve && settings.mixed_propagation);
         if pool.trace.is_some() && settings.presolve {
             domain.enable_statistics();
@@ -1645,6 +1663,22 @@ impl NativeSolver {
                     }
                 }
             }
+            if s == Status::NumericalFailure
+                && model.is_mip()
+                && settings.steepest_edge
+                && budget.stop().is_none()
+            {
+                counters.cold_solves += 1;
+                counters.unweighted_retries += 1;
+                if let Some(trace) = &mut pool.trace {
+                    trace.node_lp_solves += 1;
+                }
+                s = lp.retry_unweighted(&mut budget)?;
+                if s == Status::Infeasible && !lp.infeasibility_verified() {
+                    s = Status::NumericalFailure;
+                }
+                checked = false;
+            }
             if s == Status::Infeasible && !lp.infeasibility_verified() {
                 counters.unverified_infeasible += 1;
             }
@@ -1697,7 +1731,7 @@ impl NativeSolver {
                             safe_dual_bound_with_bounds(model, node_bounds, &duals.row_duals)?.bound
                         {
                             let b = oriented(model, value);
-                            let b = if lattice { b.ceil() } else { b };
+                            let b = if tree_lattice { b.ceil() } else { b };
                             node.bound = Some(node.bound.map_or(b, |old| old.max(b)));
                             if !model.is_mip() {
                                 result.best_bound = Some(oriented(model, b));
@@ -1739,7 +1773,7 @@ impl NativeSolver {
             let bound = safe_dual_bound_with_bounds(model, node_bounds, &duals.row_duals)?
                 .bound
                 .map(|b| oriented(model, b))
-                .map(|b| if lattice { b.ceil() } else { b });
+                .map(|b| if tree_lattice { b.ceil() } else { b });
             if !model.is_mip() {
                 result.evaluation = Some(check::evaluate(model, &x, &options.tolerances)?);
                 if let Some(trace) = &mut pool.pilot {
@@ -1958,7 +1992,7 @@ impl NativeSolver {
                         result.nodes
                     ));
                 }
-                let fixes = if settings.reduced_cost_fixing && lattice && node.depth <= 8 {
+                let fixes = if settings.reduced_cost_fixing && tree_lattice && node.depth <= 8 {
                     reduced_cost_fixes(model, node_bounds, &x, &duals, pool.upper, bound, &budget)?
                 } else {
                     Vec::new()
@@ -2073,7 +2107,12 @@ impl NativeSolver {
                 }
             }
             if all_bounds && closed_bound.is_finite() {
-                result.best_bound = Some(oriented(model, closed_bound));
+                let bound = if lattice {
+                    closed_bound.ceil()
+                } else {
+                    closed_bound
+                };
+                result.best_bound = Some(oriented(model, bound));
             }
             if status == Status::Optimal && result.candidate.is_none() {
                 status = Status::Infeasible;
@@ -2121,6 +2160,7 @@ impl NativeSolver {
                 ("presolve_removed_columns", removed_columns as u64),
                 ("cold_lp_solves", counters.cold_solves),
                 ("cold_fallbacks", counters.fallbacks),
+                ("unweighted_node_retries", counters.unweighted_retries),
                 (
                     "unverified_infeasible_nodes",
                     counters.unverified_infeasible,
@@ -2607,6 +2647,11 @@ fn effective_options(s: &NativeOptions) -> Vec<(String, String)> {
         ("root_cuts", s.root_cuts.to_string()),
         ("root_separation", s.root_separation.to_string()),
         ("mip_presolve", s.mip_presolve.to_string()),
+        ("adaptive_root", s.adaptive_root.to_string()),
+        (
+            "integer_equality_presolve",
+            s.integer_equality_presolve.to_string(),
+        ),
         (
             "coefficient_tightening",
             s.coefficient_tightening.to_string(),

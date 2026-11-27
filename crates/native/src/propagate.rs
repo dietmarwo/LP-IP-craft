@@ -1,11 +1,12 @@
 //! Conservative integer-domain propagation with incremental exact activities.
-use crate::Budget;
 use crate::diagnostics::PropagationStats;
-use lp_ip_craft::{Bounds, Model};
+use crate::{Budget, integer_equality};
+use lp_ip_craft::{Bounds, Model, Tolerances};
 use std::collections::VecDeque;
 
 struct Row {
     terms: Vec<(usize, i128)>,
+    residues: Vec<Option<integer_equality::Residue>>,
     lower: Option<i128>,
     upper: Option<i128>,
     min: i128,
@@ -36,6 +37,10 @@ fn ceil_div(a: i128, b: i128) -> i128 {
 }
 impl Domain {
     pub fn new(model: &Model, enabled: bool) -> Self {
+        Self::with_equalities(model, enabled, None)
+    }
+
+    pub fn with_equalities(model: &Model, enabled: bool, tolerances: Option<&Tolerances>) -> Self {
         let n = if enabled && model.is_mip() {
             model.n()
         } else {
@@ -83,7 +88,7 @@ impl Domain {
             let range = a.pattern.indptr[i]..a.pattern.indptr[i + 1];
             // Each product is at most 2^62; at most usize::MAX terms means
             // every activity and activity difference fits signed i128.
-            if !range.clone().all(|k| {
+            let basic = range.clone().all(|k| {
                 let (j, v) = (a.pattern.indices[k], a.values[k]);
                 v == 0.
                     || (model.kinds()[j].is_integral()
@@ -91,20 +96,39 @@ impl Domain {
                         && v.abs() <= 2_147_483_648.
                         && model.variables().lower[j].abs() <= 2_147_483_648.
                         && model.variables().upper[j].abs() <= 2_147_483_648.)
-            }) {
-                continue;
-            }
+            });
             let endpoint =
                 |v: f64| (v.is_finite() && v.abs() <= 1_125_899_906_842_624.).then_some(v as i128);
-            let lower = endpoint(model.rows().lower[i].ceil());
-            let upper = endpoint(model.rows().upper[i].floor());
-            if lower.is_none() && upper.is_none() {
+            let (terms, lower, upper, residues) = if basic {
+                let lower = endpoint(model.rows().lower[i].ceil());
+                let upper = endpoint(model.rows().upper[i].floor());
+                if lower.is_none() && upper.is_none() {
+                    continue;
+                }
+                let terms: Vec<_> = range
+                    .filter(|&k| a.values[k] != 0.)
+                    .map(|k| (a.pattern.indices[k], a.values[k] as i128))
+                    .collect();
+                let residues = match (tolerances, lower, upper) {
+                    (Some(tol), Some(l), Some(u))
+                        if l == u
+                            && (2..=12).contains(&terms.len())
+                            && model.rows().lower[i] == model.rows().upper[i]
+                            && integer_equality::normalized(model, i, tol).is_some() =>
+                    {
+                        integer_equality::residues(&terms, l)
+                    }
+                    _ => Vec::new(),
+                };
+                (terms, lower, upper, residues)
+            } else if let Some((terms, rhs)) =
+                tolerances.and_then(|t| integer_equality::normalized(model, i, t))
+            {
+                let residues = integer_equality::residues(&terms, rhs);
+                (terms, Some(rhs), Some(rhs), residues)
+            } else {
                 continue;
-            }
-            let terms: Vec<_> = range
-                .filter(|&k| a.values[k] != 0.)
-                .map(|k| (a.pattern.indices[k], a.values[k] as i128))
-                .collect();
+            };
             let (mut min, mut max) = (0, 0);
             let mut max_width = 0;
             for &(j, v) in &terms {
@@ -116,6 +140,7 @@ impl Domain {
             }
             domain.rows.push(Row {
                 terms,
+                residues,
                 lower,
                 upper,
                 min,
@@ -250,7 +275,8 @@ impl Domain {
             }
             // Root domain widths are conservative upper bounds at every child.
             // If neither side can tighten even the widest term, skip the row.
-            if row.upper.is_none_or(|b| b - row.min >= row.max_width)
+            if row.residues.is_empty()
+                && row.upper.is_none_or(|b| b - row.min >= row.max_width)
                 && row.lower.is_none_or(|b| row.max - b >= row.max_width)
             {
                 if let Some(stats) = &mut self.statistics {
@@ -290,6 +316,10 @@ impl Domain {
                     if let Some(b) = row.lower.filter(|&b| row.max - b < width) {
                         hi = hi.min(floor_div((row.max - amax) - b, -a));
                     }
+                }
+                if let Some(&(r, step)) = row.residues.get(k).and_then(Option::as_ref) {
+                    lo += (r - lo).rem_euclid(step);
+                    hi -= (hi - r).rem_euclid(step);
                 }
                 if lo > hi {
                     if let Some(stats) = &mut self.statistics {

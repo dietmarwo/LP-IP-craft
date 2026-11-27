@@ -445,6 +445,10 @@ fn native_settings(
             "dual_presolve" => settings.dual_presolve = field(&value, &key)?,
             "mip_presolve_rounds" => settings.mip_presolve_rounds = field(&value, &key)?,
             "gmi_cuts" => settings.gmi_cuts = field(&value, &key)?,
+            "adaptive_root" => settings.adaptive_root = field(&value, &key)?,
+            "integer_equality_presolve" => {
+                settings.integer_equality_presolve = field(&value, &key)?
+            }
             "mir_cuts" => settings.mir_cuts = field(&value, &key)?,
             "mip_cut_rounds" => settings.mip_cut_rounds = field(&value, &key)?,
             "mip_cut_limit" => settings.mip_cut_limit = field(&value, &key)?,

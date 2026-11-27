@@ -9,6 +9,7 @@ pub(crate) struct Stats {
     pub covers: u64,
     pub lifted: u64,
     pub exact_work: u64,
+    pub gmi_work: u64,
     pub candidates: u64,
     pub rejected: u64,
     pub vubs: u64,
@@ -23,11 +24,13 @@ pub(crate) struct Stats {
     pub stages: Vec<String>,
     pub seed: Option<Vec<f64>>,
     pub primal: primal::Stats,
+    pub stop: &'static str,
 }
 fn number(v: Option<f64>) -> String {
     v.filter(|v| v.is_finite())
         .map_or_else(|| "null".into(), |v| v.to_string())
 }
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run(
     model: &mut Model,
     options: &Options,
@@ -35,38 +38,60 @@ pub(crate) fn run(
     start: Option<&WarmStart>,
     cancel: &CancellationToken,
     began: Instant,
+    policy: Option<&root_policy::Policy>,
     mut pilot: Option<&mut local_mip_bench::Trace<'_>>,
 ) -> Result<Stats> {
     let mut stats = Stats {
         seed: start.map(|s| s.primal.clone()),
         ..Default::default()
     };
+    let root_budget = policy.map(|_| root_policy::Policy::budget(settings));
     let mut budget = Budget {
         start: began,
-        settings,
+        settings: root_budget.as_ref().unwrap_or(settings),
         cancel,
         pivots: 0,
     };
-    let mut lp = Lp::new(
+    if policy.is_some() && budget.stop().is_some() {
+        stats.stop = "root_budget";
+        return Ok(stats);
+    }
+    let mut lp = match Lp::new(
         model,
         &vec![true; model.m()],
         &presolve::kept_columns(model, model.variables(), settings),
         controls(model, options, settings),
-    )?;
-    let rounds = if settings.gmi_cuts || settings.mir_cuts {
-        settings.mip_cut_rounds
-    } else {
-        0
+    ) {
+        Ok(lp) => lp,
+        Err(_) if policy.is_some() => {
+            stats.stop = "lp_setup";
+            return Ok(stats);
+        }
+        Err(e) => return Err(e),
     };
+    let rounds = policy.map_or_else(
+        || {
+            if settings.gmi_cuts || settings.mir_cuts {
+                settings.mip_cut_rounds
+            } else {
+                0
+            }
+        },
+        |p| p.rounds,
+    );
     let mut stagnant = 0;
     let mut previous: Option<f64> = None;
-    let mut families = [settings.gmi_cuts, settings.mir_cuts];
+    let mut families = policy.map_or([settings.gmi_cuts, settings.mir_cuts], |p| p.families);
+    let initial_nnz = model.nnz();
+    const POLICY_EXACT_WORK: u64 = 4_000_000;
+    stats.stop = "round_limit";
     // Rows from here on are root cuts; `last` is the latest accepted optimum
     // and the row count it belongs to.
     let cuts_from = model.m();
     let mut last: Option<(usize, Vec<f64>)> = None;
     for round in 0..=rounds {
-        if budget.stop().is_some() || settings.node_limit.is_some_and(|n| stats.nodes >= n) {
+        if budget.stop().is_some() || budget.settings.node_limit.is_some_and(|n| stats.nodes >= n) {
+            stats.stop = "root_budget";
             break;
         }
         let before = (stats.nodes, budget.pivots);
@@ -79,12 +104,14 @@ pub(crate) fn run(
             trace.stage("presolve_root_lp", (stats.nodes, budget.pivots), before, t);
         }
         if status != Status::Optimal {
+            stats.stop = "lp_status";
             stats.stages.push(format!("{{\"round\":{round},\"status\":\"{}\",\"bound\":null,\"objective\":null,\"seconds\":{}}}",status.as_str(),t.elapsed().as_secs_f64()));
             break;
         }
         let x = lp.point();
         let duals = lp.duals(model);
         if !accepted(model, model.variables(), &x, &duals, options, settings) {
+            stats.stop = "lp_check";
             break;
         }
         let objective = check::evaluate(model, &x, &options.tolerances)?.objective;
@@ -102,7 +129,7 @@ pub(crate) fn run(
         if round == 0 {
             stats.initial_objective = Some(objective);
         }
-        stats.stages.push(format!("{{\"round\":{round},\"status\":\"optimal\",\"bound\":{},\"objective\":{objective},\"seconds\":{},\"rows\":{},\"pivots\":{}}}",number(bound),t.elapsed().as_secs_f64(),model.m(),budget.pivots));
+        stats.stages.push(format!("{{\"round\":{round},\"status\":\"optimal\",\"bound\":{},\"objective\":{objective},\"seconds\":{},\"elapsed_seconds\":{},\"rows\":{},\"pivots\":{}}}",number(bound),t.elapsed().as_secs_f64(),began.elapsed().as_secs_f64(),model.m(),budget.pivots));
         if let Some(old) = previous {
             let improvement = (objective - old).abs();
             if improvement < 0.001 * (1.0f64 + f64::abs(old)) {
@@ -152,7 +179,23 @@ pub(crate) fn run(
                 break;
             }
         }
-        if round == rounds || stagnant >= 3 {
+        if policy.is_some() {
+            if !root_policy::Policy::can_improve(model, &x, bound, start, options) {
+                stats.stop = "integral_or_closed";
+                break;
+            }
+            if stats.exact_work >= POLICY_EXACT_WORK
+                || model.nnz() > initial_nnz.saturating_mul(12).saturating_add(128)
+            {
+                stats.stop = "separation_work";
+                break;
+            }
+        }
+        if stagnant >= 3 {
+            stats.stop = "low_progress";
+            break;
+        }
+        if round == rounds {
             break;
         }
         // While both families keep contributing after the first round,
@@ -166,14 +209,22 @@ pub(crate) fn run(
         } else {
             usize::MAX
         };
+        let work = if policy.is_some() {
+            settings
+                .cut_exact_work
+                .min(POLICY_EXACT_WORK.saturating_sub(stats.exact_work))
+        } else {
+            settings.cut_exact_work
+        };
         let (selected, cuts) =
-            certified_cuts::separate(model, &mut lp, &x, &budget, families, max_terms);
+            certified_cuts::separate(model, &mut lp, &x, &budget, families, max_terms, work);
         // A family whose cuts were not selected this round is not separated
         // again; the other family then gets the whole work budget.
         for (active, family) in families.iter_mut().zip(["gmi", "mir"]) {
             *active &= selected.iter().any(|c| c.family == family);
         }
         stats.exact_work += cuts.work;
+        stats.gmi_work += cuts.gmi_work;
         stats.candidates += cuts.candidates;
         stats.rejected += cuts.rejected;
         stats.vubs = stats.vubs.max(cuts.vubs);
@@ -187,9 +238,19 @@ pub(crate) fn run(
             stats.lifted += c.lifted as u64;
         }
         if model.m() == old_rows {
+            stats.stop = "no_selected_cut";
             break;
         }
-        lp = lp.extend_rows(model)?;
+        match lp.extend_rows(model) {
+            Ok(extended) => lp = extended,
+            Err(_) if policy.is_some() => {
+                // Any appended inequalities passed the same validity checks
+                // as manual separation. The tree can rebuild on that model.
+                stats.stop = "basis_extension";
+                break;
+            }
+            Err(e) => return Err(e),
+        }
         stats.basis_reuses += 1;
     }
     if let Some((rows, x)) = last {

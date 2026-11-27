@@ -62,6 +62,16 @@
       "description": "Native master switch; false skips the whole root stage, so a MIP then needs finite bounds as given.",
       "type": "boolean"
     },
+    "adaptive_root": {
+      "description": "Opt in to work-bounded root cut selection on eligible general MIPs. Requires presolve.",
+      "type": "boolean",
+      "default": false
+    },
+    "integer_equality_presolve": {
+      "description": "Opt in to certified bound tightening on short integer equality rows. Requires presolve.",
+      "type": "boolean",
+      "default": false
+    },
     "mip_relative_gap": {
       "description": "Stop a MIP once |incumbent - bound| / |incumbent| is at most this value; ends with gap_limit and a feasible claim, never optimal. Null or 0 searches to completion; LPs ignore it.",
       "type": ["number", "null"],

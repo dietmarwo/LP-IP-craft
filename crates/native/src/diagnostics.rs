@@ -40,6 +40,7 @@ pub(crate) struct SearchDiagnostics {
     limit: usize,
     events: Vec<Event>,
     dropped: u64,
+    clock: Vec<(Milestone, Option<f64>)>,
     first_candidate: Option<Milestone>,
     first_certified: Option<Milestone>,
     candidate: Option<f64>,
@@ -90,6 +91,7 @@ impl SearchDiagnostics {
             limit,
             events: Vec::new(),
             dropped: 0,
+            clock: Vec::new(),
             first_candidate: None,
             first_certified: None,
             candidate: None,
@@ -158,6 +160,18 @@ impl SearchDiagnostics {
         self.global_bound = bound;
         self.current_open = open;
         self.max_open = self.max_open.max(open);
+        let elapsed = self.started.elapsed().as_secs_f64();
+        if self.clock.len() < 1201
+            && self
+                .clock
+                .last()
+                .is_none_or(|(v, _)| elapsed - v.seconds >= 0.05)
+        {
+            self.clock.push((
+                self.at(nodes, pivots, self.candidate, self.certified),
+                bound,
+            ));
+        }
         if changed || nodes == 0 || nodes.is_power_of_two() {
             self.event(
                 "progress",
@@ -258,6 +272,14 @@ impl SearchDiagnostics {
                 json.push(',');
             }
             write!(json, "{{\"kind\":\"{}\",\"source\":\"{}\",\"elapsed_seconds\":{},\"nodes\":{},\"pivots\":{},\"tree_nodes_visited\":{},\"open_nodes\":{},\"depth\":{},\"objective\":{},\"certified_incumbent_bound\":{},\"global_bound\":{},{} }}", event.kind, event.source, event.at.seconds, event.at.nodes, event.at.pivots, event.tree_nodes, event.open_nodes, event.depth, number(Some(event.at.objective)), number(event.certified), number(event.global_bound), self.gap(event.certified, event.global_bound)).unwrap();
+        }
+        json.push_str("],\"clock\":[");
+        for (i, (at, bound)) in self.clock.iter().enumerate() {
+            if i > 0 {
+                json.push(',');
+            }
+            write!(json, "{{\"elapsed_seconds\":{},\"nodes\":{},\"pivots\":{},\"objective\":{},\"bound\":{}}}",
+                at.seconds, at.nodes, at.pivots, number(Some(at.objective)), number(*bound)).unwrap();
         }
         json.push_str("]}");
         result

@@ -26,6 +26,7 @@ pub(crate) struct Stats {
     pub candidates: u64,
     pub rejected: u64,
     pub work: u64,
+    pub gmi_work: u64,
     pub vubs: u64,
 }
 
@@ -727,12 +728,12 @@ pub(crate) fn separate(
     budget: &Budget<'_>,
     families: [bool; 2],
     max_terms: usize,
+    cap: u64,
 ) -> (Vec<Cut>, Stats) {
     rational::reset_work();
     let mut stats = Stats::default();
     let mut output = Vec::new();
     let settings = budget.settings;
-    let cap = settings.cut_exact_work;
     let mut acc = Accumulator::new(model.n());
     let mut wide = Wide::new(model.n());
     if families[0] {
@@ -752,7 +753,8 @@ pub(crate) fn separate(
             }
         }
     }
-    if families[1] && rational::work() < cap {
+    stats.gmi_work = rational::work();
+    if families[1] && stats.gmi_work < cap {
         let vubs = variable_bounds(model);
         stats.vubs = vubs.iter().filter(|v| v.is_some()).count() as u64;
         'rows: for i in 0..model.m() {
@@ -1212,6 +1214,7 @@ pub(crate) mod tests {
             &budget,
             [s.gmi_cuts, s.mir_cuts],
             usize::MAX,
+            s.cut_exact_work,
         )
         .0
     }

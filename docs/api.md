@@ -20,6 +20,8 @@ call Python during optimization.
 | time_limit_seconds | None | Whole-call cooperative budget after validation |
 | node_limit | 100000 | MIP relaxations processed; None removes the limit |
 | mip_relative_gap, mip_absolute_gap | None | Opt-in positive MIP gap stops; zero requests full search; see below |
+| adaptive_root | false | Select bounded GMI/MIR separation for eligible general MIPs |
+| integer_equality_presolve | false | Propagate integer residues certified on short equality rows |
 | iteration_limit | 1000000 | Simplex iterations across phase 1/2, all nodes, certification LPs and retries |
 | pivot_tolerance | 1e-9 | Smallest pivot-row entry accepted by the scaled dual ratio test |
 | dual_tolerance | 1e-7 | Independent LP dual acceptance threshold |
@@ -336,3 +338,41 @@ in-process solver API. Unknown profile options are rejected.
 The relative gap is the same quotient as `SolveResult.gap`: absolute objective-to-bound distance divided by the absolute incumbent objective, including its offset and original sense. At objective zero it is infinite for a positive absolute gap. A missing, non-finite or contradictory frontier bound never triggers a stop. Limits are checked at node boundaries and after the root/node incumbent heuristics with the current relaxation still included in the global frontier.
 
 An open positive gap within a supplied limit returns `gap_limit`. The candidate is independently checked and a job reports claim `feasible`, with `details.gap`; this status never asserts optimality. A fully closed frontier retains `optimal`. Separable MIPs are searched as one model, reporting `decompose=false` and `gap_limit_scope=whole_model`. Positive limits with specialized packing controls or `tree_threads>1` return `Unsupported`. Numerical parallel kernels remain available. See [evidence and commands](benchmarks/gap-limits/README.md).
+
+
+## Optional root cut selection and integer equalities
+
+Set either control on Rust or Python `NativeOptions`. Both require the
+master `presolve` switch. With `adaptive_root`, bounded sparse pure-integer
+models may receive GMI or combined GMI/MIR passes. The policy skips
+uniform-coefficient binary covering rows and dense binary packing systems
+when all active rows have the corresponding structure. Binary on/off
+capacity rows coupled with short continuous balance equations can receive
+bounded GMI passes. Mixed binary,
+general-integer and continuous models receive at most one GMI pass.
+An integral relaxation skips separation. Explicit root cut, dual presolve
+and root heuristic settings take precedence. The policy skips packing
+and split-tree configurations. It uses at most half the initial iteration
+and node limits and a quarter of the initial time allowance, where supplied.
+The total solve retains its original limits. The `mip_cut_rounds` option
+continues to cap cut rounds. Check `diagnostics.adaptive_root_family` and
+`diagnostics.adaptive_root_stop` to see what ran.
+
+With `integer_equality_presolve`, short equalities over finite integer
+variables can tighten bounds before and during the tree. Any scaled
+equation must pass an outward error check on the actual binary64
+coefficients, the variable box and feasibility and integrality tolerances.
+The original model retains its coefficient arrays and variable coordinates.
+Every returned point follows the usual original-model checks.
+
+
+The integral-objective bound also applies to a MIP with continuous columns
+when all their objective coefficients are exactly zero and the existing
+offset, coefficient and magnitude guards hold. The serial tree rounds its returned
+global bound in these mixed models and keeps the original priorities for node
+selection and reduced-cost fixing. Set `objective_lattice=false`
+to disable it. When a weighted MIP node LP exhausts its numerical recovery,
+one cold retry uses largest-infeasibility pricing, sharing the original
+time and iteration budgets. A recovered optimum passes the usual residual
+checks. A recovered infeasibility needs a verified Farkas row.
+`diagnostics.unweighted_node_retries` counts these additional LP calls.
